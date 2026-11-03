@@ -1,0 +1,28 @@
+# KiCad: respaldos y archivos temporales
+*-backups/
+*.bak
+*.bck
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*-cache.lib
+*-rescue.lib
+*-rescue.dcm
+*.kicad_prl
+fp-info-cache
+*.lck
+\#auto_saved_files#
+_autosave-*
+~*.lck
+
+# Salidas generadas (se publican en las releases, no en el repositorio)
+*.zip
+gerber_tmp/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Hojas de datos de fabricantes (derechos de autor): no subir
+datasheets/
+*.pdf
