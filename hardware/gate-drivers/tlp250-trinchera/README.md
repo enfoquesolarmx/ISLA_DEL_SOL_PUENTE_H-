@@ -1,6 +1,5 @@
 # Módulo gate driver TLP250H — modo trinchera (legacy) con tótem TIP41C/TIP42C
 <img width="335" height="400" alt="imagen" src="https://github.com/user-attachments/assets/e21339fe-37e3-44d8-814f-c6384ac7cc5f" />
-<img width="335" height="480" alt="imagen" src="https://github.com/user-attachments/assets/09583d0f-3638-456e-a11e-980f181438be" />
 <img width="335" height="480" alt="imagen" src="https://github.com/user-attachments/assets/71d82b25-b94e-42bb-820c-cf43d3d45a0b" />
 
 
