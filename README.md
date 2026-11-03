@@ -28,7 +28,7 @@ Los módulos de gate driver son **intercambiables**: usan los mismos conectores 
 
 | Módulo | Tecnología | Tiempo muerto | Para qué | Estado |
 | --- | --- | --- | --- | --- |
-| IRS2186 | Driver de bootstrap | 500 ns | Producción, bajo costo | En diseño |
+| IRS2186 | Driver de bootstrap | 500 ns | Producción, bajo costo | **Diseñado** (P9 en J1) |
 | UCC21520ADWR | Driver aislado | 500 ns | Mejor desempeño | Diseñado |
 | **TLP250 + tótem TIP41C/TIP42C** | Optoacoplador DIP + transistores TO-220 | **1 µs** | **Modo trinchera:** zonas sin acceso a componentes modernos; reparable con partes de tienda local | **V.0.1 diseñado** |
 
@@ -54,29 +54,53 @@ El sistema está pensado para que **el error humano no pueda causar el daño**:
 
 ---
 
-## Estructura del repositorio
+## Contenido del repositorio
 
 ```
-isla_del_sol_puente_h/
-├── README.md
-├── LICENSE.md
-├── docs/                      ← documentos de diseño y justificación
-├── hardware/
-│   ├── puente-h/              ← tarjeta de potencia (KiCad)
-│   └── gate-drivers/
-│       ├── irs2186/
-│       ├── ucc21520/
-│       └── tlp250-trinchera/  ← módulo TLP250 + tótem TIP41C/TIP42C
-└── firmware/
+ISLA_DEL_SOL_PUENTE_H-/
+├── README.md                                   ← este archivo
+├── LICENSE.md                                  ← licencias (hardware, documentación, firmware)
+├── .gitignore
+├── docs/
+│   ├── identificacion_dt_pin9.md
+│   └── compensacion_adaptativa_tiempo_muerto.md
+└── hardware/
+    └── gate-drivers/
+        ├── irs2186/
+        │   └── README.md
+        └── tlp250-trinchera/
+            ├── README.md
+            ├── GATE_TLP_250_TOTEM_TIP.kicad_pro
+            ├── GATE_TLP_250_TOTEM_TIP.kicad_sch
+            └── GATE_TLP_250_TOTEM_TIP.kicad_pcb
 ```
 
-## Documentación
+Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/puente-h/` (tarjeta de potencia) y `firmware/`.
 
-| Documento | Contenido |
-| --- | --- |
-| [`docs/identificacion_dt_pin9.md`](docs/identificacion_dt_pin9.md) | Identificación del tiempo muerto por P9, soporte legacy, poka-yoke, análisis de fallas y código de referencia |
-| [`docs/compensacion_adaptativa_tiempo_muerto.md`](docs/compensacion_adaptativa_tiempo_muerto.md) | Compensación de tiempo muerto (etapa posterior): signo de corriente, Goertzel del 3er armónico, ajuste adaptativo |
-| [`hardware/gate-drivers/tlp250-trinchera/README.md`](hardware/gate-drivers/tlp250-trinchera/README.md) | Módulo TLP250 de trinchera: cálculos, evaluación de transistores, layout, BOM, ensamble, validación y registro de errores |
+### Documentos de sistema (`docs/`)
+
+| Documento | Qué explica | Útil para |
+| --- | --- | --- |
+| [Identificación del tiempo muerto por P9](docs/identificacion_dt_pin9.md) | Cómo cada módulo declara su tiempo muerto (P9 a GND = 500 ns, abierto = 1 µs); soporte legacy para trincheras; costo contra beneficio; filosofía poka-yoke; llave mecánica en la posición 8; análisis de fallas; código de referencia para ATmega328 y ESP32; validación en banco | Entender la interfaz universal y escribir el firmware |
+| [Compensación adaptativa de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md) | Por qué el tiempo muerto genera armónicos impares; compensación con el signo de la corriente; medición del 3er armónico con Goertzel; ajuste automático; hoja de ruta en 5 etapas | Etapa posterior: mejorar la calidad de la onda |
+
+### Módulos gate driver (`hardware/gate-drivers/`)
+
+Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET bajo). El puente completo usa dos módulos iguales, uno por rama.
+
+| Módulo | Documento | Archivos KiCad | Qué incluye |
+| --- | --- | --- | --- |
+| **IRS2186** | [README](hardware/gate-drivers/irs2186/README.md) | Próximamente | Interfaz J1/J5 con P9 a GND; tierras compartidas (lógica = potencia) y cómo controlar el lazo de tierra; bootstrap con R antes del diodo y referencias; cálculo de los 500 ns; **alcance por cantidad de MOSFET** (1 IRF100P219 o hasta 2 IRF540N); opciones con tótem; validación |
+| **TLP250 + tótem TIP41C/TIP42C** (trinchera) | [README](hardware/gate-drivers/tlp250-trinchera/README.md) | ✓ Esquemático, PCB y proyecto | Propósito educativo y de supervivencia; entrada aislada; por qué 1 µs; tótem y regla de 250 nC; **evaluación de 9 transistores** (por qué TIP41/42 y no BD, Darlington, IRF540 o BC); layout; BOM; ensamble con RTV neutro; validación en 10 pasos; **registro de errores corregidos durante el diseño** |
+| UCC21520ADWR | Próximamente | Próximamente | — |
+
+### Por dónde empezar a estudiar
+
+1. **Este README:** visión general del inversor y de la interfaz universal.
+2. **[Identificación por P9](docs/identificacion_dt_pin9.md):** el "contrato" que cumplen todos los módulos.
+3. **[Módulo IRS2186](hardware/gate-drivers/irs2186/README.md):** el driver de bootstrap clásico, la base para entender los demás.
+4. **[Módulo TLP250](hardware/gate-drivers/tlp250-trinchera/README.md):** cómo resolver lo mismo con partes de tienda local, y los errores típicos al diseñar un tótem.
+5. **[Compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** el siguiente paso, cuando el hardware ya esté validado.
 
 ## Herramientas
 
@@ -88,9 +112,9 @@ isla_del_sol_puente_h/
 | Etapa | Estado |
 | --- | --- |
 | Diseño de la tarjeta del puente H | En curso |
-| Módulo UCC21520 | Diseñado |
+| Módulo UCC21520 | Diseñado; pendiente llevar P9 a J1 |
 | Módulo TLP250 de trinchera | V.0.1 diseñado; pendiente fabricar y validar |
-| Módulo IRS2186 | Pendiente: llevar P9 a J1 |
+| Módulo IRS2186 | Diseñado con P9 en J1; pendiente fabricar y validar |
 | Firmware | Pendiente |
 | Validación en banco | Pendiente |
 
