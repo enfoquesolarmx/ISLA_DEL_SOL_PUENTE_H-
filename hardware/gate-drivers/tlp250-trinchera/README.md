@@ -1,4 +1,5 @@
 # Módulo gate driver TLP250H — modo trinchera (legacy) con tótem TIP41C/TIP42C
+<img width="671" height="795" alt="imagen" src="https://github.com/user-attachments/assets/e21339fe-37e3-44d8-814f-c6384ac7cc5f" />
 
 **Proyecto:** Puente H — prototipo SPWM "Isla del Sol" (inversor 48 V → 127 V / 60 Hz, 1000 W; modo cargador 1 kVA)
 **Módulo:** gate driver de servicio / legacy, intercambiable con IRS2186 y UCC21520ADWR (misma interfaz, mismo firmware)
