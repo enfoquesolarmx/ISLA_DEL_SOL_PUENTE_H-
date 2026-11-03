@@ -67,7 +67,10 @@ ISLA_DEL_SOL_PUENTE_H-/
 └── hardware/
     └── gate-drivers/
         ├── irs2186/
-        │   └── README.md
+        │   ├── README.md
+        │   ├── GATE_DRIVER_IRS2186.kicad_pro
+        │   ├── GATE_DRIVER_IRS2186.kicad_sch
+        │   └── GATE_DRIVER_IRS2186.kicad_pcb
         └── tlp250-trinchera/
             ├── README.md
             ├── GATE_TLP_250_TOTEM_TIP.kicad_pro
@@ -90,7 +93,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 
 | Módulo | Documento | Archivos KiCad | Qué incluye |
 | --- | --- | --- | --- |
-| **IRS2186** | [README](hardware/gate-drivers/irs2186/README.md) | Próximamente | Interfaz J1/J5 con P9 a GND; tierras compartidas (lógica = potencia) y cómo controlar el lazo de tierra; bootstrap con R antes del diodo y referencias; cálculo de los 500 ns; **alcance por cantidad de MOSFET** (1 IRF100P219 o hasta 2 IRF540N); opciones con tótem; validación |
+| **IRS2186** | [README](hardware/gate-drivers/irs2186/README.md) | ✓ Esquemático, PCB y proyecto | Interfaz con P9 a GND; tierras compartidas (lógica = potencia), unión única GND_K–GND con *net tie* y cómo controlar el lazo de tierra; bootstrap con R antes del diodo y referencias; cálculo de los 500 ns; **alcance por cantidad de MOSFET** (1 IRF100P219 o hasta 2 IRF540N); opciones con tótem; lista de materiales; validación |
 | **TLP250 + tótem TIP41C/TIP42C** (trinchera) | [README](hardware/gate-drivers/tlp250-trinchera/README.md) | ✓ Esquemático, PCB y proyecto | Propósito educativo y de supervivencia; entrada aislada; por qué 1 µs; tótem y regla de 250 nC; **evaluación de 9 transistores** (por qué TIP41/42 y no BD, Darlington, IRF540 o BC); layout; BOM; ensamble con RTV neutro; validación en 10 pasos; **registro de errores corregidos durante el diseño** |
 | UCC21520ADWR | Próximamente | Próximamente | — |
 
