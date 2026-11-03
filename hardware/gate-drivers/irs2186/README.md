@@ -8,6 +8,9 @@
 **Documentos relacionados:** [`docs/identificacion_dt_pin9.md`](../../../docs/identificacion_dt_pin9.md), [`docs/compensacion_adaptativa_tiempo_muerto.md`](../../../docs/compensacion_adaptativa_tiempo_muerto.md), [módulo TLP250](../tlp250-trinchera/README.md)
 
 > Verificar los valores marcados con *(verificar)* contra el esquemático de KiCad antes de fabricar.
+<img width="556" height="929" alt="imagen" src="https://github.com/user-attachments/assets/9fd8c481-7021-4d3a-8ff5-21f3c2534462" />
+<img width="558" height="929" alt="imagen" src="https://github.com/user-attachments/assets/0e5c1018-f84f-4114-be1e-e99312f8d35b" />
+
 
 ---
 
