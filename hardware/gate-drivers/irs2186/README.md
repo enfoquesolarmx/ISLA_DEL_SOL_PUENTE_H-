@@ -1,3 +1,4 @@
+
 # Módulo gate driver de medio puente H con IRS2186
 
 **Proyecto:** Puente H — prototipo SPWM "Isla del Sol" (inversor 48 V → 127 V / 60 Hz, 1000 W; modo cargador 1 kVA)
@@ -8,10 +9,9 @@
 **Documentos relacionados:** [`docs/identificacion_dt_pin9.md`](../../../docs/identificacion_dt_pin9.md), [`docs/compensacion_adaptativa_tiempo_muerto.md`](../../../docs/compensacion_adaptativa_tiempo_muerto.md), [módulo TLP250](../tlp250-trinchera/README.md)
 
 > Verificar los valores marcados con *(verificar)* contra el esquemático de KiCad antes de fabricar.
+
 <img width="500" height="850" alt="imagen" src="https://github.com/user-attachments/assets/9fd8c481-7021-4d3a-8ff5-21f3c2534462" />
 <img width="500" height="850" alt="imagen" src="https://github.com/user-attachments/assets/0e5c1018-f84f-4114-be1e-e99312f8d35b" />
-
-
 ---
 
 ## 1. Qué maneja este módulo
@@ -34,7 +34,7 @@ Cada módulo maneja **una rama** del puente H: el **MOSFET del lado alto** (HO, 
 - **El puente completo usa dos módulos iguales:** rama A (VS1) y rama B (VS2). En la rama B, "H" y "L" de J1 manejan HB y LB, y el pin "VS1" de J5 va a VS2.
 - **Inversor (modulación híbrida):** rama A a **24 kHz**, rama B a **60 Hz**.
 - **Cargador (unipolar):** las dos ramas a **24 kHz**.
-- **Alcance:** **1 IRF100P219 por posición** con 500 ns. Para 2 MOSFET por posición, el IRS2186 solo ya no cumple 500 ns (ver sección 6).
+- **Alcance:** **1 IRF100P219 por posición** (o hasta 2 IRF540N) con 500 ns. Para más carga de compuerta hace falta tótem rápido o el módulo UCC21520 (ver sección 6).
 
 ### Por qué el IRS2186
 
@@ -169,13 +169,49 @@ Las resistencias de compuerta de cada MOSFET (arreglo R1/R2/R3) y las **10 kΩ d
 
 ---
 
-## 6. Dos MOSFET por posición
+## 6. Alcance: cantidad de MOSFET por posición
 
-Con 2 × IRF100P219 en paralelo (~480 nC por flanco), el IRS2186 solo apaga ~1.5 veces más lento: el piso sube a ~590 ns y **500 ns ya no alcanza**. Opciones:
+### 6.1 Criterio
 
-1. Usar el módulo **UCC21520** (6 A de apagado): conserva 500 ns.
-2. Agregar al IRS2186 un **tótem rápido** (D44H11/D45H11 o ZXTC2062E6; **no TIP41/42**, demasiado lentos para mejorar un driver de 4 A) o un **PNP de descarga local** por MOSFET. Validar en banco.
-3. Marcar el módulo: "IRS2186 · 1 MOSFET/posición".
+Con 500 ns de tiempo muerto y ≤ 35 ns de diferencia entre canales del IRS2186, el **apagado del MOSFET (o de los MOSFET en paralelo) debe quedar en ~400 ns como máximo**. El tiempo de apagado crece con la **carga de compuerta total** que el IRS2186 (4 A, ~3.75 Ω equivalentes a 15 V) tiene que sacar.
+
+Referencia: **1 × IRF100P219 (~240 nC a 15 V) → ~390 ns**. Eso fija el presupuesto en **~250 nC por posición** sin ayuda externa.
+
+| Carga de compuerta a 15 V | IRF100P219 | IRF540N | Sin ayuda (IRS2186 solo) | Con tótem rápido (D44H11/D45H11 o ZXTC2062E6) |
+| --- | --- | --- | --- | --- |
+| ~100 nC | — | 1 | ✓ amplio | ✓ |
+| ~200 nC | — | 2 | ✓ | ✓ |
+| ~240 nC | 1 | — | ✓ **(diseño actual)** | ✓ |
+| ~300 nC | — | 3 | ⚠ ~490 ns: solo con Qg típica, validar en banco | ✓ |
+| ~400 nC | — | 4 | ✗ | ✓ validar en banco |
+| ~480 nC | 2 | — | ✗ ~590 ns | ✓ ~280–320 ns |
+
+*Qg a 15 V estimada: IRF100P219 ~240 nC (180 nC típ. a 10 V); IRF540N ~100 nC máx. (71 nC máx. a 10 V). Los tiempos son estimaciones con modelo RC; confirmarlos en banco.*
+
+### 6.2 Potencia aproximada por configuración (48 V)
+
+| MOSFET por posición | Potencia | Módulo recomendado |
+| --- | --- | --- |
+| **1 × IRF100P219** | **1000 W** | **IRS2186 (este)** ✓ |
+| 2 × IRF100P219 | 1000 W más frío (pérdida por conducción ÷ 2 en total) | UCC21520, o IRS2186 + tótem rápido |
+| 1 × IRF540N | ~300 W (cargas pequeñas: módem, celular, laptop) | IRS2186 ✓ |
+| 2 × IRF540N | ~500 W | IRS2186 ✓ |
+| 4 × IRF540N | ~800–1000 W | IRS2186 + tótem rápido, o UCC21520 |
+
+Los MOSFET en paralelo deben ser **del mismo número de parte** (idealmente del mismo lote), cada uno con **su propia resistencia de compuerta** y layout simétrico. **No mezclar** IRF540N con IRF100P219 en la misma posición: con 1.7 mΩ contra 44 mΩ, el IRF100P219 lleva casi toda la corriente.
+
+### 6.3 Si se necesitan más MOSFET que los que el IRS2186 maneja solo
+
+1. **Usar el módulo UCC21520** (6 A de apagado, R_OL ~0.55 Ω): maneja 2 × IRF100P219 con 500 ns.
+2. **Agregar al IRS2186 un tótem rápido** por canal: **D44H11/D45H11** (TO-220, 20 A pico, f_T 40–50 MHz) o **ZXTC2062E6** (SOT23-6, 20 V, 10 A pico). **No usar TIP41/42** (f_T 3 MHz: no mejora a un driver de 4 A) ni el ZXTC2061 (V_CEO 12 V < 15–18 V).
+3. **PNP de descarga local por MOSFET** (solo acelera el apagado, que es el flanco crítico): emisor a la compuerta, colector a la fuente.
+4. **Marcar el módulo** en la serigrafía con su alcance: "IRS2186 · 1 MOSFET/POSICION". Un IRS2186 sin tótem en un equipo de 2 MOSFET por posición declararía 500 ns (P9 a GND) **sin margen**.
+
+### 6.4 Consumo y bootstrap con más MOSFET
+
+- **Potencia de compuerta por canal:** Qg × V × f. Con 1 × IRF100P219 a 24 kHz: 240 nC × 15 V × 24 kHz ≈ **0.09 W**; con 2, ≈ 0.17 W. Se reparte entre el IRS2186, la red de compuerta y la R_G interna; dentro de lo que disipa el SOIC-8.
+- **Bootstrap:** por pulso, ΔV = Qg / C_boot. Con 2 × 10 µF (~10–14 µF efectivos): 1 MOSFET → ~20 mV; 2 MOSFET → ~40 mV ✓.
+- **Rama de 60 Hz (8.3 ms encendido):** las 10 kΩ de compuerta a fuente de la tarjeta del puente H consumen ~1.4 mA por MOSFET; con 2 MOSFET (5 kΩ) ≈ 2.8 mA → ~1.7–2.3 V de caída en los 8.3 ms, más la corriente propia del IRS2186. Verificar en banco que VB–VS1 quede con margen sobre el UVLO.
 
 ---
 
