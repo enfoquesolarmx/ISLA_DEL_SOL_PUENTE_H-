@@ -1,4 +1,4 @@
-**# Isla del Sol — Puente H SPWM 48 V → 127 V / 60 Hz
+# Isla del Sol — Puente H SPWM 48 V → 127 V / 60 Hz
 
 Inversor / cargador de **puente H con modulación SPWM** para sistemas solares aislados: **48 V de batería → 127 V / 60 Hz, 1000 W**, con modo cargador de **1 kVA**.
 
