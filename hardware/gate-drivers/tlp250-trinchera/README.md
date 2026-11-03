@@ -1,21 +1,44 @@
-# Módulo gate driver TLP250H — modo trinchera (legacy) con tótem TIP41C/TIP42C
 
-<img width="485" height="926" alt="imagen" src="https://github.com/user-attachments/assets/475ba639-b2fb-4983-8414-e7f0e609fd14" />
-<img width="485" height="926" alt="imagen" src="https://github.com/user-attachments/assets/9ef2f1c1-1768-4cc0-9647-6285bf2f720b" />
-
-
-
+# Módulo gate driver de medio puente H con TLP250H — modo trinchera (legacy) con tótem TIP41C/TIP42C
 
 **Proyecto:** Puente H — prototipo SPWM "Isla del Sol" (inversor 48 V → 127 V / 60 Hz, 1000 W; modo cargador 1 kVA)
-**Módulo:** gate driver de servicio / legacy, intercambiable con IRS2186 y UCC21520ADWR (misma interfaz, mismo firmware)
+**Módulo:** gate driver de **medio puente H** (una rama: MOSFET alto + MOSFET bajo), de servicio / legacy, intercambiable con IRS2186 y UCC21520ADWR (misma interfaz, mismo firmware)
 **Versión de placa:** V.0.1.NOV.26.J.G
 **Estado:** diseño terminado (esquemático y layout). Pendiente: DRC final, fabricación y validación en banco
 **Fecha:** 2026-11-02 · **Revisión:** 2026-11-03 (diseño final)
 **Documentos relacionados:** `identificacion_dt_pin9.md` (P9, llave en posición 8, poka-yoke), `compensacion_adaptativa_tiempo_muerto.md`
 
+<img width="485" height="926" alt="imagen" src="https://github.com/user-attachments/assets/475ba639-b2fb-4983-8414-e7f0e609fd14" />
+<img width="485" height="926" alt="imagen" src="https://github.com/user-attachments/assets/9ef2f1c1-1768-4cc0-9647-6285bf2f720b" />
+
 ---
 
 ## 1. Propósito
+
+### 1.1 Qué maneja este módulo
+
+Cada módulo es un **gate driver de medio puente**: maneja **una rama** del puente H, es decir, el **MOSFET del lado alto** (canal H, referido a VS1, alimentado por bootstrap) y el **MOSFET del lado bajo** (canal L, referido a GND_K) de esa rama.
+
+```
+            +48 V
+              │
+     HA ──► [MOSFET alto]          [MOSFET alto] ◄── HB
+              │                         │
+              ├── VS1 ──► transformador ◄── VS2 ──┤
+              │                         │
+     LA ──► [MOSFET bajo]          [MOSFET bajo] ◄── LB
+              │                         │
+             GND ───────────────────── GND
+         └── módulo rama A ──┘    └── módulo rama B ──┘
+```
+
+- **El puente H completo usa dos módulos:** uno en la **rama A** (VS1) y otro en la **rama B** (VS2). Son el mismo módulo; en la rama B, las señales "H" y "L" de J1 manejan HB y LB, y el pin "VS1" de J5 se conecta a VS2.
+- **Inversor (modulación híbrida):** el módulo de la rama A conmuta a **24 kHz** y el de la rama B a **60 Hz**.
+- **Cargador (unipolar):** los dos módulos conmutan a **24 kHz**.
+- Cada posición (alto o bajo) puede tener **1 o 2 MOSFET en paralelo** (sección 5).
+- Se pueden mezclar tecnologías entre ramas (por ejemplo, UCC21520 en la rama A y TLP250 en la rama B): el MCU lee P9 de cada módulo y, si cualquiera pide 1 µs, usa 1 µs en todo el puente.
+
+### 1.2 Por qué existe
 
 Este módulo existe para **cuando TI o Infineon no llegan**. Es una opción **educativa y de supervivencia**: demuestra que el puente H puede operar con componentes legacy que se consiguen en cualquier tienda de electrónica o se rescatan de equipos viejos (variadores, UPS, soldadoras inverter, fuentes, amplificadores).
 
