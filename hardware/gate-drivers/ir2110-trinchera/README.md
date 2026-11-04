@@ -8,6 +8,8 @@
 **Fecha:** 2026-11-04
 **Documentos relacionados:** [`docs/identificacion_dt_pin9.md`](../../../docs/identificacion_dt_pin9.md), [`docs/sensado_corriente.md`](../../../docs/sensado_corriente.md), [módulo TLP250](../tlp250-trinchera/README.md), [módulo IRS2186](../irs2186/README.md)
 
+<img width="513" height="923" alt="imagen" src="https://github.com/user-attachments/assets/27c7c135-b067-4162-8e5b-c950183c9330" />
+
 > Valores tomados del esquemático y del layout revisados durante el diseño. Lo marcado *(verificar)* debe confirmarse contra los archivos de KiCad o la hoja de datos antes de fabricar.
 
 ---
