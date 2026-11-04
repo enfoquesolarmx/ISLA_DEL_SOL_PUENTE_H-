@@ -31,7 +31,7 @@ Los módulos de gate driver son **intercambiables**: usan los mismos conectores 
 | IRS2186 | Driver de bootstrap | 500 ns | Producción, bajo costo | **Diseñado** (P9 en J1) |
 | UCC21520ADWR | Driver aislado | 500 ns | Mejor desempeño | Diseñado |
 | **TLP250 + tótem TIP41C/TIP42C** | Optoacoplador DIP + transistores TO-220 | **1 µs** | **Modo trinchera:** zonas sin acceso a componentes modernos; reparable con partes de tienda local | **V.0.1 diseñado** |
-| **IR2110 + tótem TIP41C/TIP42C** | Driver de bootstrap legacy (DIP-14) + transistores TO-220 | **1 µs** | **Modo trinchera:** el driver de medio puente más fácil de conseguir o rescatar; reparable con partes de tienda local; de 1 a 5 MOSFET por posición | **Próximamente** |
+| **IR2110 + tótem TIP41C/TIP42C** | Driver de bootstrap legacy (DIP-14) + transistores TO-220 | **1 µs** | **Modo trinchera:** el driver de medio puente más fácil de conseguir o rescatar; reparable con partes de tienda local; de 1 a 5 MOSFET por posición | **V.0.1 diseñado** |
 
 ### Identificación automática del tiempo muerto (P9)
 
@@ -64,7 +64,8 @@ ISLA_DEL_SOL_PUENTE_H-/
 ├── .gitignore
 ├── docs/
 │   ├── identificacion_dt_pin9.md
-│   └── compensacion_adaptativa_tiempo_muerto.md
+│   ├── compensacion_adaptativa_tiempo_muerto.md
+│   └── sensado_corriente.md
 └── hardware/
     └── gate-drivers/
         ├── irs2186/
@@ -72,6 +73,9 @@ ISLA_DEL_SOL_PUENTE_H-/
         │   ├── GATE_DRIVER_IRS2186.kicad_pro
         │   ├── GATE_DRIVER_IRS2186.kicad_sch
         │   └── GATE_DRIVER_IRS2186.kicad_pcb
+        ├── ir2110-trinchera/
+        │   ├── README.md
+        │   └── archivos de KiCad (.kicad_pro / .kicad_sch / .kicad_pcb)
         └── tlp250-trinchera/
             ├── README.md
             ├── GATE_TLP_250_TOTEM_TIP.kicad_pro
@@ -79,7 +83,7 @@ ISLA_DEL_SOL_PUENTE_H-/
             └── GATE_TLP_250_TOTEM_TIP.kicad_pcb
 ```
 
-Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/gate-drivers/ir2110-trinchera/`, `hardware/puente-h/` (tarjeta de potencia) y `firmware/`.
+Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/puente-h/` (tarjeta de potencia) y `firmware/`.
 
 ### Documentos de sistema (`docs/`)
 
@@ -87,6 +91,7 @@ Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/gate-drivers/ir2110-
 | --- | --- | --- |
 | [Identificación del tiempo muerto por P9](docs/identificacion_dt_pin9.md) | Cómo cada módulo declara su tiempo muerto (P9 a GND = 500 ns, abierto = 1 µs); soporte legacy para trincheras; costo contra beneficio; filosofía poka-yoke; llave mecánica en la posición 8; análisis de fallas; código de referencia para ATmega328 y ESP32; validación en banco | Entender la interfaz universal y escribir el firmware |
 | [Compensación adaptativa de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md) | Por qué el tiempo muerto genera armónicos impares; compensación con el signo de la corriente; medición del 3er armónico con Goertzel; ajuste automático; hoja de ruta en 5 etapas | Etapa posterior: mejorar la calidad de la onda |
+| [Sensado de corriente DC y AC](docs/sensado_corriente.md) | Por qué hacen falta dos sensores (bus DC y primario AC); protección por hardware; INA240 en el primario; protección del transformador contra saturación; muestreo sincronizado; calibración | Etapa posterior: base para el control avanzado |
 
 ### Módulos gate driver (`hardware/gate-drivers/`)
 
@@ -97,33 +102,8 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | **IRS2186** | [README](hardware/gate-drivers/irs2186/README.md) | ✓ Esquemático, PCB y proyecto | Interfaz con P9 a GND; tierras compartidas (lógica = potencia), unión única GND_K–GND con *net tie* y cómo controlar el lazo de tierra; bootstrap con R antes del diodo y referencias; cálculo de los 500 ns; **alcance por cantidad de MOSFET** (1 IRF100P219 o hasta 2 IRF540N); opciones con tótem; lista de materiales; validación |
 | **TLP250 + tótem TIP41C/TIP42C** (trinchera) | [README](hardware/gate-drivers/tlp250-trinchera/README.md) | ✓ Esquemático, PCB y proyecto | Propósito educativo y de supervivencia; entrada aislada; por qué 1 µs; tótem y regla de 250 nC; **evaluación de 9 transistores** (por qué TIP41/42 y no BD, Darlington, IRF540 o BC); layout; BOM; ensamble con RTV neutro; validación en 10 pasos; **registro de errores corregidos durante el diseño** |
 | UCC21520ADWR | Próximamente | Próximamente | — |
-| **IR2110 + tótem TIP41C/TIP42C** (trinchera) | Próximamente | Próximamente | Ver adelanto abajo |
+| **IR2110 + tótem TIP41C/TIP42C** (trinchera) | [README](hardware/gate-drivers/ir2110-trinchera/README.md) | ✓ Esquemático, PCB y proyecto | VSS y COM separados con J5-6 a GND lógico; VDD de 5 V con 78L05; SD a VSS; tótem por canal con su desacoplo; zener en VB–VS1 y en VCC; P9 abierto (1 µs); **alcance de 1 a 5 MOSFET** y refuerzo del bootstrap; **registro de 8 errores corregidos**; BOM; validación |
 
-### Próximo módulo de trinchera: IR2110 + tótem TIP41C/TIP42C (adelanto de diseño)
-
-Igual que el módulo TLP250, este módulo existe para **cuando los drivers modernos no llegan**. El IR2110 es un driver de medio puente **legacy** (International Rectifier, hoy Infineon) que se encuentra en casi cualquier tienda de electrónica y se rescata de variadores, soldadoras inverter y UPS viejos. Viene en **DIP-14**: se monta en zócalo y se cambia sin cautín. Todo el módulo se puede armar con **partes de tienda local**: IR2110, TIP41C/TIP42C, 78L05, diodos, resistencias y capacitores comunes.
-
-| | TLP250 + tótem (trinchera) | IR2110 + tótem (trinchera) |
-| --- | --- | --- |
-| Driver | Optoacoplador TLP250H (DIP-8), uno por canal | IR2110 (DIP-14), un chip para los dos canales |
-| Aislamiento de la entrada | **Sí** (óptico) | Parcial: VSS y COM separados hasta ±5 V |
-| Diferencia de retardo entre canales | Hasta **400 ns** (peor caso) | **10–20 ns** |
-| Margen dentro de 1 µs | ~150–250 ns con 2 IRF100P219 | **Mucho mayor:** casi toda la ventana queda para el apagado |
-| Tótem | TIP41C/TIP42C (D44H11/D45H11 de mejora) | TIP41C/TIP42C (D44H11/D45H11 de mejora), mismo footprint TO-220 B-C-E |
-
-| Punto | Decisión preliminar | Por qué |
-| --- | --- | --- |
-| Corriente de salida | 2 A / 2 A → **tótem por canal: TIP41C/TIP42C** de trinchera; **D44H11/D45H11** como mejora en el mismo footprint | Con 2 A, un solo IRF100P219 ya no apaga en 500 ns (~590 ns). El TIP es lento (f_T 3 MHz), pero con la poca diferencia entre canales del IR2110 sobra margen en 1 µs |
-| Tiempo muerto | **P9 abierto → 1 µs** | Módulo de trinchera: el tiempo muerto no debe depender de qué transistor se monte |
-| Alimentación lógica | **VDD = 5 V con un 78L05** en el módulo, desde los 15 V | J1 no trae VDD, y los umbrales de entrada del IR2110 suben con VDD (a VDD = 15 V el "1" pide ≥ 9.5 V). Con MCU de 3.3 V, verificar la gráfica de umbrales |
-| Tierras | **VSS → GND de J1**, **COM → GND_K** | El IR2110 tolera ±5 V entre VSS y COM: aleja el rebote de tierra de las entradas (mejor que el IRS2186, aunque no es aislamiento completo como el TLP250) |
-| Pin SD | **A VSS** | Si queda flotando o con ruido, apaga las salidas. A futuro: apagado de emergencia por sobrecorriente |
-| Alcance | **1 a 5 MOSFET por posición** (por ejemplo 5 × IRF540N rescatados) | Picos de ~9–12 A en el tótem (TIP41C: 10 A pico; usar 6.8 Ω por MOSFET para quedar en ~9 A); apagado de ~350–450 ns con TIP, ~150–300 ns con D44H11 |
-| Bootstrap con 3 o más MOSFET | **4 × 10 µF** y resistencias de compuerta a fuente de **22 kΩ** en la tarjeta del puente H | Con 5 × 10 kΩ en paralelo, la rama de 60 Hz caería bajo el UVLO del IR2110 en los 8.3 ms |
-| Ensamble | TIP acostados, aletas separadas, **silicón RTV neutro** al final | Mismas reglas que el módulo TLP250 |
-| Serigrafía | "OPERACION DT IR2110=1US", "TRENZAR H Y L CON GND", "B C E", "X" en J5-8 | Poka-yoke visible, igual que los otros módulos |
-
-Datos de la hoja de datos (Infineon IR2110E4): retardo 120/94 ns típ. (150/125 ns máx.), diferencia entre canales 10–20 ns, VCC 10–20 V, UVLO ~8.2–8.7 V típ., consumo del lado alto ≤ 230 µA.
 
 ### Por dónde empezar a estudiar
 
@@ -131,7 +111,8 @@ Datos de la hoja de datos (Infineon IR2110E4): retardo 120/94 ns típ. (150/125 
 2. **[Identificación por P9](docs/identificacion_dt_pin9.md):** el "contrato" que cumplen todos los módulos.
 3. **[Módulo IRS2186](hardware/gate-drivers/irs2186/README.md):** el driver de bootstrap clásico, la base para entender los demás.
 4. **[Módulo TLP250](hardware/gate-drivers/tlp250-trinchera/README.md):** cómo resolver lo mismo con partes de tienda local, y los errores típicos al diseñar un tótem.
-5. **[Compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** el siguiente paso, cuando el hardware ya esté validado.
+5. **[Módulo IR2110](hardware/gate-drivers/ir2110-trinchera/README.md):** el driver legacy clásico con tierras separadas y tótem para muchos MOSFET.
+6. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
 
 ## Herramientas
 
@@ -146,9 +127,21 @@ Datos de la hoja de datos (Infineon IR2110E4): retardo 120/94 ns típ. (150/125 
 | Módulo UCC21520 | Diseñado; pendiente llevar P9 a J1 |
 | Módulo TLP250 de trinchera | V.0.1 diseñado; pendiente fabricar y validar |
 | Módulo IRS2186 | Diseñado con P9 en J1; pendiente fabricar y validar |
-| Módulo IR2110 + tótem TIP41C/TIP42C (trinchera) | Próximamente (definición preliminar lista) |
+| Módulo IR2110 + tótem TIP41C/TIP42C (trinchera) | V.0.1 diseñado (DRC sin errores); pendiente fabricar y validar |
 | Firmware | Pendiente |
 | Validación en banco | Pendiente |
+
+## Misión actual: SPWM con cargador básico de trinchera
+
+Primero gatear, después caminar. La etapa actual busca un equipo **básico pero completo y seguro**:
+
+| Dentro del alcance | Fuera del alcance (integración avanzada, después) |
+| --- | --- |
+| Inversor SPWM híbrido a 24 kHz, tiempo muerto fijo según P9 | Sensor AC con INA240 en el primario |
+| Regulación lenta del voltaje RMS con el feedback 120 → 12 V | Compensación de tiempo muerto |
+| Cargador básico sincronizado con la red, CC/CV con límite de corriente (boost: el pico del primario, ~43 V, está por debajo del voltaje de carga) | Lazo resonante de voltaje y corriente |
+| **Protección de sobrecorriente por hardware** (shunt DC + comparador), batería baja/alta, sobretemperatura, arranque suave | Formación de red con AC coupling y control por frecuencia |
+| Gate drivers IRS2186, TLP250 e IR2110 | Migración a STM32G4 (el ATmega328P o un STM32F103 alcanzan para la misión básica) |
 
 ## Licencia
 
@@ -159,4 +152,3 @@ Datos de la hoja de datos (Infineon IR2110E4): retardo 120/94 ns típ. (150/125 
 Ver [`LICENSE.md`](LICENSE.md).
 
 Las hojas de datos de los fabricantes no se incluyen en el repositorio por derechos de autor; los documentos citan la fuente de cada dato.
-**
