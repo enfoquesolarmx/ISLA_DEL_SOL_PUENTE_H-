@@ -10,7 +10,7 @@
 
 <img width="513" height="923" alt="imagen" src="https://github.com/user-attachments/assets/27c7c135-b067-4162-8e5b-c950183c9330" />
 
-> Valores tomados del esquemático y del layout revisados durante el diseño. Lo marcado *(verificar)* debe confirmarse contra los archivos de KiCad o la hoja de datos antes de fabricar.
+> Valores verificados contra `GATE_DRIVER_IR2110_TOTEM.kicad_pcb` (2026-11-04). Lo marcado *(verificar)* depende de la hoja de datos.
 
 ---
 
@@ -54,6 +54,8 @@ Igual que el módulo TLP250, este módulo existe para **cuando los drivers moder
 
 ### 2.1 J2 — entrada, hacia la tarjeta de control ("J1" de la interfaz)
 
+Conector **Phoenix Contact SPT 1,5/5-H-3,5** (5 posiciones, paso 3.5 mm, de resorte), igual que el módulo IRS2186.
+
 | Terminal | Señal | En este módulo |
 | --- | --- | --- |
 | 1 | H | HIN del IR2110 (pin 10), 10 kΩ a GND |
@@ -83,7 +85,7 @@ El IR2110 tiene **dos tierras**: **VSS** (lógica) y **COM** (retorno del lado b
 | Zona | Referencia | Componentes |
 | --- | --- | --- |
 | Lógica | **GND (VSS)** | J2, R1, R2, VSS (13), SD (11), 78L05, capacitor de entrada y de salida del 78L05, **J5-6** |
-| Canal L (potencia) | **GND_K (COM)** | COM (2), Q3 colector, C2, C4, C6, C8, Z2 |
+| Canal L (potencia) | **GND_K (COM)** | COM (2), colector de Q4 (PNP), C2, C4, C6, C8, Z2 |
 | Canal H (HV, flota con VS1) | **VS1** | VS (5), Q2 colector, C3, C5, C9, Z1 |
 
 - **J5-6 a GND lógico** (a diferencia del TLP250, que deja J5-6 sin conectar): el 78L05 toma sus 15 V de J5-7, así que su corriente regresa por el camino corto J5-6. Además, VSS queda bien referido respecto a COM.
@@ -155,10 +157,10 @@ Canal H:  VB ──┬── C9 10 µF ── VS1
 
 Canal L:  15 V ──┬── C8 10 µF ── GND_K
                  C
-  LO ─[R3 2.2 Ω]─B  Q4 TIP41C / D44H11G
+  LO ─[R3 2.2 Ω]─B  Q3 TIP41C / D44H11G
                  E ──┬── LA_OUT (J5-5)
                  E ──┘
-  (bases unidas) B  Q3 TIP42C / D45H11G
+  (bases unidas) B  Q4 TIP42C / D45H11G
                  C
                GND_K
 ```
@@ -193,7 +195,7 @@ Las resistencias de compuerta de cada MOSFET y las de **compuerta a fuente** est
 - **Dominio HV (columna del canal H):** Q1, Q2, C9, la pista Vb, HA_OUT, C3, C5, Z1 y el pin 6 del IR2110. **0.6 mm** al resto (regla `HV_a_LV`). Ninguna pista de GND_K, 15 V o GND la cruza **por la misma capa**; los cruces van por la otra capa y en ángulo.
 - **SD (11) a VSS (13):** la pista rodea por debajo del cuerpo sin tocar LIN (12).
 - **C6 (VCC–COM)** en B.Cu entre los pines 2 y 3; capacitor de salida del 78L05 junto a VDD.
-- **C8 en B.Cu entre los colectores de Q4 y Q3**; **C9 (Vb–VS1)** fuera del camino de otras redes.
+- **C8 en B.Cu entre los colectores de Q3 (15 V) y Q4 (GND_K)**; **C9 (Vb–VS1)** fuera del camino de otras redes.
 - **J5-6 (GND)** llega desde arriba, sin pasar sobre el pad 7 (15 V).
 - **TIP acostados**, aletas sin tocarse; sin disipador.
 
@@ -203,7 +205,7 @@ Las resistencias de compuerta de cada MOSFET y las de **compuerta a fuente** est
 | --- | --- | --- |
 | VCC (pin 3) sin conectar | Canal bajo sin alimentación, UVLO sin liberar, bootstrap sin carga | VCC a 15 V |
 | SD (pin 11) al aire | El ruido puede apagar las salidas | SD a VSS |
-| Colector de Q3 (PNP del canal L) en **VS1** | El tótem L intentaría llevar LA_OUT a 48 V: **conducción cruzada** | Colector de Q3 a GND_K |
+| Colector del PNP del canal L en **VS1** | El tótem L intentaría llevar LA_OUT a 48 V: **conducción cruzada** | Colector del PNP (Q4) a GND_K |
 | Zener Z1 **al revés** (cátodo a VS1) | Conduce en directo: corto del bootstrap | Cátodo a VB |
 | VS1 pasando entre los pads de R3 (base del tótem L) | ~0.65 mm a un nodo de 48 V a 24 kHz; acoplamiento de ruido | VS1 desviada, R3 movida |
 | GND_K pasando entre los pads del capacitor Vb–VS1 | ~0.25 mm a Vb: no cumple 0.6 mm; acoplamiento del dv/dt | Capacitor reubicado (C9) y GND_K por otra ruta |
@@ -254,28 +256,35 @@ El DRC da **0 errores y 0 elementos sin conectar**, con 3 avisos de "huella no c
 
 ---
 
-## 7. Lista de materiales *(verificar contra el esquemático)*
+## 7. Lista de materiales (verificada contra el PCB)
 
-| Ref. | Valor / parte | Encapsulado | Función |
-| --- | --- | --- | --- |
-| U1 | IR2110 | DIP-14 (en zócalo) | Driver de medio puente |
-| U2 | L78L05 | SOT-89 | VDD = 5 V |
-| Q1, Q4 | TIP41C (o D44H11G) | TO-220 B-C-E, acostado | NPN de los tótems H y L |
-| Q2, Q3 | TIP42C (o D45H11G) | TO-220 B-C-E, acostado | PNP de los tótems H y L |
-| R1, R2 | 10 kΩ | 1206 | Pull-down de HIN y LIN |
-| R3, R5 | 2.2 Ω | 1206 | Base de los tótems L y H |
-| R9 | 2.2 Ω 1 W | 1210 / 2512 | Limitador del bootstrap |
-| D5 | ES1D (o ES1J) | SMA | Diodo de bootstrap |
-| Z1, Z2 | 1SMA5931B (18 V) | SMA | VB–VS1 y VCC–GND_K |
-| C3, C5 | 10 µF X7R 50 V | 1206 / 1210 | Bootstrap VB–VS1 |
-| C9 | 10 µF X7R 50 V | 1206 / 1210 | Tótem H (VB–VS1) |
-| C8 | 10 µF X7R 50 V | 1206 / 1210 | Tótem L (15 V–GND_K) |
-| C2, C4 | 10 µF X7R 50 V | 1206 / 1210 | VCC–COM |
-| C6 | 0.1–1 µF X7R | 1206 | VCC–COM, junto a los pines 2 y 3 |
-| — | 10 µF X7R | 1206 / 1210 | Entrada del 78L05 (15 V–GND) |
-| C7 | 0.1–1 µF X7R | 1206 | Salida del 78L05 / VDD (5 V–GND) |
-| J2 | Bornera de 5 posiciones | — | H, GND, L, GND, P9 |
-| J5 | Header macho 1 × 9, 2.54 mm | — | Salida; **quitar el pin 8** |
+| Ref. | Valor / parte | Footprint | Cara | Función |
+| --- | --- | --- | --- | --- |
+| U1 | IR2110 | DIP-14 (7.62 mm) | F.Cu | Driver de medio puente (se puede montar en zócalo) |
+| U2 | L78L05 | SOT-89-3 | B.Cu | VDD = 5 V |
+| Q1 | TIP41C / D44H11G | TO-220-3 | F.Cu | NPN tótem H (colector a Vb) |
+| Q2 | TIP42C / D45H11G | TO-220-3 | F.Cu | PNP tótem H (colector a VS1) |
+| Q3 | TIP41C / D44H11G | TO-220-3 | F.Cu | NPN tótem L (colector a 15 V) |
+| Q4 | TIP42C / D45H11G | TO-220-3 | F.Cu | PNP tótem L (colector a GND_K) |
+| R1, R2 | 10 kΩ | 1206 | F.Cu | Pull-down de HIN y LIN |
+| R3 | 2.2 Ω | 1206 | F.Cu | Base del tótem L |
+| R5 | 2.2 Ω | 1206 | B.Cu | Base del tótem H |
+| R9 | 2.2 Ω 1 W | 1210 | B.Cu | Limitador del bootstrap |
+| D5 | ES1D | SMA | B.Cu | Diodo de bootstrap |
+| 1SMA5931B1 (Z1) | 18 V | SMA | B.Cu | Vb–VS1 (cátodo a Vb) |
+| 1SMA5931B2 (Z2) | 18 V | SMA | B.Cu | 15 V–GND_K (cátodo a 15 V) |
+| C3, C5 | 10 µF X7R 50 V | **1210** | F.Cu | Bootstrap Vb–VS1 |
+| C9 | 10 µF X7R 50 V | **1210** | F.Cu | Tótem H (Vb–VS1) |
+| C8 | 10 µF X7R 50 V | **1210** | B.Cu | Tótem L (15 V–GND_K) |
+| C2, C4 | 10 µF X7R 50 V | **1210** | B.Cu | VCC–COM |
+| C6 | 0.1 µF X7R | 1206 | B.Cu | VCC–COM, junto a los pines 2 y 3 |
+| C1 | 10 µF X7R 50 V | **1210** | B.Cu | Entrada del 78L05 (15 V–GND) |
+| C7 | 0.1 µF X7R | 1206 | F.Cu | Salida del 78L05 / VDD (5 V–GND) |
+| J2 | Phoenix SPT 1,5/5-H-3,5 | 5 pos., 3.5 mm | F.Cu | H, GND, L, GND, P9 (abierto) |
+| J5 | Header macho 1 × 9, 2.54 mm | Sin pad 8 | F.Cu | Salida; **quitar el pin 8** |
+
+- Los **10 µF usan footprint 1210** (con pads de soldadura a mano): aceptan piezas 1210 y 1206.
+- Los TIP usan el footprint **TO-220-3_Vertical** y se montan **acostados** con las patas dobladas a 90°.
 
 **Capacitores 100 % cerámicos X7R** (sin electrolíticos): no se secan con el calor del gabinete tropical. Diseñar con la capacidad real a 15 V (−30 a −50 % en 50 V; el 1210 pierde menos que el 1206).
 
