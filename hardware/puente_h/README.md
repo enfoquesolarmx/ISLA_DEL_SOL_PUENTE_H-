@@ -7,6 +7,7 @@
 Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del puente H, el banco de capacitores del bus, los shunts para medir corriente y los conectores para los módulos universales (gate drivers, sensor de corriente y buck de 15 V). La lógica de control vive en otra tarjeta.
 
 ---
+<img width="916" height="766" alt="imagen" src="https://github.com/user-attachments/assets/5b75ac33-6a59-4065-8a0b-40a90492ccdb" />
 
 ## 1. Características
 
