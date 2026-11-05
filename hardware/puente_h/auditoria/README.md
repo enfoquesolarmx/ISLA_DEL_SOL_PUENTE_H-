@@ -11,9 +11,6 @@ La segunda (sección 8):
 > **Con el calor de los MOSFET y el rizo de los capacitores, ¿todo queda dentro de sus límites?**
 
 La herramienta `auditoria_cobre.py` lee el `.kicad_pcb`, calcula cómo se reparte la corriente en las zonas de cobre reales (las dos capas, unidas por los pines THT y las vías) y estima cuánto se calienta el cobre. Se corre en los dos escenarios, **cobre solo** y **con alambre 12 AWG soldado en las ventanas**, para que **cada usuario decida** si agrega el refuerzo.
-<img width="942" height="787" alt="imagen" src="https://github.com/user-attachments/assets/2eb881db-3a4b-4caf-898a-4463792152b1" />
-<img width="934" height="784" alt="imagen" src="https://github.com/user-attachments/assets/bf88bec4-3ff8-4f22-a02f-8fad1fd38fc6" />
-
 
 ---
 
@@ -173,7 +170,7 @@ El reparto se calculó con el cobre real: el lazo va del Rubycon al MOSFET alto 
 **Cómo leerlo:**
 - **El reparto es parejo**, aunque los capacitores estén a distancias distintas del MOSFET. La ESR (~30 mΩ) es mucho mayor que la resistencia de los planos (~1 mΩ), así que manda la ESR. Es el resultado de tener planos anchos.
 - **Cada Rubycon trabaja cerca de su corriente nominal**, pero ese nominal es **a 105 °C**. A ~47 °C el capacitor está muy por debajo de su límite, y el aumento de temperatura de su núcleo se estima en solo ~6–7 °C.
-- **Vida esperada:** la regla del fabricante duplica la vida por cada 10 °C bajo 105 °C. A ~47 °C eso da muchas veces las 10 000 h nominales. En la práctica la vida la limita el envejecimiento del sello, del orden de 15 años, no el rizo.
+- **Vida esperada** (método de Cornell Dubilier: L = M_v · L_b · 2^((T_m − T_c)/10), con T_c = T_amb + 1.5·ΔT y M_v = 4.3 − 3.3·V_aplicado/V_nominal): con 40 °C de ambiente, 54 V de bus y ΔT de 6.6 a 16 °C, la fórmula da del orden de **0.5 a 1 millón de horas**. Ese número no se toma literal: en la práctica la vida la limita el envejecimiento del sello, del orden de 15 años, no el rizo.
 - **Margen:** el rizo está al 95–97 % del nominal. **No conviene quitar Rubycon** (con 3 piezas, cada uno pasaría al ~127 %), y conviene que el aire del ventilador pase primero por ellos.
 
 Los cerámicos (10 µF y 4.7 µF) manejan los flancos de MHz. A 24 kHz su impedancia (~1 Ω) es mucho mayor que la de un Rubycon, así que casi no toman rizo de la fundamental.
@@ -227,9 +224,9 @@ Todo queda con margen amplio **a 40 °C de ambiente y sin ventilador**. El venti
 | Disipador SK 129 50.8 STS | 5.3 °C/W | Fischer Elektronik, vía distribuidor |
 | Patas del MOSFET y pines del disipador hacia la tarjeta | 9 y 10 °C/W | Estimado por geometría |
 | ZLH 820 µF / 100 V, 18 × 40 | Z = 0.026 Ω a 100 kHz; 3510 mA a 105 °C y 100 kHz; coeficiente 0.96 a 10 kHz | Hoja de datos de Rubycon ZLH |
-| Enfriamiento del bote del Rubycon | β = 2.3 × 10⁻³ W/(cm²·°C), 25.1 cm² | Método usual de los fabricantes de electrolíticos |
+| Enfriamiento del bote del Rubycon | β = 2.3 × 10⁻³ W/(cm²·°C), 25.1 cm² (base); 1.0 × 10⁻³ (pesimista) | Método usual de los fabricantes japoneses; Cornell Dubilier usa ~10 W/m²K (1.0 × 10⁻³), más conservador |
 
-**Las pérdidas de conmutación son la parte más incierta.** Con t_r + t_f de 150 ns bajarían a ~1.3 W; con 400 ns subirían a ~3.4 W por MOSFET. La medición en banco (sección 10) es la que fija el número real.
+**Las pérdidas de conmutación son la parte más incierta.** Con t_r + t_f de 150 ns bajarían a ~1.3 W; con 400 ns subirían a ~3.4 W por MOSFET. La medición en banco (sección 11) es la que fija el número real.
 
 ### 8.6 ¿Qué tan exactos son estos números? (sensibilidad)
 
@@ -244,6 +241,7 @@ Los resultados no son mediciones. Para saber cuánto se pueden mover, la auditor
 | Convección de la tarjeta | 14 W/m²K | 10 W/m²K | 7 W/m²K |
 | Cobre real (tolerancia del fabricante) | 38 µm | 35 µm | 31 µm |
 | ESR del Rubycon | 24 mΩ | 30 mΩ | 36 mΩ |
+| Enfriamiento del bote del Rubycon | 2.3 × 10⁻³ W/(cm²·°C) | 2.3 × 10⁻³ | 1.0 × 10⁻³ (CDE: ~10 W/m²K) |
 
 | Resultado | Optimista | **Base** | Pesimista | Rango respecto a la base |
 | --- | --- | --- | --- | --- |
@@ -252,21 +250,49 @@ Los resultados no son mediciones. Para saber cuánto se pueden mover, la auditor
 | Pérdida en el cobre | 2.3 W | **2.5 W** | 2.8 W | −8 % / +13 % (+~8 % más si el cobre está caliente) |
 | Unión de Q1 (40 °C de ambiente) | 55 °C | **62 °C** | 77 °C | aumento: −33 % / +72 % |
 | Cobre más caliente | 54 °C | **61 °C** | 76 °C | aumento: −33 % / +70 % |
-| Bote del Rubycon más caliente | 45 °C | **47 °C** | 51 °C | aumento: −27 % / +66 % |
+| Bote del Rubycon más caliente | 45 °C | **47 °C** | 56 °C | aumento: −27 % / +142 % (el pesimista usa el coeficiente de CDE, más conservador) |
 | Rizo por Rubycon | 3.29 A | **3.28 A** | 3.28 A | ±2 % por el modelo; ±10 % por la diferencia de ESR entre piezas reales |
 
 **Cómo leerlo:**
 - **Lo más confiable es el cobre:** la geometría sale exacta del archivo de KiCad, y su error es de ±10–15 %, sobre todo por el grosor real del cobre que entregue el fabricante.
 - **Lo menos confiable son los MOSFET:** las pérdidas de conmutación dependen de qué tan rápido conmuta el driver real, y por eso **las temperaturas tienen un rango de −33 % a +70 %** en su aumento sobre el ambiente.
-- **Aun en el caso pesimista**, todo queda dentro de los límites: unión a 77 °C (máx. 175 °C), Rubycon a 51 °C (máx. 105 °C), cobre a 76 °C (FR-4 Tg ~130 °C).
+- **Aun en el caso pesimista**, todo queda dentro de los límites: unión a 77 °C (máx. 175 °C), Rubycon a 56 °C (máx. 105 °C), cobre a 76 °C (FR-4 Tg ~130 °C).
 - **Fuera de esta tabla queda la carga real.** Las cuentas suponen carga resistiva (factor de potencia 1). Cargas con motor, o rectificadores con capacitor (cargadores, fuentes de computadora), pueden subir la corriente RMS un 20–40 % con la misma potencia, y las pérdidas suben con el cuadrado.
-- **La medición en banco** (sección 10) es la que convierte estos rangos en un número: con una temperatura medida se recalibra el modelo, y el resto de los resultados se vuelve más confiable.
+- **La medición en banco** (sección 11) es la que convierte estos rangos en un número: con una temperatura medida se recalibra el modelo, y el resto de los resultados se vuelve más confiable.
 
 **Pendiente:** repetir esta etapa para el **modo cargador (unipolar)**, donde las dos piernas conmutan a 24 kHz y la pierna B también tendrá pérdidas de conmutación.
 
 ---
 
-## 9. Escenario y supuestos
+## 9. Validación del método
+
+Antes de confiar en los resultados, cada parte de la herramienta se comprobó contra un caso con respuesta conocida:
+
+| Prueba | Resultado de la herramienta | Valor esperado | Diferencia |
+| --- | --- | --- | --- |
+| **Resistencia de una tira recta** de 10 × 100 mm en 1 oz (solución analítica: R = ρ·L/(t·W)) | 4.725 mΩ | 4.706 mΩ (misma geometría de celdas) / 4.914 mΩ (ideal) | 0.4 % (4 % contra la ideal, por la cuadrícula de 0.4 mm) |
+| **Calentamiento uniforme** de la tarjeta: 10 W repartidos (solución analítica: ΔT = P / (2·h·A)) | 21.45 K | 21.45 K | < 0.1 % |
+| **Corrientes del bus** (fórmulas de la sección 8.1) contra una **simulación de la modulación híbrida** de 400 portadoras por ciclo, con FFT | RMS 28.64 A · DC 20.83 A · 120 Hz 14.73 A · HF 13.00 A | 28.63 · 20.83 · 14.73 · 13.00 A | < 0.1 % |
+| **Voltaje de salida** de esa simulación (fundamental de V_AB) | 30.50 V RMS | 30.5 V RMS (objetivo) | 0 % |
+
+Las pruebas están en `pruebas/` (`prueba_tira_recta.py`, `prueba_corrientes_bus.py`) para que cualquiera las repita.
+
+**Qué significa:** las ecuaciones y los métodos numéricos están bien implementados. **El error que queda viene de los datos de entrada** (sección 8.6), no del cálculo. Por eso lo siguiente es medir en el banco.
+
+### 9.1 ¿Qué le falta para considerarse completa?
+
+| Pendiente | Por qué importa | Cómo se cierra |
+| --- | --- | --- |
+| **Medición en banco** | Es la única forma de fijar las pérdidas de conmutación y el enfriamiento real | Sección 11: termopar o infrarrojo a 1000 W, 30 min; ajustar t_r + t_f y la convección hasta que el modelo coincida |
+| **Modo cargador (unipolar)** | Las dos piernas conmutan a 24 kHz: la pierna B suma pérdidas y su rizo es distinto | Agregar el escenario unipolar al script |
+| **Carga no resistiva** | Motores y rectificadores con capacitor suben la corriente RMS 20–40 % | Correr con I_o y factor de cresta medidos de una carga real |
+| **Corto circuito** | En una falla, ¿qué se funde primero, la pista o el fusible? ¿Alcanza la protección de 2–3 µs del sensor? | Cálculo de fusión de pistas (por ejemplo, ecuación de Onderdonk) contra la energía que deja pasar el fusible |
+| **Inductancia y EMI** | El modelo es de DC; no calcula sobretiros ni ruido | Medir con osciloscopio el sobretiro en VS1/VS2 (ver `docs/modulacion_spwm.md`) |
+| **Revisión independiente** | Que otra persona revise supuestos y código | Comparar con una herramienta conocida, por ejemplo la calculadora IPC-2152 de Saturn PCB Toolkit, o la calculadora de pistas de KiCad (IPC-2221) |
+
+---
+
+## 10. Escenario y supuestos
 
 | Parámetro | Valor | Nota |
 | --- | --- | --- |
@@ -288,7 +314,7 @@ Los resultados no son mediciones. Para saber cuánto se pueden mover, la auditor
 
 ---
 
-## 10. Validación en banco
+## 11. Validación en banco
 
 1. A 1000 W y después de **30 minutos**, mide con termopar o termómetro infrarrojo (con cinta negra mate para leer bien el cobre) en:
    - el cobre entre **Q1 y J27**, y entre **Q3 y J22** (el punto más caliente según la auditoría);
@@ -301,7 +327,7 @@ Los resultados no son mediciones. Para saber cuánto se pueden mover, la auditor
 
 ---
 
-## 11. Cómo correr la auditoría en tu propia tarjeta
+## 12. Cómo correr la auditoría en tu propia tarjeta
 
 ```bash
 pip install numpy scipy matplotlib
@@ -324,13 +350,16 @@ Los datos de operación, de los MOSFET y de los capacitores están en los diccio
 
 ---
 
-## 12. Referencias
+## 13. Referencias
 
 - IPC-2221B, *Generic Standard on Printed Board Design*: relación entre corriente, sección de cobre y aumento de temperatura (I = k·ΔT^0.44·A^0.725).
 - IPC-2152, *Standard for Determining Current Carrying Capacity in Printed Board Design*: versión moderna, basada en mediciones, de la capacidad de corriente de pistas y planos.
 - Infineon, hoja de datos IRF100P219 (R_DS(on), R_thJC, R_thCS, Q_rr, tiempos de conmutación). <https://www.farnell.com/datasheets/2849758.pdf>
 - Rubycon, hoja de datos de la serie ZLH (impedancia, corriente de rizo, coeficientes de frecuencia). <https://sy-dep-epc-lpc.web.cern.ch/components/datasheets/epc-lpc%20(converters)/ZLH-Aluminium-Capacitor_Rubycon.pdf>
 - Fischer Elektronik SK 129 50.8 STS: 5.3 °C/W (ficha del distribuidor). <https://nz.element14.com/fischer-elektronik/sk-129-50-8-sts/heat-sink-extruded-pcb-mounting/dp/1319813>
+- Infineon, D. Graovac, M. Pürschel, A. Kiep, *MOSFET Power Losses Calculation Using the Data-Sheet Parameters*, nota de aplicación V1.1, julio 2006 (método de pérdidas de conducción, conmutación y recuperación). Copia: <https://forums.futura-sciences.com/attachments/electronique/134703d1297466225-calcul-courant-de-grille-maximal-un-mosfet-mosfet_powerlossescalculationusingdata-sheetparameters.pdf>
+- Cornell Dubilier, *Aluminum Electrolytic Capacitor Application Guide* (vida por temperatura, coeficiente de transferencia de calor, ESR). <https://www.cma4ch.org/chemo/ftp/CDE_Aluminum-Electrolytic-Capacitor-Application-Guide-r2.pdf>
+- Saturn PCB Design, *PCB Toolkit* (calculadora gratuita IPC-2152, útil para verificar en forma independiente). <https://pcdandf.com/pcdesign/index.php/editorial/menu-new-indust-prod/14858-saturn-pcb-delivers-pcb-design-toolkit-v-7-12>
 - Resistividad del cobre a 20 °C: 1.72 × 10⁻⁸ Ω·m (cobre recocido, IACS).
 
 ---
