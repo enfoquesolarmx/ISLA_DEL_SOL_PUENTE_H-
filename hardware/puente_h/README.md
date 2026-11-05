@@ -1,6 +1,6 @@
 # Tarjeta de potencia: Puente H SPWM 48 V
 
-**Isla del Sol — Puente H, prototipo V0.1** · Archivo: `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO` · Estado: **diseño terminado, pendiente de fabricar y validar en banco**
+**Isla del Sol — Puente H, prototipo V0.1** · Archivo: `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO` · Estado: **lista para fabricar** · pendiente de validar en banco
 
 > ⚠️ **Seguridad:** esta tarjeta maneja hasta ~35 A en el lado de 48 V, y el transformador entrega **127 V AC, que pueden ser mortales**. Una batería de 48 V entrega cientos de amperes en un corto. Arma y prueba primero con una fuente limitada en corriente y con voltaje reducido (sección 12).
 
@@ -31,6 +31,7 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 
 | Archivo | Contenido |
 | --- | --- |
+| `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pro` | Proyecto de KiCad 9 (ábrelo para cargar todo) |
 | `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_sch` | Esquemático principal (hoja raíz, KiCad 9) |
 | `CAPASITORES.kicad_sch` | Hoja jerárquica: banco de capacitores del bus |
 | `untitled.kicad_sch` | Hoja jerárquica: disipadores |
@@ -39,8 +40,6 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 | `Disipador_V8511Y_equiv.step` | Modelo 3D aproximado de un disipador equivalente (versión anterior, ya no se usa en el layout) |
 | `SSA2512_Littelfuse_Kelvin.kicad_mod` · `SSA2512_Littelfuse.step` | Huella y modelo 3D del shunt (los mismos que en la carpeta del sensor) |
 | `auditoria/` | Auditoría de corriente y temperatura del layout: herramientas, figuras y [README](auditoria/README.md) |
-
-> Para abrir el proyecto en KiCad hace falta también el archivo `.kicad_pro` (pendiente de subir).
 
 ---
 
@@ -317,8 +316,7 @@ La auditoría completa está en [`auditoria/README.md`](auditoria/README.md). Re
 
 | Pendiente | Prioridad |
 | --- | --- |
-| **Ventanas del MOSFET bajo:** quedan a 1.49–1.58 mm del gate de Q2 y Q4. Subir a ≥ 2 mm. | **Alta, antes de fabricar** |
-| Serigrafía: queda un "H0_A_G" con cero; marca "RTV" entre los Rubycon; "60HZ" junto a J9 | Media |
+| Serigrafía: marca "RTV" entre los Rubycon y "60HZ" junto a J9 (opcional) | Baja |
 | Fusible principal de batería (clase T o ANL) y precarga del bus: fuera de la tarjeta, documentar en el manual | Alta (instalación) |
 | Divisor de voltaje del bus y NTC para la tarjeta de control | Media |
 | Aislar el disipador de la pierna A (lámina térmica + disipador a GND) si el ruido lo exige | Según la medición |
@@ -339,6 +337,7 @@ La auditoría completa está en [`auditoria/README.md`](auditoria/README.md). Re
 | 2026-11-05 | Salida J8 al buck protegida con R14 (2.2 Ω ½ W THT) + T1A en línea; buck ≥ 80 V | J8 y R14 vinculadas al esquemático |
 | 2026-11-05 | **1 oz como condición de diseño** (lo que existe en trinchera); auditoría de cobre y temperatura; ventanas para alambre 12 AWG hasta la pata del MOSFET | Refuerzo opcional a 1000 W; el bus DC no lo necesita |
 | 2026-11-05 | Auditoría con MOSFET y Rubycon; sensibilidad y validación del método | Todo dentro de sus límites, incluso en el caso pesimista |
+| 2026-11-05 | Ventanas del MOSFET bajo con cuello en la pata central: Q2 a 2.50 mm del gate y 2.85 mm de GND; Q4 a 2.84 / 3.12 mm. Las del MOSFET alto quedan a 1.98–1.99 mm del pin de 48 V. Serigrafía HO_A / LO_A corregida | Verificado con la geometría exacta; sin pistas con net distinta a su pad ni referencias duplicadas: **lista para fabricar** |
 | 2026-11-05 | Nets de compuerta unificadas: `HO_A` / `LO_A` (pierna A) y `HO_B` / `LO_B` (pierna B), de J10/J9 hasta las redes de gate | Ninguna pista queda con net distinta a la del pad que toca |
 
 ---
