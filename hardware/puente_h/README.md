@@ -7,7 +7,6 @@
 Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del puente H, el banco de capacitores del bus, los shunts para medir corriente y los conectores para los módulos universales (gate drivers, sensor de corriente y buck de 15 V). La lógica de control vive en otra tarjeta.
 
 ---
-<img width="916" height="766" alt="imagen" src="https://github.com/user-attachments/assets/5b75ac33-6a59-4065-8a0b-40a90492ccdb" />
 
 ## 1. Características
 
@@ -32,14 +31,16 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 
 | Archivo | Contenido |
 | --- | --- |
-| `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pro` | Proyecto de KiCad 9 |
-| `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_sch` | Esquemático principal (hoja raíz) |
+| `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_sch` | Esquemático principal (hoja raíz, KiCad 9) |
 | `CAPASITORES.kicad_sch` | Hoja jerárquica: banco de capacitores del bus |
 | `untitled.kicad_sch` | Hoja jerárquica: disipadores |
 | `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pcb` | Layout |
+| `Heatsink_Fischer_SK129-STS_50.8mm.step` | Modelo 3D del disipador Fischer SK 129 50.8 STS (hecho con las coordenadas de la huella oficial de KiCad) |
+| `Disipador_V8511Y_equiv.step` | Modelo 3D aproximado de un disipador equivalente (versión anterior, ya no se usa en el layout) |
+| `SSA2512_Littelfuse_Kelvin.kicad_mod` · `SSA2512_Littelfuse.step` | Huella y modelo 3D del shunt (los mismos que en la carpeta del sensor) |
 | `auditoria/` | Auditoría de corriente y temperatura del layout: herramientas, figuras y [README](auditoria/README.md) |
 
-La huella del shunt (`SSA2512_Littelfuse_Kelvin.kicad_mod`) y su modelo 3D están en `hardware/sensores/sensor-dc-ina-comparador/`.
+> Para abrir el proyecto en KiCad hace falta también el archivo `.kicad_pro` (pendiente de subir).
 
 ---
 
