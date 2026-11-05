@@ -12,6 +12,8 @@ La segunda (sección 8):
 
 La herramienta `auditoria_cobre.py` lee el `.kicad_pcb`, calcula cómo se reparte la corriente en las zonas de cobre reales (las dos capas, unidas por los pines THT y las vías) y estima cuánto se calienta el cobre. Se corre en los dos escenarios, **cobre solo** y **con alambre 12 AWG soldado en las ventanas**, para que **cada usuario decida** si agrega el refuerzo.
 <img width="942" height="787" alt="imagen" src="https://github.com/user-attachments/assets/2eb881db-3a4b-4caf-898a-4463792152b1" />
+<img width="934" height="784" alt="imagen" src="https://github.com/user-attachments/assets/bf88bec4-3ff8-4f22-a02f-8fad1fd38fc6" />
+
 
 ---
 
