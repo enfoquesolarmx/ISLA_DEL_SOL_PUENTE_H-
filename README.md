@@ -64,6 +64,7 @@ ISLA_DEL_SOL_PUENTE_H-/
 ├── .gitignore
 ├── docs/
 │   ├── identificacion_dt_pin9.md
+│   ├── modulacion_spwm.md
 │   ├── compensacion_adaptativa_tiempo_muerto.md
 │   └── sensado_corriente.md
 └── hardware/
@@ -101,6 +102,7 @@ Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/sensores/` (sensor A
 | Documento | Qué explica | Útil para |
 | --- | --- | --- |
 | [Identificación del tiempo muerto por P9](docs/identificacion_dt_pin9.md) | Cómo cada módulo declara su tiempo muerto (P9 a GND = 500 ns, abierto = 1 µs); soporte legacy para trincheras; costo contra beneficio; filosofía poka-yoke; llave mecánica en la posición 8; análisis de fallas; código de referencia para ATmega328 y ESP32; validación en banco | Entender la interfaz universal y escribir el firmware |
+| [Modulación SPWM: bipolar, unipolar e híbrida](docs/modulacion_spwm.md) | Por qué el inversor usa modulación **híbrida** (pierna A a 24 kHz, pierna B a 60 Hz) y el cargador **unipolar**; comparación de rizo (4 : 2 : 1), consumo en vacío, pérdidas de conmutación, distorsión por tiempo muerto con módulos de 500 ns y 1 µs, modo común; ciclos de trabajo para el firmware; validación | Entender la estrategia de modulación y escribir el firmware |
 | [Compensación adaptativa de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md) | Por qué el tiempo muerto genera armónicos impares; compensación con el signo de la corriente; medición del 3er armónico con Goertzel; ajuste automático; hoja de ruta en 5 etapas | Etapa posterior: mejorar la calidad de la onda |
 | [Sensado de corriente DC y AC](docs/sensado_corriente.md) | Por qué hacen falta dos sensores (bus DC y primario AC); protección por hardware; INA240 en el primario; protección del transformador contra saturación; muestreo sincronizado; calibración | Etapa posterior: base para el control avanzado |
 
@@ -127,11 +129,12 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 
 1. **Este README:** visión general del inversor y de la interfaz universal.
 2. **[Identificación por P9](docs/identificacion_dt_pin9.md):** el "contrato" que cumplen todos los módulos.
-3. **[Módulo IRS2186](hardware/gate-drivers/irs2186/README.md):** el driver de bootstrap clásico, la base para entender los demás.
-4. **[Módulo TLP250](hardware/gate-drivers/tlp250-trinchera/README.md):** cómo resolver lo mismo con partes de tienda local, y los errores típicos al diseñar un tótem.
-5. **[Módulo IR2110](hardware/gate-drivers/ir2110-trinchera/README.md):** el driver legacy clásico con tierras separadas y tótem para muchos MOSFET.
-6. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md):** cómo medir la corriente del bus y cortar las compuertas por hardware antes que el fusible.
-7. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
+3. **[Modulación SPWM](docs/modulacion_spwm.md):** por qué híbrida en el inversor y unipolar en el cargador, y por qué eso hace viables los módulos de 1 µs.
+4. **[Módulo IRS2186](hardware/gate-drivers/irs2186/README.md):** el driver de bootstrap clásico, la base para entender los demás.
+5. **[Módulo TLP250](hardware/gate-drivers/tlp250-trinchera/README.md):** cómo resolver lo mismo con partes de tienda local, y los errores típicos al diseñar un tótem.
+6. **[Módulo IR2110](hardware/gate-drivers/ir2110-trinchera/README.md):** el driver legacy clásico con tierras separadas y tótem para muchos MOSFET.
+7. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md):** cómo medir la corriente del bus y cortar las compuertas por hardware antes que el fusible.
+8. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
 
 ## Herramientas
 
