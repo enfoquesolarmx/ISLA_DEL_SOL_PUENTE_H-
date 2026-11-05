@@ -142,7 +142,7 @@ Pines (DIP-8): 1 NC · 2 ánodo · 3 cátodo · 4 NC · 5 GND (VEE) · 6 salida 
 | MCU | R3 = R4 | Corriente del LED |
 | --- | --- | --- |
 | **ATmega328 a 5 V (diseño actual)** | **330 Ω** | ~10 mA ✓ |
-| ESP32 / STM32 a 3.3 V | **150 Ω** | ~11 mA (con 330 Ω quedan ~5 mA, justo en el umbral máximo) |
+| ESP32 / STM32 a 3.3 V *(fuera del alcance actual: la interfaz es de 5 V)* | **150 Ω** | ~11 mA (con 330 Ω quedan ~5 mA, justo en el umbral máximo) |
 
 R1 y R2 (10 kΩ) de H y L a GND mantienen los LED apagados si el MCU no está conectado.
 
@@ -251,7 +251,7 @@ Datos: TIP41C/TIP42C (onsemi): V_CEO 100 V, 6 A continua, **10 A pico**, hFE ≥
 | U1, U2 | 2 | Optoacoplador | TLP250H (DIP-8) | Verificar pines en equivalentes |
 | Q1, Q4 | 2 | NPN | TIP41C (o D44H11) | TO-220 B-C-E, acostado |
 | Q2, Q3 | 2 | PNP | TIP42C (o D45H11) | TO-220 B-C-E, acostado |
-| R3, R4 | 2 | Resistencia LED | 330 Ω (5 V) / 150 Ω (3.3 V) | Iguales |
+| R3, R4 | 2 | Resistencia LED | **330 Ω** (interfaz de 5 V del proyecto) | Iguales |
 | R1, R2 | 2 | Pull-down de entrada | 10 kΩ | |
 | R5, R6 | 2 | Resistencia de base | 2.2 Ω | |
 | R9 | 1 | Resistencia bootstrap | 2.2 Ω 1 W | |
