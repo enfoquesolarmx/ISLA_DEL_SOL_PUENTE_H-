@@ -13,7 +13,7 @@ El proyecto se publica como **referencia de estudio**: cada decisión de diseño
 | Parámetro | Valor |
 | --- | --- |
 | Entrada | Batería de 48 V |
-| Salida | 127 V / 60 Hz, 1000 W (transformador 1 : 4.16) |
+| Salida | 127 V / 60 Hz, 1000 W (transformador compatible 24–28 V / 120 V) |
 | Modo inversor | Modulación híbrida: rama A a 24 kHz, rama B a 60 Hz |
 | Modo cargador | Unipolar, ambas ramas a 24 kHz, 1 kVA |
 | MOSFET | Infineon IRF100P219 (100 V), disipador Fischer SK 129 |
@@ -63,6 +63,7 @@ ISLA_DEL_SOL_PUENTE_H-/
 ├── LICENSE.md                                  ← licencias (hardware, documentación, firmware)
 ├── .gitignore
 ├── docs/
+│   ├── vision_isla_del_sol.md
 │   ├── identificacion_dt_pin9.md
 │   ├── modulacion_spwm.md
 │   ├── compensacion_adaptativa_tiempo_muerto.md
@@ -84,6 +85,12 @@ ISLA_DEL_SOL_PUENTE_H-/
     │       ├── GATE_TLP_250_TOTEM_TIP.kicad_pro
     │       ├── GATE_TLP_250_TOTEM_TIP.kicad_sch
     │       └── GATE_TLP_250_TOTEM_TIP.kicad_pcb
+    ├── puente-h/
+    │   ├── README.md                               ← tarjeta de potencia
+    │   ├── PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pro / .kicad_sch / .kicad_pcb
+    │   ├── CAPASITORES.kicad_sch                   ← hoja: banco de capacitores
+    │   ├── untitled.kicad_sch                      ← hoja: disipadores
+    │   └── auditoria/                              ← corriente y temperatura del layout (herramientas + figuras)
     └── sensores/
         └── sensor-dc-ina-comparador/
             ├── README.md
@@ -95,12 +102,13 @@ ISLA_DEL_SOL_PUENTE_H-/
                 └── SSA2512_Littelfuse.step           ← modelo 3D del shunt
 ```
 
-Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/sensores/` (sensor AC del primario), `hardware/puente-h/` (tarjeta de potencia) y `firmware/`.
+Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/sensores/` (sensor AC del primario), la tarjeta de control y `firmware/`.
 
 ### Documentos de sistema (`docs/`)
 
 | Documento | Qué explica | Útil para |
 | --- | --- | --- |
+| [Visión: la Isla del Sol](docs/vision_isla_del_sol.md) | Por qué existe el proyecto: convertir la luz del sol en energía útil contra la cadena diaria del diésel (exploración, extracción, refinación, transporte); acceso a la electricidad como bien común; hardware abierto y modo trinchera; lo que la solar también cuesta; ideas para trabajar más adelante (borrador) | Entender el propósito antes que los circuitos |
 | [Identificación del tiempo muerto por P9](docs/identificacion_dt_pin9.md) | Cómo cada módulo declara su tiempo muerto (P9 a GND = 500 ns, abierto = 1 µs); soporte legacy para trincheras; costo contra beneficio; filosofía poka-yoke; llave mecánica en la posición 8; análisis de fallas; código de referencia para ATmega328 y ESP32; validación en banco | Entender la interfaz universal y escribir el firmware |
 | [Modulación SPWM: bipolar, unipolar e híbrida](docs/modulacion_spwm.md) | Por qué el inversor usa modulación **híbrida** (pierna A a 24 kHz, pierna B a 60 Hz) y el cargador **unipolar**; comparación de rizo (4 : 2 : 1), consumo en vacío, pérdidas de conmutación, distorsión por tiempo muerto con módulos de 500 ns y 1 µs, modo común; ciclos de trabajo para el firmware; validación | Entender la estrategia de modulación y escribir el firmware |
 | [Compensación adaptativa de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md) | Por qué el tiempo muerto genera armónicos impares; compensación con el signo de la corriente; medición del 3er armónico con Goertzel; ajuste automático; hoja de ruta en 5 etapas | Etapa posterior: mejorar la calidad de la onda |
@@ -118,6 +126,12 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | **IR2110 + tótem TIP41C/TIP42C** (trinchera) | [README](hardware/gate-drivers/ir2110-trinchera/README.md) | ✓ Esquemático, PCB y proyecto | VSS y COM separados con J5-6 a GND lógico; VDD de 5 V con 78L05; SD a VSS; tótem por canal con su desacoplo; zener en VB–VS1 y en VCC; P9 abierto (1 µs); **alcance de 1 a 5 MOSFET** y refuerzo del bootstrap; **registro de 8 errores corregidos**; BOM; validación |
 
 
+### Tarjeta de potencia (`hardware/puente-h/`)
+
+| Tarjeta | Documento | Archivos KiCad | Qué incluye |
+| --- | --- | --- | --- |
+| **Puente H SPWM 48 V** (REV C) | [README](hardware/puente-h/README.md) · [Auditoría](hardware/puente-h/auditoria/README.md) | ✓ Esquemático (3 hojas) y PCB | 4 × IRF100P219 con disipador SK 129; pierna A a 24 kHz y B a 60 Hz; sockets universales J10/J9 con llave; banco Rubycon + cerámicos con plano partido y lazo doblado (~4 nH); shunts con Kelvin; transformador compatible 24–28 V / 120 V; salida protegida al buck (R14 + T1A, buck ≥ 80 V); **cobre de 1 oz como condición de trinchera**, con **auditoría de corriente y temperatura** (MOSFET, Rubycon y cobre) y refuerzo opcional con alambre 12 AWG; ensamble, validación, BOM y pendientes |
+
 ### Módulos de sensado (`hardware/sensores/`)
 
 | Módulo | Documento | Archivos KiCad | Qué incluye |
@@ -133,19 +147,20 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 4. **[Módulo IRS2186](hardware/gate-drivers/irs2186/README.md):** el driver de bootstrap clásico, la base para entender los demás.
 5. **[Módulo TLP250](hardware/gate-drivers/tlp250-trinchera/README.md):** cómo resolver lo mismo con partes de tienda local, y los errores típicos al diseñar un tótem.
 6. **[Módulo IR2110](hardware/gate-drivers/ir2110-trinchera/README.md):** el driver legacy clásico con tierras separadas y tótem para muchos MOSFET.
-7. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md):** cómo medir la corriente del bus y cortar las compuertas por hardware antes que el fusible.
-8. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
+7. **[Tarjeta del puente H](hardware/puente-h/README.md)** y su **[auditoría](hardware/puente-h/auditoria/README.md):** cómo se juntan los módulos, el banco de capacitores, el layout de potencia y cómo comprobar antes de fabricar que el cobre y los componentes aguantan.
+8. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md):** cómo medir la corriente del bus y cortar las compuertas por hardware antes que el fusible.
+9. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
 
 ## Herramientas
 
 - **KiCad** (esquemáticos y PCB).
-- Firmware: ATmega328 para el prototipo del inversor; STM32 o ESP32 (MCPWM) en etapas posteriores.
+- Firmware: **ATmega328P a 5 V** (ecosistema Arduino) para la misión actual; la interfaz J1 de los gate drivers es **lógica de 5 V**. STM32 o ESP32 (3.3 V) en etapas posteriores, cambiando la compuerta de corte por 74HCT08.
 
 ## Estado
 
 | Etapa | Estado |
 | --- | --- |
-| Diseño de la tarjeta del puente H | En curso |
+| Tarjeta del puente H (REV C) | Diseño terminado y auditado (cobre 1 oz); pendiente ajustar las ventanas del MOSFET bajo (≥ 2 mm al gate), fabricar y validar en banco |
 | Módulo UCC21520 | Diseñado; pendiente llevar P9 a J1 |
 | Módulo TLP250 de trinchera | V.0.1 diseñado; pendiente fabricar y validar |
 | Módulo IRS2186 | Diseñado con P9 en J1; pendiente fabricar y validar |
@@ -164,7 +179,7 @@ Primero gatear, después caminar. La etapa actual busca un equipo **básico pero
 | Regulación lenta del voltaje RMS con el feedback 120 → 12 V | Compensación de tiempo muerto |
 | Cargador básico sincronizado con la red, CC/CV con límite de corriente (boost: el pico del primario, ~43 V, está por debajo del voltaje de carga) | Lazo resonante de voltaje y corriente |
 | **Protección de sobrecorriente por hardware** (shunt DC + comparador), batería baja/alta, sobretemperatura, arranque suave | Formación de red con AC coupling y control por frecuencia |
-| Gate drivers IRS2186, TLP250 e IR2110 | Migración a STM32G4 (el ATmega328P o un STM32F103 alcanzan para la misión básica) |
+| Gate drivers IRS2186, TLP250 e IR2110 | Migración a STM32G4 o ESP32 (la misión básica se hace con ATmega328P a 5 V) |
 
 ## Licencia
 
