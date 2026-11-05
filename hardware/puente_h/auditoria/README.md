@@ -11,6 +11,7 @@ La segunda (sección 8):
 > **Con el calor de los MOSFET y el rizo de los capacitores, ¿todo queda dentro de sus límites?**
 
 La herramienta `auditoria_cobre.py` lee el `.kicad_pcb`, calcula cómo se reparte la corriente en las zonas de cobre reales (las dos capas, unidas por los pines THT y las vías) y estima cuánto se calienta el cobre. Se corre en los dos escenarios, **cobre solo** y **con alambre 12 AWG soldado en las ventanas**, para que **cada usuario decida** si agrega el refuerzo.
+<img width="942" height="787" alt="imagen" src="https://github.com/user-attachments/assets/2eb881db-3a4b-4caf-898a-4463792152b1" />
 
 ---
 
