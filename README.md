@@ -72,34 +72,32 @@ ISLA_DEL_SOL_PUENTE_H-/
     ├── gate-drivers/
     │   ├── irs2186/
     │   │   ├── README.md
-    │   │   ├── GATE_DRIVER_IRS2186.kicad_pro
-    │   │   ├── GATE_DRIVER_IRS2186.kicad_sch
-    │   │   └── GATE_DRIVER_IRS2186.kicad_pcb
+    │   │   └── GATE_DRIVER_IRS2186.kicad_pro / .kicad_sch / .kicad_pcb
     │   ├── ir2110-trinchera/
     │   │   ├── README.md
-    │   │   ├── GATE_DRIVER_IR2110_TOTEM.kicad_pro
-    │   │   ├── GATE_DRIVER_IR2110_TOTEM.kicad_sch
-    │   │   └── GATE_DRIVER_IR2110_TOTEM.kicad_pcb
+    │   │   └── GATE_DRIVER_IR2110_TOTEM.kicad_pro / .kicad_sch / .kicad_pcb
     │   └── tlp250-trinchera/
     │       ├── README.md
-    │       ├── GATE_TLP_250_TOTEM_TIP.kicad_pro
-    │       ├── GATE_TLP_250_TOTEM_TIP.kicad_sch
-    │       └── GATE_TLP_250_TOTEM_TIP.kicad_pcb
-    ├── puente-h/
+    │       └── GATE_TLP_250_TOTEM_TIP.kicad_pro / .kicad_sch / .kicad_pcb
+    ├── puente_h/
     │   ├── README.md                               ← tarjeta de potencia
-    │   ├── PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pro / .kicad_sch / .kicad_pcb
+    │   ├── PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_sch / .kicad_pcb
     │   ├── CAPASITORES.kicad_sch                   ← hoja: banco de capacitores
     │   ├── untitled.kicad_sch                      ← hoja: disipadores
-    │   └── auditoria/                              ← corriente y temperatura del layout (herramientas + figuras)
+    │   ├── Heatsink_Fischer_SK129-STS_50.8mm.step  ← modelo 3D del disipador
+    │   ├── Disipador_V8511Y_equiv.step             ← modelo 3D aproximado (versión anterior)
+    │   ├── SSA2512_Littelfuse_Kelvin.kicad_mod     ← huella del shunt
+    │   ├── SSA2512_Littelfuse.step                 ← modelo 3D del shunt
+    │   └── auditoria/
+    │       ├── README.md                           ← auditoría de corriente y temperatura
+    │       ├── auditoria_cobre.py · termica_componentes.py · sensibilidad.py
+    │       └── resultados/                         ← figuras (.png) y resúmenes (.json)
     └── sensores/
         └── sensor-dc-ina-comparador/
             ├── README.md
-            ├── SENSOR_DC_INA_COMPARADOR.kicad_pro
-            ├── SENSOR_DC_INA_COMPARADOR.kicad_sch
-            ├── SENSOR_DC_INA_COMPARADOR.kicad_pcb
-            ├── SSA2512_Littelfuse_Kelvin.kicad_mod   ← huella del shunt (va en la tarjeta de potencia)
-            └── 3d/
-                └── SSA2512_Littelfuse.step           ← modelo 3D del shunt
+            ├── SENSOR_DC_INA_COMPARADOR.kicad_pro / .kicad_sch / .kicad_pcb
+            ├── SSA2512_Littelfuse_Kelvin.kicad_mod ← huella del shunt
+            └── SSA2512_Littelfuse.step             ← modelo 3D del shunt
 ```
 
 Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/sensores/` (sensor AC del primario), la tarjeta de control y `firmware/`.
@@ -126,11 +124,11 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | **IR2110 + tótem TIP41C/TIP42C** (trinchera) | [README](hardware/gate-drivers/ir2110-trinchera/README.md) | ✓ Esquemático, PCB y proyecto | VSS y COM separados con J5-6 a GND lógico; VDD de 5 V con 78L05; SD a VSS; tótem por canal con su desacoplo; zener en VB–VS1 y en VCC; P9 abierto (1 µs); **alcance de 1 a 5 MOSFET** y refuerzo del bootstrap; **registro de 8 errores corregidos**; BOM; validación |
 
 
-### Tarjeta de potencia (`hardware/puente-h/`)
+### Tarjeta de potencia (`hardware/puente_h/`)
 
 | Tarjeta | Documento | Archivos KiCad | Qué incluye |
 | --- | --- | --- | --- |
-| **Puente H SPWM 48 V** (REV C) | [README](hardware/puente-h/README.md) · [Auditoría](hardware/puente-h/auditoria/README.md) | ✓ Esquemático (3 hojas) y PCB | 4 × IRF100P219 con disipador SK 129; pierna A a 24 kHz y B a 60 Hz; sockets universales J10/J9 con llave; banco Rubycon + cerámicos con plano partido y lazo doblado (~4 nH); shunts con Kelvin; transformador compatible 24–28 V / 120 V; salida protegida al buck (R14 + T1A, buck ≥ 80 V); **cobre de 1 oz como condición de trinchera**, con **auditoría de corriente y temperatura** (MOSFET, Rubycon y cobre) y refuerzo opcional con alambre 12 AWG; ensamble, validación, BOM y pendientes |
+| **Puente H SPWM 48 V** (REV C) | [README](hardware/puente_h/README.md) · [Auditoría](hardware/puente_h/auditoria/README.md) | ✓ Esquemático (3 hojas) y PCB | 4 × IRF100P219 con disipador SK 129; pierna A a 24 kHz y B a 60 Hz; sockets universales J10/J9 con llave; banco Rubycon + cerámicos con plano partido y lazo doblado (~4 nH); shunts con Kelvin; transformador compatible 24–28 V / 120 V; salida protegida al buck (R14 + T1A, buck ≥ 80 V); **cobre de 1 oz como condición de trinchera**, con **auditoría de corriente y temperatura** (MOSFET, Rubycon y cobre) y refuerzo opcional con alambre 12 AWG; ensamble, validación, BOM y pendientes |
 
 ### Módulos de sensado (`hardware/sensores/`)
 
@@ -147,7 +145,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 4. **[Módulo IRS2186](hardware/gate-drivers/irs2186/README.md):** el driver de bootstrap clásico, la base para entender los demás.
 5. **[Módulo TLP250](hardware/gate-drivers/tlp250-trinchera/README.md):** cómo resolver lo mismo con partes de tienda local, y los errores típicos al diseñar un tótem.
 6. **[Módulo IR2110](hardware/gate-drivers/ir2110-trinchera/README.md):** el driver legacy clásico con tierras separadas y tótem para muchos MOSFET.
-7. **[Tarjeta del puente H](hardware/puente-h/README.md)** y su **[auditoría](hardware/puente-h/auditoria/README.md):** cómo se juntan los módulos, el banco de capacitores, el layout de potencia y cómo comprobar antes de fabricar que el cobre y los componentes aguantan.
+7. **[Tarjeta del puente H](hardware/puente_h/README.md)** y su **[auditoría](hardware/puente_h/auditoria/README.md):** cómo se juntan los módulos, el banco de capacitores, el layout de potencia y cómo comprobar antes de fabricar que el cobre y los componentes aguantan.
 8. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md):** cómo medir la corriente del bus y cortar las compuertas por hardware antes que el fusible.
 9. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
 
