@@ -118,12 +118,14 @@ Medido con la geometría exacta: borde de la ventana de máscara contra el cobre
 
 | Ventana | Pin vecino más cercano | Separación | Estado |
 | --- | --- | --- | --- |
-| Q2 → J24 (VS1, bajo) | Q2-1 (gate) | **1.58 mm** | ⚠️ Subir a ≥ 2 mm |
-| | Q2-3 (GND) | 2.04 mm | ✅ |
-| Q4 → J23 (VS2, bajo) | Q4-1 (gate) | **1.49 mm** | ⚠️ Subir a ≥ 2 mm |
-| | Q4-3 (GND) | 1.96 mm | ✅ (al límite) |
-| Q1 → J27 (VS1, alto) | Q1-2 (48 V) | 1.98 mm | ✅ |
-| Q3 → J22 (VS2, alto) | Q3-2 (48 V) | 1.99 mm | ✅ |
+| Q2 → J24 (VS1, bajo) | Q2-1 (gate) | 2.50 mm | ✅ |
+| | Q2-3 (GND) | 2.85 mm | ✅ |
+| Q4 → J23 (VS2, bajo) | Q4-1 (gate) | 2.84 mm | ✅ |
+| | Q4-3 (GND) | 3.12 mm | ✅ |
+| Q1 → J27 (VS1, alto) | Q1-2 (48 V) | 1.98 mm | ✅ (2 mm nominal) |
+| Q3 → J22 (VS2, alto) | Q3-2 (48 V) | 1.99 mm | ✅ (2 mm nominal) |
+
+En una versión anterior, las ventanas del MOSFET bajo quedaban a 1.49–1.58 mm del gate. Se corrigieron con un **cuello angosto** que envuelve solo la pata central, y la parte ancha empieza después de la fila de pines.
 
 **Por qué importa:** si la soldadura del alambre puentea la ventana con un pin vecino, el MOSFET queda en corto (VS con 48 V o con GND) o su gate queda pegado a VS. **Antes de energizar, mide con el multímetro que no haya continuidad** entre VS y 48 V, entre VS y GND, y entre VS y cada gate.
 
