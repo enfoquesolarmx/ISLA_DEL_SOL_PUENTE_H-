@@ -154,10 +154,23 @@ El pin 9 y la llave de la posición 8 son **poka-yoke** (a prueba de errores, co
 
 > **Historial:** la primera versión de este documento ubicaba la identificación en J2/J5-9, con pull-up en la tarjeta de potencia. Se movió a J1-P9 al diseñar el módulo TLP250 V.0.1. **Pendiente:** llevar P9 a J1 también en los módulos IRS2186 y UCC21520 (P9 a GND de entrada) para que los tres usen la misma asignación. La duda sobre INA_OUT en J5-9 del IRS2186 deja de afectar a la identificación.
 
+#### Nivel lógico de la interfaz: 5 V
+
+**Decisión (2026-11-05):** las señales H y L de J1 son **lógica de 5 V**, generadas por un **ATmega328P** (ecosistema Arduino) a través de la compuerta **74HC08** de corte por FAULT en la tarjeta de control.
+
+| Por qué 5 V | Detalle |
+| --- | --- |
+| Soporte a largo plazo | El ATmega328P y las placas Arduino de 5 V se consiguen en todo el mundo y tienen soporte asegurado por muchos años |
+| Trinchera | El 74HC08 es la variante más común de la familia; con entradas de 5 V no hace falta el 74HCT08 |
+| Un solo valor por módulo | TLP250 con **330 Ω fijos** (~10 mA en el LED); IR2110 con margen completo en sus entradas a VDD = 5 V; IRS2186 con margen amplio sobre su V_IH de 2.5 V |
+| Poka-yoke | No existen versiones del módulo "para 3.3 V" que se puedan confundir |
+
+**Fuera del alcance actual:** MCU de 3.3 V (STM32, ESP32). Si en una etapa posterior se usan, la compuerta de corte se cambia por **74HCT08** (mismo pinout DIP-14, V_IH = 2.0 V, salida de 5 V) y los módulos no se tocan. **No usar 74LS08 ni CD4081:** su salida en alto es débil y no enciende bien el LED del TLP250 ni las entradas del IR2110.
+
 ### 3.2 Tarjeta de control (lado del MCU)
 
 ```
-3.3 V
+5 V (VCC del ATmega328P)
   │
  [10 kΩ]        ← pull-up externa (además de la interna del MCU)
   │
@@ -171,23 +184,23 @@ El pin 9 y la llave de la posición 8 son **poka-yoke** (a prueba de errores, co
 
 | Componente | Valor | Función |
 | --- | --- | --- |
-| Pull-up | 10 kΩ a 3.3 V | Convierte "abierto" en un 1 definido; más inmune al ruido de 24 kHz que la pull-up interna |
+| Pull-up | 10 kΩ a 5 V (VCC del MCU) | Convierte "abierto" en un 1 definido; más inmune al ruido de 24 kHz que la pull-up interna |
 | Resistencia serie | 1–4.7 kΩ | Limita corriente hacia el pin del MCU si llega un voltaje indebido |
 | Capacitor (opcional) | 10–100 nF a GND junto al MCU | Filtra ruido acoplado de la conmutación |
 
-**Cómo "sabe" el MCU que el pin está abierto:** no lo detecta directamente. La pull-up sube la línea a 3.3 V cuando nada la jala a tierra. Si el módulo la conecta a GND, circulan 3.3 V / 10 kΩ = **0.33 mA** y la línea queda en 0 V. Sin pull-up, una entrada flotante leería valores al azar.
+**Cómo "sabe" el MCU que el pin está abierto:** no lo detecta directamente. La pull-up sube la línea a 5 V cuando nada la jala a tierra. Si el módulo la conecta a GND, circulan 5 V / 10 kΩ = **0.5 mA** y la línea queda en 0 V. Sin pull-up, una entrada flotante leería valores al azar.
 
 ### 3.3 Módulos
 
 | Módulo | Cambio en layout | Serigrafía sugerida |
 | --- | --- | --- |
-| IRS2186 | J1-P9 → GND de entrada (pendiente) | "OPERACION DT IRS2186=500NS" |
+| IRS2186 | J1-P9 → GND ✓ (2026-11-03). En este módulo GND de J1 = COM = tierra de potencia (no aislado) | "OPERACION DT IRS2186=500NS" (pendiente) |
 | UCC21520ADWR | J1-P9 → GND de entrada (pendiente; hoy el ID está en J2-9) | "OPERACION DT UCC21520=500NS" |
 | TLP250H | **J1-P9 sin pista** y sin relleno de GND alrededor ✓ (V.0.1) | **"OPERACION DT TLP250=1US"** ✓ |
 
 La serigrafía dice **qué hace** el módulo, no solo cómo se llama: si en banco el equipo reporta un modo distinto al impreso, el técnico sabe que hay un problema en P9.
 
-### 3.4 Nota para ESP32
+### 3.4 Nota para ESP32 (etapa posterior)
 
 Los GPIO 34 a 39 del ESP32 son solo de entrada y **no tienen pull-up interna**. Si se usa uno de ellos, la pull-up externa es obligatoria.
 
@@ -389,4 +402,6 @@ En ATmega328, convertir a cuentas enteras: `d_comp_cuentas = dt_cuentas` (aplica
 | 2026-11-02 | Se agrega la sección 2.6: costo de la modalidad (de 4 a 5 terminales, ~1 USD) contra el costo de una ida de reparación | Argumento económico documentado | — |
 | 2026-11-02 | Llave mecánica en posición 8 (sin pin/pad en módulo, tapón en tarjeta) y sección 2.7 poka-yoke | Pad 8 eliminado en módulo UCC21520ADWR | Keepout en posición 8, serigrafía, aplicar en IRS2186 y TLP250H, tapón en tarjeta del puente H |
 | 2026-11-03 | P9 se ubica en **J1-5** (conector hacia la tarjeta de control); pull-up en la tarjeta de control; J5-9 queda reservado | Implementado en módulo TLP250 V.0.1.NOV.26.J.G: P9 abierto, "X" en J5-8, serigrafía "OPERACION DT TLP250=1US" y "TRENZAR H Y L CON GND" | Llevar P9 a J1 en módulos IRS2186 y UCC21520; pull-up 10 k + serie en tarjeta de control |
+| 2026-11-03 | Módulo IRS2186: P9 en J1-5 unido a GND; J5 sin pad 8 con "X"; J5-9 a GND (reservado) | Módulo IRS declara 500 ns ✓; duda de INA_OUT resuelta | Falta llevar P9 a J1 en el módulo UCC21520 |
+| 2026-11-05 | Nivel lógico de J1 fijado en **5 V** (ATmega328P + 74HC08); pull-up de P9 a 5 V | Un solo valor por módulo (TLP250 con 330 Ω); 3.3 V queda para una etapa posterior con 74HCT08 | — |
 | | | | |
