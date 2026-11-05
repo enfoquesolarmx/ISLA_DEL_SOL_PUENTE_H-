@@ -67,23 +67,29 @@ ISLA_DEL_SOL_PUENTE_H-/
 │   ├── compensacion_adaptativa_tiempo_muerto.md
 │   └── sensado_corriente.md
 └── hardware/
-    └── gate-drivers/
-        ├── irs2186/
-        │   ├── README.md
-        │   ├── GATE_DRIVER_IRS2186.kicad_pro
-        │   ├── GATE_DRIVER_IRS2186.kicad_sch
-        │   └── GATE_DRIVER_IRS2186.kicad_pcb
-        ├── ir2110-trinchera/
-        │   ├── README.md
-        │   └── archivos de KiCad (.kicad_pro / .kicad_sch / .kicad_pcb)
-        └── tlp250-trinchera/
+    ├── gate-drivers/
+    │   ├── irs2186/
+    │   │   ├── README.md
+    │   │   ├── GATE_DRIVER_IRS2186.kicad_pro
+    │   │   ├── GATE_DRIVER_IRS2186.kicad_sch
+    │   │   └── GATE_DRIVER_IRS2186.kicad_pcb
+    │   ├── ir2110-trinchera/
+    │   │   ├── README.md
+    │   │   └── archivos de KiCad (.kicad_pro / .kicad_sch / .kicad_pcb)
+    │   └── tlp250-trinchera/
+    │       ├── README.md
+    │       ├── GATE_TLP_250_TOTEM_TIP.kicad_pro
+    │       ├── GATE_TLP_250_TOTEM_TIP.kicad_sch
+    │       └── GATE_TLP_250_TOTEM_TIP.kicad_pcb
+    └── sensores/
+        └── sensor-dc-ina-comparador/
             ├── README.md
-            ├── GATE_TLP_250_TOTEM_TIP.kicad_pro
-            ├── GATE_TLP_250_TOTEM_TIP.kicad_sch
-            └── GATE_TLP_250_TOTEM_TIP.kicad_pcb
+            ├── archivos de KiCad (.kicad_pro / .kicad_sch / .kicad_pcb)
+            ├── SSA2512_Littelfuse_Kelvin.kicad_mod   ← huella del shunt
+            └── 3d/SSA2512_Littelfuse.step            ← modelo 3D del shunt
 ```
 
-Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/puente-h/` (tarjeta de potencia) y `firmware/`.
+Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/sensores/` (sensor AC del primario), `hardware/puente-h/` (tarjeta de potencia) y `firmware/`.
 
 ### Documentos de sistema (`docs/`)
 
@@ -105,6 +111,13 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | **IR2110 + tótem TIP41C/TIP42C** (trinchera) | [README](hardware/gate-drivers/ir2110-trinchera/README.md) | ✓ Esquemático, PCB y proyecto | VSS y COM separados con J5-6 a GND lógico; VDD de 5 V con 78L05; SD a VSS; tótem por canal con su desacoplo; zener en VB–VS1 y en VCC; P9 abierto (1 µs); **alcance de 1 a 5 MOSFET** y refuerzo del bootstrap; **registro de 8 errores corregidos**; BOM; validación |
 
 
+### Módulos de sensado (`hardware/sensores/`)
+
+| Módulo | Documento | Archivos KiCad | Qué incluye |
+| --- | --- | --- | --- |
+| **SENSOR_DC_INA_COMPARADOR** | [README](hardware/sensores/sensor-dc-ina-comparador/README.md) | ✓ Esquemático, PCB, huella y modelo 3D del shunt | Medición bidireccional del bus DC con INA240A1 (I_OUT 0–3.3 V, compatible con ATmega, STM32 y ESP32); **protección de sobrecorriente por hardware** con LM393 en ventana y salida FAULT de colector abierto (~2–3 µs); shunts Littelfuse SSA2512 de 1 mΩ en **1, 2 o 3 piezas** (±34 / ±68 / ±102 A) con sensado Kelvin por *net tie*; fórmulas, límite de modo común del LM393, BOM y validación en banco |
+
+
 ### Por dónde empezar a estudiar
 
 1. **Este README:** visión general del inversor y de la interfaz universal.
@@ -112,7 +125,8 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 3. **[Módulo IRS2186](hardware/gate-drivers/irs2186/README.md):** el driver de bootstrap clásico, la base para entender los demás.
 4. **[Módulo TLP250](hardware/gate-drivers/tlp250-trinchera/README.md):** cómo resolver lo mismo con partes de tienda local, y los errores típicos al diseñar un tótem.
 5. **[Módulo IR2110](hardware/gate-drivers/ir2110-trinchera/README.md):** el driver legacy clásico con tierras separadas y tótem para muchos MOSFET.
-6. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
+6. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md):** cómo medir la corriente del bus y cortar las compuertas por hardware antes que el fusible.
+7. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
 
 ## Herramientas
 
@@ -128,6 +142,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | Módulo TLP250 de trinchera | V.0.1 diseñado; pendiente fabricar y validar |
 | Módulo IRS2186 | Diseñado con P9 en J1; pendiente fabricar y validar |
 | Módulo IR2110 + tótem TIP41C/TIP42C (trinchera) | V.0.1 diseñado (DRC sin errores); pendiente fabricar y validar |
+| Módulo SENSOR_DC_INA_COMPARADOR | Esquemático y layout listos; pendiente DRC final (costura de GND), serigrafía y fabricar |
 | Firmware | Pendiente |
 | Validación en banco | Pendiente |
 
