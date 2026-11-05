@@ -81,7 +81,7 @@ ISLA_DEL_SOL_PUENTE_H-/
     │       └── GATE_TLP_250_TOTEM_TIP.kicad_pro / .kicad_sch / .kicad_pcb
     ├── puente_h/
     │   ├── README.md                               ← tarjeta de potencia
-    │   ├── PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_sch / .kicad_pcb
+    │   ├── PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pro / .kicad_sch / .kicad_pcb
     │   ├── CAPASITORES.kicad_sch                   ← hoja: banco de capacitores
     │   ├── untitled.kicad_sch                      ← hoja: disipadores
     │   ├── Heatsink_Fischer_SK129-STS_50.8mm.step  ← modelo 3D del disipador
@@ -158,7 +158,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 
 | Etapa | Estado |
 | --- | --- |
-| Tarjeta del puente H (REV C) | Diseño terminado y auditado (cobre 1 oz); pendiente ajustar las ventanas del MOSFET bajo (≥ 2 mm al gate), fabricar y validar en banco |
+| Tarjeta del puente H (REV C) | **Lista para fabricar** (cobre 1 oz, auditada); pendiente validar en banco |
 | Módulo UCC21520 | Diseñado; pendiente llevar P9 a J1 |
 | Módulo TLP250 de trinchera | V.0.1 diseñado; pendiente fabricar y validar |
 | Módulo IRS2186 | Diseñado con P9 en J1; pendiente fabricar y validar |
