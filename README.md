@@ -75,7 +75,9 @@ ISLA_DEL_SOL_PUENTE_H-/
     │   │   └── GATE_DRIVER_IRS2186.kicad_pcb
     │   ├── ir2110-trinchera/
     │   │   ├── README.md
-    │   │   └── archivos de KiCad (.kicad_pro / .kicad_sch / .kicad_pcb)
+    │   │   ├── GATE_DRIVER_IR2110_TOTEM.kicad_pro
+    │   │   ├── GATE_DRIVER_IR2110_TOTEM.kicad_sch
+    │   │   └── GATE_DRIVER_IR2110_TOTEM.kicad_pcb
     │   └── tlp250-trinchera/
     │       ├── README.md
     │       ├── GATE_TLP_250_TOTEM_TIP.kicad_pro
@@ -84,9 +86,12 @@ ISLA_DEL_SOL_PUENTE_H-/
     └── sensores/
         └── sensor-dc-ina-comparador/
             ├── README.md
-            ├── archivos de KiCad (.kicad_pro / .kicad_sch / .kicad_pcb)
-            ├── SSA2512_Littelfuse_Kelvin.kicad_mod   ← huella del shunt
-            └── 3d/SSA2512_Littelfuse.step            ← modelo 3D del shunt
+            ├── SENSOR_DC_INA_COMPARADOR.kicad_pro
+            ├── SENSOR_DC_INA_COMPARADOR.kicad_sch
+            ├── SENSOR_DC_INA_COMPARADOR.kicad_pcb
+            ├── SSA2512_Littelfuse_Kelvin.kicad_mod   ← huella del shunt (va en la tarjeta de potencia)
+            └── 3d/
+                └── SSA2512_Littelfuse.step           ← modelo 3D del shunt
 ```
 
 Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/sensores/` (sensor AC del primario), `hardware/puente-h/` (tarjeta de potencia) y `firmware/`.
