@@ -13,7 +13,6 @@
 > Valores verificados contra `GATE_DRIVER_IR2110_TOTEM.kicad_pcb` (2026-11-04). Lo marcado *(verificar)* depende de la hoja de datos.
 
 ---
-
 ## 1. Qué maneja este módulo
 
 Cada módulo maneja **una rama** del puente H: el **MOSFET del lado alto** (HO, referido a VS, alimentado por bootstrap) y el **MOSFET del lado bajo** (LO, referido a COM / GND_K).
@@ -124,7 +123,7 @@ El IR2110 tiene **dos tierras**: **VSS** (lógica) y **COM** (retorno del lado b
 - La interfaz J2 **no trae VDD**, y los umbrales de entrada del IR2110 **suben con VDD** (a VDD = 15 V, el "1" lógico pide ≥ 9.5 V). Por eso el módulo genera sus propios **5 V** con un **L78L05 (SOT-89)** desde los 15 V.
 - **Capacitores:** 10 µF X7R en la entrada (15 V–GND) y capacitor de salida (5 V–GND, C7) junto al regulador. El 78L05 es un regulador clásico (no LDO): **estable con cerámicos**.
 - **MCU de 5 V (ATmega328P):** funciona con margen.
-- **MCU de 3.3 V (STM32, ESP32):** con VDD = 5 V el umbral del "1" puede quedar cerca de 3.3 V. **Verificar la gráfica de umbrales contra VDD** de la hoja de datos; si no hay margen, agregar un buffer **74HCT** en las entradas.
+- **Nivel lógico:** la interfaz J1 del proyecto es **lógica de 5 V** (ATmega328P + 74HC08), con margen completo sobre los umbrales del IR2110 a VDD = 5 V. Con una MCU de 3.3 V (etapa posterior), el umbral del "1" quedaría pegado a 3.3 V; por eso la compuerta de corte de la tarjeta de control se cambiaría por **74HCT08**, sin tocar el módulo (ver `docs/identificacion_dt_pin9.md`).
 
 ### 3.3 Alimentación del lado bajo (VCC)
 
