@@ -123,6 +123,26 @@ Los paneles, las baterías y los MOSFET todavía se fabrican lejos. La soberaní
 
 **La regla de diseño:** si una pieza falla en una isla o en una comunidad remota, **tiene que existir al menos un sustituto que se consiga ahí mismo**, y la documentación tiene que decir cuál es.
 
+#### Segunda vida para los recursos y contra la obsolescencia programada
+
+Poder sustituir también significa tener **alternativas para darle una segunda vida** a lo que ya existe en la región, en lugar de tirarlo:
+
+| Recurso que suele terminar en la basura | Segunda vida en una Isla del Sol |
+| --- | --- |
+| Transformadores de UPS e inversores viejos | Si su lado de baja está entre 24 y 28 V para 120 V, son compatibles (ver el README del puente H) |
+| Circuitos integrados y transistores de equipos dañados | IR2110, TLP250, TIP41C/TIP42C rescatados alimentan los módulos de trinchera |
+| Disipadores, borneras, cable de instalación | Disipadores para los MOSFET, alambre de cobre para reforzar el layout |
+| Un módulo que falla | Se cambia **solo ese módulo**, no el inversor completo |
+| Baterías de segunda vida | Bancos de 48 V con su protección (BMS), en una etapa posterior |
+
+Y el diseño evita, a propósito, lo que vuelve obsoleto a un equipo antes de tiempo:
+- **Firmware abierto**, sin bloqueos ni "apagado a distancia": el equipo no depende de un servidor ni de una actualización del fabricante.
+- **Interfaces documentadas** (J1/J5 con P9, el sensor y el buck), para que una pieza nueva sirva en una tarjeta vieja y al revés.
+- **Componentes estándar** en encapsulados que se sueldan a mano (THT, 1206, 1210).
+- **Explicación de cada valor**, para que un técnico pueda sustituir una pieza descontinuada por otra equivalente.
+
+**La escala del problema:** en 2022 el mundo generó un récord de **62 millones de toneladas de residuos electrónicos**, y solo el **22.3 %** se recolectó y recicló de forma documentada. Para 2030 se esperan ~82 millones de toneladas [12]. Por su parte, la Unión Europea aprobó en 2024 una directiva que promueve la reparación de bienes, conocida como "derecho a reparar" [13]. La Isla del Sol va en la misma dirección desde el diseño: **lo que se puede reparar no se tira.**
+
 ### 5.2 Formar técnicos es parte del hardware
 
 Un equipo soberano necesita personas que lo entiendan. Por eso el repositorio no solo publica archivos: explica **por qué** cada valor, documenta los errores que se cometieron y cómo se corrigieron, y deja herramientas para comprobar el diseño antes de fabricar. Cada técnico que aprende con estos documentos es una trinchera más.
@@ -178,6 +198,8 @@ Una visión que se quiere desplegar en el mundo real tiene que ser honesta:
 9. T. Dinkelman, "The Effects of Rural Electrification on Employment: New Evidence from South Africa", *American Economic Review*, 101(7): 3078–3108, 2011. <https://econpapers.repec.org/RePEc:aea:aecrev:v:101:y:2011:i:7:p:3078-3108>
 10. K. Lee, E. Miguel, C. Wolfram, "Experimental Evidence on the Economics of Rural Electrification", *Journal of Political Economy*, 128(4), 2020. <https://epic.uchicago.edu/research/experimental-evidence-on-the-economics-of-rural-electrification/>
 11. ESMAP / Banco Mundial, *Accelerating the Productive Use of Electricity: Enabling Energy Access to Power Rural Economic Growth*. <https://www.esmap.org/publications/accelerating-productive-use-electricity-enabling-energy-access-power-rural-economic>
+12. UNITAR / UIT, *Global E-waste Monitor 2024*. <https://www.unitar.org/about/news-stories/press/global-e-waste-monitor-2024-electronic-waste-rising-five-times-faster-documented-e-waste-recycling>
+13. Directiva (UE) 2024/1799 del Parlamento Europeo y del Consejo, de 13 de junio de 2024, sobre normas comunes para promover la reparación de bienes. <https://eur-lex.europa.eu/eli/dir/2024/1799/2026-07-31/eng>
 
 ---
 
