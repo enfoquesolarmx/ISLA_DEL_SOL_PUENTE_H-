@@ -8,8 +8,11 @@
 **Fecha:** 2026-11-02 · **Revisión:** 2026-11-03 (diseño final)
 **Documentos relacionados:** `identificacion_dt_pin9.md` (P9, llave en posición 8, poka-yoke), `compensacion_adaptativa_tiempo_muerto.md`
 
-<img width="485" height="926" alt="imagen" src="https://github.com/user-attachments/assets/475ba639-b2fb-4983-8414-e7f0e609fd14" />
-<img width="485" height="926" alt="imagen" src="https://github.com/user-attachments/assets/9ef2f1c1-1768-4cc0-9647-6285bf2f720b" />
+| Cara de componentes | Cara de soldadura |
+| --- | --- |
+| ![Módulo TLP250, vista 3D superior](img/tlp250_3d_superior.png) | ![Módulo TLP250, vista 3D inferior](img/tlp250_3d_inferior.png) |
+
+*Izquierda: arriba, la bornera J1 de entrada, con R3/R4 (330 Ω) en serie con los LED y R1/R2 (10 kΩ) a GND; en medio, los **dos TLP250H** (DIP-8), uno por canal; abajo, los dos tótems **acostados**, TIP41C (NPN) y TIP42C (PNP) con sus resistencias de 2.2 Ω, la red de bootstrap (2.2 Ω 1 W + diodo rápido), los 2 × 10 µF del bootstrap y el header J5. Derecha: las leyendas **"TRENZAR H Y L CON GND"**, **"OPERACIÓN DT TLP250 = 1 µs"** y **"OJO: USAR SILICÓN RTV NEUTRO ENTRE TIPs"**, los 0.1 µF pegados a cada TLP, el 10 µF de 15 V, el zener de 18 V (1SMA5931B1) y la **X** de la llave en la posición 8 de J5.*
 
 ---
 
@@ -229,6 +232,10 @@ Datos: TIP41C/TIP42C (onsemi): V_CEO 100 V, 6 A continua, **10 A pico**, hFE ≥
 - **HA_OUT** une los pines 3 de Q1 y Q2 por arriba y baja por el borde hasta J5-1, sin cruzar entre las filas de pines.
 - **Pistas de salida de 0.5 mm:** suficientes (RMS ~0.3–0.5 A). Lo que importa es el lazo: retorno (VS1 / GND_K) junto a la salida.
 - **Opcional:** 100 nF X7R 50 V en B.Cu entre los colectores de cada tótem (Q1-2 ↔ Q2-2 en H; Q4-2 ↔ Q3-2 en L). Montar si en banco el flanco de VGS sale redondeado u oscila.
+
+![Módulo TLP250 en el editor de PCB](img/tlp250_editor_pcb.png)
+
+*Vista del editor con las dos capas (rojo F.Cu, azul B.Cu), vista desde abajo. Arriba, la zona de entrada (J1, lado del LED); en medio, la barrera de los optoacopladores **sin cobre de GND debajo**; abajo, los tótems y el dominio de alto voltaje (VB, VS1, bootstrap y zener), separado 0.6 mm del resto.*
 
 ### Serigrafía (como quedó)
 
