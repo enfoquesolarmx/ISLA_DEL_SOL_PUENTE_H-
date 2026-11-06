@@ -9,6 +9,12 @@
 
 > Shunts definidos: **Littelfuse SSA2512LR001FWR (1 mΩ)** en la tarjeta de potencia, con **1, 2 o 3 piezas en paralelo** según el uso (sección 4). La calibración del módulo depende de cuántas se monten.
 
+| Cara de componentes | Cara de soldadura |
+| --- | --- |
+| ![Sensor DC, vista 3D superior](img/sensor_dc_3d_superior.png) | ![Sensor DC, vista 3D inferior](img/sensor_dc_3d_inferior.png) |
+
+*Izquierda: arriba, la bornera J2 hacia la tarjeta de control; en medio, el **LM393** en zócalo DIP-8 con el divisor de umbrales (3.6 kΩ · 2.7 kΩ · 3.6 kΩ) y sus filtros de 1 nF; abajo, el **INA240A1PW** (TSSOP-8) con R3/R4 (0 Ω), C1 (0.01 µF) y su desacoplo de 0.1 µF, y el header J1 hacia el shunt (G · K+ · K− · G · llave · 15V). Derecha: el nombre del módulo y la versión V.0.1.NOV.26.J.G, la leyenda **"TRENZAR I_OUT Y FAULT CON GND"**, el regulador **L78L05** (SOT-89) que baja los 15 V a 5 V, los capacitores de 1 µF, el blanking (R8 + C4), C5 (0.1 µF) entre las filas del LM393 y la **X** de la llave de J1.*
+
 ---
 
 ## 1. Qué hace
@@ -295,10 +301,23 @@ ISR(INT0_vect){
 - **Vías de cosido** de GND en los bordes, uniendo los rellenos de las dos caras. Al quitar el pad de la llave en J1 se perdió una unión entre caras; las vías la reemplazan.
 - **DRC:** los avisos de "huella no coincide con la librería" en J1 (pad de llave eliminado) son esperados. Si se usa *Actualizar huellas desde la librería*, **se restaura el pad 5 y se pierde la llave**.
 
-### 7.1 Serigrafía pendiente
+![Sensor DC en el editor de PCB](img/sensor_dc_editor_pcb.png)
 
-| Texto | Dónde |
-| --- | --- |
+*Vista del editor con las dos capas. Arriba, J2 (I_OUT · GND · FAULT · GND · NC); en medio, el LM393 con las nets de la ventana (FAULT, INA_RC, V_ALTO, V_BAJO, 5V) y el divisor a la derecha; abajo, el INA240A1PW junto a J1, con el par K+ / K− que sube encimado en las dos capas.*
+
+### 7.1 Serigrafía
+
+| Texto | Dónde | Estado |
+| --- | --- | --- |
+| "SENSOR_DC_INA_COMPARADOR" y versión | Cara de soldadura | ✅ |
+| J2: I_OUT · GND · FAULT · GND · NC, y "TRENZAR I_OUT Y FAULT CON GND" | Junto a J2 | ✅ |
+| J1: G · K+ · K− · G · **X** · 15V | Junto a J1 | ✅ |
+| Valores de los componentes | Junto a cada uno | ✅ |
+| "L78L05_SOT89" | Junto al regulador | ✅ (falta "15V → 5V interno", opcional) |
+| "I_OUT 0–3.3V · centro 1.65V" y "FAULT OC" | Visible | ⏳ Pendiente |
+| **"CAL: ___ mΩ / ±___ A"** según las piezas montadas (sección 4.2) | Visible | ⏳ Pendiente |
+
+--- | --- |
 | "SENSOR_DC_INA_COMPARADOR" y versión | Cualquier cara |
 | J2: I_OUT · GND · FAULT · GND · NC, y "TRENZAR I_OUT Y FAULT CON GND" | Junto a J2 |
 | J1: GND · IN+ · IN− · GND · **X** · 15V | Junto a J1 |
