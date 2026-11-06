@@ -8,6 +8,10 @@ El proyecto se publica como **referencia de estudio**: cada decisión de diseño
 
 ---
 
+![Puente H — prototipo SPWM V.0.1, Isla del Sol](hardware/puente_h/img/perspectiva_prototipo_trinchera.png)
+
+*Tarjeta de potencia del puente H, prototipo de trinchera V0.1 (render 3D de KiCad). Detalles en [`hardware/puente_h/`](hardware/puente_h/README.md).*
+
 ## Características principales
 
 | Parámetro | Valor |
@@ -76,9 +80,12 @@ ISLA_DEL_SOL_PUENTE_H-/
     │   ├── ir2110-trinchera/
     │   │   ├── README.md
     │   │   └── GATE_DRIVER_IR2110_TOTEM.kicad_pro / .kicad_sch / .kicad_pcb
-    │   └── tlp250-trinchera/
-    │       ├── README.md
-    │       └── GATE_TLP_250_TOTEM_TIP.kicad_pro / .kicad_sch / .kicad_pcb
+    │   ├── tlp250-trinchera/
+    │   │   ├── README.md
+    │   │   └── GATE_TLP_250_TOTEM_TIP.kicad_pro / .kicad_sch / .kicad_pcb
+    │   └── ucc21520/
+    │       ├── README.md                           ← borrador (faltan los archivos de KiCad)
+    │       └── img/
     ├── puente_h/
     │   ├── README.md                               ← tarjeta de potencia
     │   ├── PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pro / .kicad_sch / .kicad_pcb
@@ -100,13 +107,13 @@ ISLA_DEL_SOL_PUENTE_H-/
             └── SSA2512_Littelfuse.step             ← modelo 3D del shunt
 ```
 
-Próximamente: `hardware/gate-drivers/ucc21520/`, `hardware/sensores/` (sensor AC del primario), la tarjeta de control y `firmware/`.
+Próximamente: `hardware/sensores/` (sensor AC del primario), la tarjeta de control y `firmware/`.
 
 ### Documentos de sistema (`docs/`)
 
 | Documento | Qué explica | Útil para |
 | --- | --- | --- |
-| [Visión: la Isla del Sol](docs/vision_isla_del_sol.md) | Por qué existe el proyecto: convertir la luz del sol en energía útil contra la cadena diaria del diésel (exploración, extracción, refinación, transporte); acceso a la electricidad como bien común; hardware abierto y modo trinchera; lo que la solar también cuesta; ideas para trabajar más adelante (borrador) | Entender el propósito antes que los circuitos |
+| [Visión: la Isla del Sol](docs/vision_isla_del_sol.md) | Por qué existe el proyecto: convertir la luz del sol en energía útil contra la cadena diaria del diésel (exploración, extracción, refinación, transporte); acceso a la electricidad como bien común; **la soberanía se construye en las trincheras** (soberanía energética: poder entender, reparar y sustituir cada pieza); hardware abierto y modo trinchera; lo que la solar también cuesta; ideas para trabajar más adelante (borrador) | Entender el propósito antes que los circuitos |
 | [Identificación del tiempo muerto por P9](docs/identificacion_dt_pin9.md) | Cómo cada módulo declara su tiempo muerto (P9 a GND = 500 ns, abierto = 1 µs); soporte legacy para trincheras; costo contra beneficio; filosofía poka-yoke; llave mecánica en la posición 8; análisis de fallas; código de referencia para ATmega328 y ESP32; validación en banco | Entender la interfaz universal y escribir el firmware |
 | [Modulación SPWM: bipolar, unipolar e híbrida](docs/modulacion_spwm.md) | Por qué el inversor usa modulación **híbrida** (pierna A a 24 kHz, pierna B a 60 Hz) y el cargador **unipolar**; comparación de rizo (4 : 2 : 1), consumo en vacío, pérdidas de conmutación, distorsión por tiempo muerto con módulos de 500 ns y 1 µs, modo común; ciclos de trabajo para el firmware; validación | Entender la estrategia de modulación y escribir el firmware |
 | [Compensación adaptativa de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md) | Por qué el tiempo muerto genera armónicos impares; compensación con el signo de la corriente; medición del 3er armónico con Goertzel; ajuste automático; hoja de ruta en 5 etapas | Etapa posterior: mejorar la calidad de la onda |
@@ -120,7 +127,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | --- | --- | --- | --- |
 | **IRS2186** | [README](hardware/gate-drivers/irs2186/README.md) | ✓ Esquemático, PCB y proyecto | Interfaz con P9 a GND; tierras compartidas (lógica = potencia), unión única GND_K–GND con *net tie* y cómo controlar el lazo de tierra; bootstrap con R antes del diodo y referencias; cálculo de los 500 ns; **alcance por cantidad de MOSFET** (1 IRF100P219 o hasta 2 IRF540N); opciones con tótem; lista de materiales; validación |
 | **TLP250 + tótem TIP41C/TIP42C** (trinchera) | [README](hardware/gate-drivers/tlp250-trinchera/README.md) | ✓ Esquemático, PCB y proyecto | Propósito educativo y de supervivencia; entrada aislada; por qué 1 µs; tótem y regla de 250 nC; **evaluación de 9 transistores** (por qué TIP41/42 y no BD, Darlington, IRF540 o BC); layout; BOM; ensamble con RTV neutro; validación en 10 pasos; **registro de errores corregidos durante el diseño** |
-| UCC21520ADWR | Próximamente | Próximamente | — |
+| **UCC21520ADWR** | [README](hardware/gate-drivers/ucc21520/README.md) (borrador) | Pendiente de subir | Driver aislado de dos canales (4 A / 6 A), tiempo muerto programable por hardware, protección contra entradas encimadas, bootstrap; P9 a GND (500 ns). **Pendiente: R3 a 50 kΩ** para garantizar 500 ns en hardware |
 | **IR2110 + tótem TIP41C/TIP42C** (trinchera) | [README](hardware/gate-drivers/ir2110-trinchera/README.md) | ✓ Esquemático, PCB y proyecto | VSS y COM separados con J5-6 a GND lógico; VDD de 5 V con 78L05; SD a VSS; tótem por canal con su desacoplo; zener en VB–VS1 y en VCC; P9 abierto (1 µs); **alcance de 1 a 5 MOSFET** y refuerzo del bootstrap; **registro de 8 errores corregidos**; BOM; validación |
 
 
@@ -159,7 +166,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | Etapa | Estado |
 | --- | --- |
 | Tarjeta del puente H (REV C) | **Lista para fabricar** (cobre 1 oz, auditada); pendiente validar en banco |
-| Módulo UCC21520 | Diseñado; pendiente llevar P9 a J1 |
+| Módulo UCC21520 | Diseñado, con P9 a GND en J4; pendiente cambiar R3 a 50 kΩ y subir los archivos de KiCad |
 | Módulo TLP250 de trinchera | V.0.1 diseñado; pendiente fabricar y validar |
 | Módulo IRS2186 | Diseñado con P9 en J1; pendiente fabricar y validar |
 | Módulo IR2110 + tótem TIP41C/TIP42C (trinchera) | V.0.1 diseñado (DRC sin errores); pendiente fabricar y validar |
