@@ -10,8 +10,12 @@
 
 > Verificar los valores marcados con *(verificar)* contra el esquemático de KiCad antes de fabricar.
 
-<img width="500" height="850" alt="imagen" src="https://github.com/user-attachments/assets/9fd8c481-7021-4d3a-8ff5-21f3c2534462" />
-<img width="500" height="850" alt="imagen" src="https://github.com/user-attachments/assets/0e5c1018-f84f-4114-be1e-e99312f8d35b" />
+| Cara de componentes | Cara de soldadura |
+| --- | --- |
+| ![Módulo IRS2186, vista 3D superior](img/irs2186_3d_superior.png) | ![Módulo IRS2186, vista 3D inferior](img/irs2186_3d_inferior.png) |
+
+*Izquierda: arriba, la bornera J1 de entrada (**P**9 · GND · L · GND · H); en medio, el IRS2186 (SOIC-8) con su desacoplo de 15 V (1 µF + 10 µF), la red de bootstrap (2.2 Ω 1 W + ES1D), el zener de 18 V (1SMA5931B1) los capacitores de bootstrap (2 × 10 µF) y el electrolítico de respaldo de 15 V; abajo, el header J5 hacia el puente H (HO · VS1 · · · Gk · LO · G · 15V · llave). Derecha: la leyenda de seguridad **"ATENCIÓN: DT 500 ns MIN — VALIDAR MOSFET Y SW"**, la versión V.0.1.NOV.26.J.G y la **X** de la llave en la posición 8 de J5.*
+
 ---
 
 ## 1. Qué maneja este módulo
