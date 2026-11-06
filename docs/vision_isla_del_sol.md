@@ -218,7 +218,7 @@ El NREL lo plantea en su hoja de ruta sobre inversores *grid-forming* (2020): la
 
 **Quien controle esos algoritmos y sus normas tendrá mucho poder sobre el sistema eléctrico.** Un firmware cerrado decide cómo se comporta la red sin que nadie pueda revisarlo; uno abierto y documentado se puede auditar, corregir y adaptar.
 
-**En una isla, el algoritmo es la red.** La Isla del Sol es una pequeña red 100 % de inversor: no hay ningún rotor, y los 60 Hz y los 127 V salen de la tabla de senos y del Timer1 del ATmega. Si ese firmware es cerrado, la comunidad no controla su propia red. Si es abierto, documentado y lo entienden sus técnicos, la comunidad es dueña de la física de su sistema. Es la soberanía de la sección 5, llevada al nivel más profundo.
+**En una isla, el algoritmo es la red.** La Isla del Sol es una pequeña red 100 % de inversor: no hay ningún rotor, y los 60 Hz y los 127 V **saldrán** de la tabla de senos y del Timer1 del ATmega. Hoy existe la **física**: el puente H, los módulos, el sensor y la auditoría. El **algoritmo todavía no nace**, y es el siguiente paso del proyecto. Es también el que **valida todo el esfuerzo al final**: ahí la **matemática** (la senoidal, la modulación, el lazo de control) se encuentra con la **física** (el cobre, los MOSFET, los capacitores), y solo cuando las dos funcionan juntas la isla tiene energía. Si ese firmware es cerrado, la comunidad no controla su propia red. Si es abierto, documentado y lo entienden sus técnicos, la comunidad es dueña de la física de su sistema. Es la soberanía de la sección 5, llevada al nivel más profundo.
 
 ---
 
