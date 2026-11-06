@@ -64,6 +64,31 @@ IRENA describe el costo de generar electricidad en zonas remotas, donde domina e
 
 **Por qué importa la eficiencia:** en una isla solar, cada watt que se pierde en el inversor es un watt que hubo que captar con panel y guardar en batería. Por eso el proyecto eligió la modulación híbrida (la mitad de pérdidas de conmutación y bajo consumo en vacío) y cuida el consumo de noche. Ver [Modulación SPWM](modulacion_spwm.md).
 
+### 3.1 Un panel vale por los kWh que entrega, no por el silicio que contiene
+
+En la energía renovable esto tiene una consecuencia práctica: **un panel solar no vale por el silicio que contiene, sino por los kWh que entregará en 25–30 años.** Por eso el **dimensionamiento correcto es, literalmente, lo que define su valor.**
+
+**Cuánto dura y cuánto pierde.** NREL revisó casi 2000 mediciones de campo de los últimos 40 años y encontró que los paneles pierden en mediana **0.5 % de su potencia por año** [14]. A ese ritmo, a los 25 años un panel todavía entrega **~88 %** de su potencia original (0.995²⁵ ≈ 0.88).
+
+**Ejemplo de cuenta** (los valores son supuestos ilustrativos; cada sitio usa los suyos):
+
+| Dato | Valor del ejemplo |
+| --- | --- |
+| Potencia del arreglo | 1 kWp |
+| Horas solares pico del sitio | 5 h/día |
+| Rendimiento del sistema aislado (cableado, controlador, batería, inversor) | 0.65 – 0.75 |
+| Degradación | 0.5 %/año durante 25 años |
+| **Energía útil en 25 años** | **≈ 28 000 – 32 000 kWh por cada kWp** |
+
+E ≈ P · HSP · 365 · Σ(0.995ᵏ, k = 0…24) · rendimiento = 1 · 5 · 365 · 23.6 · (0.65 a 0.75)
+
+**Por qué el dimensionamiento decide el valor:**
+- **Si falta panel**, la batería nunca termina de cargarse, trabaja en ciclos profundos y se acaba antes de tiempo: el sistema pierde valor por el lado más caro.
+- **Si sobra panel** en un sistema aislado, cuando la batería se llena la energía del sol simplemente **no se aprovecha**: esos kWh nunca se entregan y el panel vale menos de lo que costó.
+- **Bien dimensionado**, cada kWh que el panel puede producir tiene a dónde ir: a la carga o a la batería. Ahí el panel alcanza su valor completo.
+
+**Lo mismo aplica al inversor:** cada watt que el inversor pierde (en conmutación o en vacío durante la noche) es energía que el panel ya produjo y la batería ya guardó. Por eso la Isla del Sol cuida la eficiencia y el consumo en vacío (ver `docs/modulacion_spwm.md`): **la eficiencia del inversor también es parte del valor del panel.**
+
 ---
 
 ## 4. Bien común
@@ -88,7 +113,7 @@ La gente tiende a concentrarse cerca de donde hay energía: la red eléctrica, e
 
 **Consecuencia para el diseño:** la Isla del Sol tiene que servir para **trabajar**, no solo para alumbrar. Por eso apunta a **1000 W de inversor y 1 kVA de cargador**, para mover herramientas, bombas y refrigeración. Y por eso la documentación busca formar técnicos locales: el conocimiento para mantener el equipo también es una actividad productiva que se queda en la comunidad.
 
-*Que la energía abierta ayude a que la gente no tenga que concentrarse en las periferias es una **hipótesis del proyecto**. La evidencia indica que puede ocurrir cuando hay usos productivos, pero hay que **medirla en el campo** (sección 7).*
+*Que la energía abierta ayude a que la gente no tenga que concentrarse en las periferias es una **hipótesis del proyecto**. La evidencia indica que puede ocurrir cuando hay usos productivos, pero hay que **medirla en el campo** (sección 8).*
 
 ---
 
@@ -171,7 +196,33 @@ Una visión que se quiere desplegar en el mundo real tiene que ser honesta:
 
 ---
 
-## 7. Ideas para trabajar más adelante *(pendiente)*
+## 7. Mirando al futuro: de las máquinas a los algoritmos
+
+Esta sección complementa la visión con una mirada hacia adelante: cómo cambia el sistema eléctrico cuando la energía renovable entra a través de inversores, y por qué eso hace todavía más importante un firmware abierto.
+
+> **La red vieja controlaba lo lento, y la física se encargaba de lo rápido. La red nueva tiene que controlar también lo rápido, porque esa física ya no viene incluida.**
+
+En la red tradicional, los generadores rotatorios (turbinas de vapor, gas o agua) aportan **inercia**: si la carga sube de golpe, el rotor cede parte de su energía al instante, antes de que actúe cualquier control. Esa estabilidad no la programó nadie: es física. En cambio, un inversor no tiene rotor, y su respuesta es **exactamente la que diga su algoritmo**.
+
+| Escala de tiempo | Red de máquinas | Red de inversores |
+| --- | --- | --- |
+| Milisegundos a segundos | **Física:** inercia y par sincronizante del rotor | **Algoritmo:** el inversor responde como lo programaron |
+| Segundos | Gobernadores de las turbinas | Algoritmo |
+| Minutos a horas | Despacho y control automático de la generación | Despacho y control automático de la generación |
+
+El NREL lo plantea en su hoja de ruta sobre inversores *grid-forming* (2020): la red actual depende de la inercia de los generadores, y una red con una gran proporción de inversores necesitará **nuevos controles** para mantener esa estabilidad [15]. Por eso la transición energética es, en buena medida, **una transición de las máquinas a los algoritmos**.
+
+**Dos matices, para decirlo con precisión:**
+- **La física no desaparece, se vuelve programable.** Un inversor no tiene inercia propia, pero puede responder **más rápido y con más precisión** que una máquina. La física que antes venía gratis ahora hay que diseñarla, escribirla y probarla.
+- **Las normas son necesarias.** Estándares como IEEE 1547 (generación distribuida) e IEEE 2800 (recursos con inversor en transmisión) definen cómo debe comportarse un inversor, y son lo que hace seguro e interoperable el sistema [16]. La pregunta no es si debe haber normas, sino **quién participa en escribirlas y si los algoritmos que las cumplen se pueden revisar**.
+
+**Quien controle esos algoritmos y sus normas tendrá mucho poder sobre el sistema eléctrico.** Un firmware cerrado decide cómo se comporta la red sin que nadie pueda revisarlo; uno abierto y documentado se puede auditar, corregir y adaptar.
+
+**En una isla, el algoritmo es la red.** La Isla del Sol es una pequeña red 100 % de inversor: no hay ningún rotor, y los 60 Hz y los 127 V salen de la tabla de senos y del Timer1 del ATmega. Si ese firmware es cerrado, la comunidad no controla su propia red. Si es abierto, documentado y lo entienden sus técnicos, la comunidad es dueña de la física de su sistema. Es la soberanía de la sección 5, llevada al nivel más profundo.
+
+---
+
+## 8. Ideas para trabajar más adelante *(pendiente)*
 
 1. **Calculadora de costo diésel contra solar por kWh** para que cada comunidad use sus propios números:
    - Diésel: costo por kWh ≈ precio del litro puesto en sitio ÷ kWh por litro. Un generador pequeño da del orden de **~3 kWh por litro** *(estimación a confirmar midiendo un generador real)*.
@@ -181,11 +232,12 @@ Una visión que se quiere desplegar en el mundo real tiene que ser honesta:
 4. **Casos de campo:** documentar instalaciones reales, con consumo, autonomía, fallas y reparaciones.
 5. **Manual para el usuario de trinchera:** "si tu transformador está entre 24 y 28 V / 120 V, es compatible"; "nunca puentees el fusible"; "el buck debe ser de 80 V o más".
 6. **Formación:** usar la documentación del repositorio como curso de electrónica de potencia aplicada.
-7. **Uso productivo:** en cada instalación, registrar qué actividades productivas habilita (herramientas, bombeo, refrigeración, talleres) y si cambia la decisión de las familias de mudarse, para poner a prueba la hipótesis de la sección 4.1.
+7. **Calculadora de dimensionamiento:** a partir del consumo de la comunidad y de las horas solares pico del sitio, calcular el arreglo, la batería y los kWh útiles en 25 años (sección 3.1).
+8. **Uso productivo:** en cada instalación, registrar qué actividades productivas habilita (herramientas, bombeo, refrigeración, talleres) y si cambia la decisión de las familias de mudarse, para poner a prueba la hipótesis de la sección 4.1.
 
 ---
 
-## 8. Referencias
+## 9. Referencias
 
 1. IRENA, citado en *Energy-Storage.news*, "IRENA: Clear 'socio-economic benefits' to using renewables-plus-storage for islands". <https://energy-storage.news/irena-clear-socio-economic-benefits-to-using-renewables-plus-storage-for-islands-and>
 2. G. Kopp, J. L. Lean, "A new, lower value of total solar irradiance: Evidence and climate significance", *Geophysical Research Letters*, 38, L01706, 2011. DOI: [10.1029/2010GL045777](https://doi.org/10.1029/2010GL045777)
@@ -200,6 +252,9 @@ Una visión que se quiere desplegar en el mundo real tiene que ser honesta:
 11. ESMAP / Banco Mundial, *Accelerating the Productive Use of Electricity: Enabling Energy Access to Power Rural Economic Growth*. <https://www.esmap.org/publications/accelerating-productive-use-electricity-enabling-energy-access-power-rural-economic>
 12. UNITAR / UIT, *Global E-waste Monitor 2024*. <https://www.unitar.org/about/news-stories/press/global-e-waste-monitor-2024-electronic-waste-rising-five-times-faster-documented-e-waste-recycling>
 13. Directiva (UE) 2024/1799 del Parlamento Europeo y del Consejo, de 13 de junio de 2024, sobre normas comunes para promover la reparación de bienes. <https://eur-lex.europa.eu/eli/dir/2024/1799/2026-07-31/eng>
+14. D. C. Jordan, S. R. Kurtz, "Photovoltaic Degradation Rates — An Analytical Review", *Progress in Photovoltaics: Research and Applications*, 21(1): 12–29, 2013 (NREL). <https://research-hub.nrel.gov/en/publications/photovoltaic-degradation-rates-an-analytical-review-2/> · Actualización: D. Jordan, S. Kurtz, *Overview of Field Experience — Degradation Rates & Lifetimes*, NREL, 2015. <https://www.nrel.gov/docs/fy15osti/65040.pdf>
+15. Y. Lin et al., *Research Roadmap on Grid-Forming Inverters*, NREL/TP-5D00-73476, 2020. <https://research-hub.nrel.gov/en/publications/research-roadmap-on-grid-forming-inverters/> · Resumen: <https://nrel.gov/news/program/2020/technical-roadmap-guides-research-direction-grid-forming-inverters.html>
+16. IEEE Std 2800-2022, *Standard for Interconnection and Interoperability of Inverter-Based Resources Interconnecting with Associated Transmission Electric Power Systems*. Resumen de IEEE: <https://standards.ieee.org/beyond-standards/addressing-grid-reliability-as-renewable-energy-integration-speeds-up/>
 
 ---
 
