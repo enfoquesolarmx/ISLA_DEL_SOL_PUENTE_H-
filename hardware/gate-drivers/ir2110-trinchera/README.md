@@ -8,7 +8,11 @@
 **Fecha:** 2026-11-04
 **Documentos relacionados:** [`docs/identificacion_dt_pin9.md`](../../../docs/identificacion_dt_pin9.md), [`docs/sensado_corriente.md`](../../../docs/sensado_corriente.md), [módulo TLP250](../tlp250-trinchera/README.md), [módulo IRS2186](../irs2186/README.md)
 
-<img width="513" height="923" alt="imagen" src="https://github.com/user-attachments/assets/27c7c135-b067-4162-8e5b-c950183c9330" />
+| Cara de componentes | Cara de soldadura |
+| --- | --- |
+| ![Módulo IR2110, vista 3D superior](img/ir2110_3d_superior.png) | ![Módulo IR2110, vista 3D inferior](img/ir2110_3d_inferior.png) |
+
+*Izquierda: arriba, la bornera J2 de entrada con R1 y R2 (10 kΩ, pull-down de HIN y LIN); en medio, el **IR2110 en DIP-14** con sus capacitores X7R; abajo, los **cuatro TO-220 del tótem** (TIP41C o D44H11 como NPN, TIP42C o D45H11 como PNP) y el header J5 hacia el puente H (H · VS1 · · · GK · L · G · 15V · llave · NC). La leyenda **"USAR SILICÓN RTV NEUTRO ENTRE TIPs"** recuerda fijar los transistores a la tarjeta con silicón de curado neutro. Derecha: la leyenda **"ATENCIÓN: DT = 1 µs — VALIDAR MOSFET Y SW"**, el regulador **78L05** (SOT-89) que da los 5 V de VDD, la red de bootstrap (2.2 Ω 1 W + ES1D), los dos **zener de 18 V** (Vb–VS1 y 15V–GND_K) y la **X** de la llave en la posición 8 de J5.*
 
 > Valores verificados contra `GATE_DRIVER_IR2110_TOTEM.kicad_pcb` (2026-11-04). Lo marcado *(verificar)* depende de la hoja de datos.
 
