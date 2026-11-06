@@ -8,6 +8,12 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 
 ---
 
+![Prototipo de trinchera del puente H en perspectiva](img/perspectiva_prototipo_trinchera.png)
+
+*Prototipo de trinchera en perspectiva (render 3D de KiCad): los cuatro IRF100P219 en sus disipadores Fischer SK 129, los Rubycon entre las dos filas de MOSFET, los films rojos de entrada, los sockets J10 y J9 para los gate drivers, J3 para el sensor DC y la salida J8 con su resistencia fusible R14.*
+
+---
+
 ## 1. Características
 
 | Parámetro | Valor |
@@ -59,6 +65,14 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
    Fila central: C1 C2 (pierna A) · J10 (gate driver A) · C3 C4 (pierna B) · J9 (gate driver B)
    J8: salida de 48 V protegida (R14) para el buck de 15 V de la tarjeta de control
 ```
+
+![Vista 3D frontal del puente H](img/vista_3d_frontal.png)
+
+*Vista 3D de la cara de componentes. Arriba, los MOSFET bajos (Q2, Q4) con sus disipadores; en medio, los cuatro Rubycon con los cerámicos de 4.7 µF y los sockets J10 y J9; abajo, los MOSFET altos (Q1, Q3). A la izquierda, los Faston de batería (NEG − / POS +), los shunts y los films C10 (MKS) y C9 (MKP). Las franjas claras de arriba y abajo son las tiras sin máscara del bus.*
+
+![Vista del editor de PCB: tarjeta completa](img/editor_pcb_completo.png)
+
+*Vista del editor de PCB de KiCad, con las dos capas encendidas. A la izquierda, la entrada de batería (NEG − arriba, POS + abajo), los shunts y los films C9/C10. En el centro, las dos piernas: los MOSFET bajos con sus disipadores arriba, la fila de Rubycon en medio, sobre la frontera GND / 48 V, y los MOSFET altos abajo. J10 (pierna A, "24K") y J9 (pierna B, "60HZ") son los sockets de los gate drivers. Abajo a la izquierda, R14 y la salida J8 al buck.*
 
 | Zona | Qué hay |
 | --- | --- |
@@ -137,6 +151,10 @@ Cada MOSFET tiene la misma red, junto a sus patas, en la cara de soldadura:
 | Q3 (alto B) | R5 10 Ω | R4 2.2 Ω + D1 ES1D | R6 10 kΩ a VS2 | NT3: VS2_k ↔ VS2 |
 | Q4 (bajo B) | R11 10 Ω | R12 2.2 Ω + D4 ES1D | R10 10 kΩ a GND | NT1: GND_KELVIN_B ↔ GND |
 
+![Acercamiento a Q1 en la cara de soldadura](img/zoom_Q1_BCu.png)
+
+*Q1 (MOSFET alto de la pierna A), visto en B.Cu. Sus tres pines son: **1** gate (`Net-(Q1-G)`), **2** drenaje a 48 V, aislado del plano VS1 que lo rodea, y **3** source a VS1. Debajo está su red de compuerta: R2 (10 Ω) desde HO_A, R3 (2.2 Ω) + D2 (ES1D) para el apagado y R1 (10 kΩ) del gate a VS1. Las dos pistas que salen a la derecha, hacia J10, son el par **HO_A / VS1_k**, que viajan juntas. La zona rayada que baja del borne J27 hasta el pin 3 es la **ventana para el alambre**, que se aleja del pin 2 (48 V). Los dos pines del disipador HS5 (48 V) también quedan aislados del plano VS1.*
+
 - **Encendido por 10 Ω y apagado por 2.2 Ω + diodo:** el MOSFET enciende suave (menos sobretiro y ruido) y apaga rápido (menos riesgo de conducción cruzada). El ánodo del ES1D va hacia el gate.
 - **10 kΩ gate–source:** mantienen apagado el MOSFET si el módulo no está puesto o se desconecta.
 - **Kelvin:** el retorno de cada gate driver se toma en el source de su MOSFET, a través de un *net tie* colocado **del lado contrario al flujo de potencia**, para que la caída de la corriente de carga no se sume al voltaje de compuerta.
@@ -156,6 +174,10 @@ Cada MOSFET tiene la misma red, junto a sus patas, en la cara de soldadura:
 | C9 | 1 µF / 250 V MKP | Cerca de la entrada, 48 V–GND | Film del bus y de entrada |
 | C10 | 1 µF / 250 V MKS | En la entrada, 48 V–GND_IN | Filtro de la batería, antes de los shunts |
 
+![Fila de capacitores del bus](img/fila_capacitores.png)
+
+*La fila central en 3D. A la izquierda, los films C10 (MKS) y C9 (MKP). Después, la **pierna A**: C1 y C2 (Rubycon 820 µF) con los dos 4.7 µF (C11, C12) entre ellos, y luego J10, el socket del gate driver A ("24K"). A la derecha, la **pierna B**: C3 y C4, con C14 a la izquierda de C3 y C13 entre los dos. La línea horizontal que cruza la fila es la frontera entre el plano de GND (arriba) y el de 48 V (abajo); el "+" de cada Rubycon queda del lado de 48 V. Arriba se ven los bornes VS1 (J24) y VS2 (J23) de los MOSFET bajos, y abajo los de los altos.*
+
 **Cómo funciona el desacoplo:**
 - **Plano partido bajo la fila de capacitores:** en F.Cu, GND ocupa la mitad superior (hacia los MOSFET bajos) y 48 V la inferior (hacia los altos). Los 4.7 µF cruzan esa frontera con un pad en cada plano, sin pistas.
 - **Lazo de conmutación doblado:** VS1 y VS2 van en B.Cu, justo debajo de los planos de 48 V y GND de F.Cu. La corriente de ida y la de regreso quedan encimadas a 1.6 mm, y eso da **~4 nH** de lazo en la tarjeta aunque los MOSFET de una pierna estén a 74 mm entre sí.
@@ -174,6 +196,13 @@ Cada MOSFET tiene la misma red, junto a sus patas, en la cara de soldadura:
 | R16 | Littelfuse SSA2512LR001FWR, 1 mΩ, 6 W | **Posición Kelvin: siempre montada.** De sus pads salen IN+ (NT5) e IN− (NT6) hacia J3. |
 | R28 | Ídem | Segunda pieza (operación) |
 | R17 | Ídem | Tercera pieza (opcional) |
+
+![Zona del sensor DC, shunts y disipador de Q2](img/zona_sensor_shunts.png)
+
+*Esquina superior izquierda, en 3D:*
+- ***J3**, el socket del módulo SENSOR_DC_INA_COMPARADOR, con su serigrafía GND · K_IN+ · K_IN− · GND · **X** (llave) · 15V;*
+- *los **tres shunts SSA2512** (1 mΩ, 6 W) en paralelo, entre GND_IN (los Faston **J1** y **J2**, "NEG −") y el plano GND, que sigue por la tira sin máscara de NEG;*
+- *a la derecha, el disipador de **Q2** (MOSFET bajo de la pierna A) y **J7**, la entrada de 15 V del gate driver A con su LED D6.*
 
 | Piezas montadas | Resistencia | Límite de medición | Uso |
 | --- | --- | --- | --- |
@@ -232,6 +261,18 @@ La tarjeta de control lleva un buck **extraíble**, para aceptar distintos fabri
 | Ventanas para alambre | Cuatro ventanas en B.Mask, de la pata del MOSFET a su borne VS, con la leyenda "REFORZAR CON ALAMBRE Cu 12 AWG SOLDADO" |
 | Tiras sin máscara en POS y NEG | Opcionales con 1 oz; quedan para quien suba la potencia |
 
+**Cobre frontal (F.Cu):**
+
+![Cobre frontal F.Cu](img/cobre_frontal_FCu.png)
+
+*Cara de componentes. El plano de **GND** ocupa la mitad superior y el de **48 V** la inferior; la frontera entre los dos pasa justo por la fila de Rubycon, donde los cerámicos de 4.7 µF la cruzan con un pad en cada lado. Los recuadros oscuros alrededor de los disipadores de arriba son las islas **VS1** y **VS2** de los MOSFET bajos. Las franjas horizontales sin máscara, junto a "NEG −" arriba y "POS +" abajo, son las tiras opcionales de refuerzo del bus.*
+
+**Cobre posterior (B.Cu):**
+
+![Cobre posterior B.Cu](img/cobre_posterior_BCu.png)
+
+*Cara de soldadura, vista desde arriba (por eso los textos se leen al revés). Cada pierna tiene un plano grande, **VS1** a la izquierda y **VS2** a la derecha, que va del MOSFET bajo al alto pasando por debajo de la fila de Rubycon. Encimado con los planos de GND y 48 V de la cara frontal, forma el **lazo de conmutación doblado** (~4 nH). Alrededor queda **GND**. Las islas con anillo de vías en cada pin de Rubycon llevan 48 V o GND a esta capa, y en medio de ellas van los cerámicos de 10 µF. Las zonas sin máscara que bajan de cada borne VS a la pata de su MOSFET son las **ventanas para el alambre 12 AWG**.*
+
 ### 11.1 Auditoría de cobre y temperatura
 
 La auditoría completa está en [`auditoria/README.md`](auditoria/README.md). Resumen, a 1000 W con 40 °C de ambiente y sin ventilador:
@@ -251,6 +292,14 @@ La auditoría completa está en [`auditoria/README.md`](auditoria/README.md). Re
 ---
 
 ## 12. Ensamble
+
+![Vista 3D posterior del puente H](img/vista_3d_posterior.png)
+
+*Vista 3D de la cara de soldadura. Está vista desde abajo, así que la imagen queda en espejo: la **pierna B (VS2) queda a la izquierda** y la **pierna A (VS1) a la derecha**, con los Faston de batería en la orilla derecha. Se ven:*
+- *las **redes de compuerta** junto a cada MOSFET (10 Ω, 2.2 Ω + ES1D, 10 kΩ);*
+- *los **cerámicos de 10 µF** en sus islas, entre los pines de cada Rubycon;*
+- *las cuatro **ventanas para el alambre 12 AWG**, de cada borne VS a la pata de su MOSFET, con su leyenda;*
+- *los pines de J9 y J10 con sus nombres de señal.*
 
 **Orden recomendado:**
 1. SMD de la cara de soldadura: redes de gate (R1–R12, D1–D4) y *net ties*.
