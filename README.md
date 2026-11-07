@@ -70,6 +70,7 @@ ISLA_DEL_SOL_PUENTE_H-/
 │   ├── vision_isla_del_sol.md
 │   ├── identificacion_dt_pin9.md
 │   ├── modulacion_spwm.md
+│   ├── decisiones_criticas.md                  ← bitácora de decisiones del arquitecto
 │   ├── compensacion_adaptativa_tiempo_muerto.md
 │   └── sensado_corriente.md
 └── hardware/
@@ -116,6 +117,7 @@ Próximamente: `hardware/sensores/` (sensor AC del primario), la tarjeta de cont
 | [Visión: la Isla del Sol](docs/vision_isla_del_sol.md) | Por qué existe el proyecto: convertir la luz del sol en energía útil contra la cadena diaria del diésel (exploración, extracción, refinación, transporte); acceso a la electricidad como bien común; **la soberanía se construye en las trincheras** (soberanía energética: poder entender, reparar y sustituir cada pieza); hardware abierto y modo trinchera; lo que la solar también cuesta; ideas para trabajar más adelante (borrador) | Entender el propósito antes que los circuitos |
 | [Identificación del tiempo muerto por P9](docs/identificacion_dt_pin9.md) | Cómo cada módulo declara su tiempo muerto (P9 a GND = 500 ns, abierto = 1 µs); soporte legacy para trincheras; costo contra beneficio; filosofía poka-yoke; llave mecánica en la posición 8; análisis de fallas; código de referencia para ATmega328 y ESP32; validación en banco | Entender la interfaz universal y escribir el firmware |
 | [Modulación SPWM: bipolar, unipolar e híbrida](docs/modulacion_spwm.md) | Por qué el inversor usa modulación **híbrida** (pierna A a 24 kHz, pierna B a 60 Hz) y el cargador **unipolar**; comparación de rizo (4 : 2 : 1), consumo en vacío, pérdidas de conmutación, distorsión por tiempo muerto con módulos de 500 ns y 1 µs, modo común; ciclos de trabajo para el firmware; validación | Entender la estrategia de modulación y escribir el firmware |
+| [Decisiones críticas de diseño](docs/decisiones_criticas.md) | Bitácora de decisiones del arquitecto (ADR): **por qué** se eligió cada solución, qué alternativas se descartaron y qué críticas se esperan. Primeras entradas: cascada de alimentación 48 → 15 → 8 → 5 V ("pagamos complejidad para comprar pureza en el ADC"), XL7015 en socket mixto, protección de la entrada de 48 V (TVS SMBJ58A/64A), MP1584, 7805, sensado AC y de la batería, tablero de diagnóstico con LED y valores de referencia, y holgura de diseño para capacidad médica (objetivo a futuro) | Entender lo que no se ve en el cobre antes de "mejorar" algo |
 | [Compensación adaptativa de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md) | Por qué el tiempo muerto genera armónicos impares; compensación con el signo de la corriente; medición del 3er armónico con Goertzel; ajuste automático; hoja de ruta en 5 etapas | Etapa posterior: mejorar la calidad de la onda |
 | [Sensado de corriente DC y AC](docs/sensado_corriente.md) | Por qué hacen falta dos sensores (bus DC y primario AC); protección por hardware; INA240 en el primario; protección del transformador contra saturación; muestreo sincronizado; calibración | Etapa posterior: base para el control avanzado |
 
