@@ -37,6 +37,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-008](#dc-008-tablero-de-diagnóstico-de-la-alimentación-led-test-points-y-valores-de-referencia) | Tablero de diagnóstico de la alimentación: LED, test points y valores de referencia | Control | 2026-11-06 | Vigente |
 | [DC-009](#dc-009-objetivo-a-futuro-holgura-de-diseño-para-capacidad-médica) | Objetivo a futuro: holgura de diseño para capacidad médica | Todo el sistema | 2026-11-06 | Objetivo (no vigente) |
 | [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms) | Reparto de tareas entre los dos ATmega, enlace I2C con latido y CAN para el BMS | Control | 2026-11-07 | Vigente |
+| [DC-011](#dc-011-lectura-de-p9-un-pin-por-rama-nunca-en-paralelo) | Lectura de P9: un pin por rama, nunca en paralelo | Control | 2026-11-07 | Vigente |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -414,6 +415,50 @@ La tarjeta de control usa dos Arduino Nano (ATmega328P TQFP). Hay que repartir:
 - **Pines libres para crecer:**
   - en el CRÍTICO: D2, D8, D13, A2 y A7 (A7, para el riel de 15 V del DC-008);
   - en el AUX: D3, D7, A0, A2, A3, A6 y A7.
+
+---
+
+## DC-011. Lectura de P9: un pin por rama, nunca en paralelo
+
+> **El poka-yoke se diseña para lo que puede pasar, no para lo que debería pasar.**
+
+**Contexto**
+
+Cada módulo de gate driver declara su tiempo muerto por P9: **GND = 500 ns** (IRS2186, UCC21520) y **abierto = 1 µs** (TLP250). Los módulos son intercambiables por diseño, así que en la trinchera **puede haber módulos mezclados**: por ejemplo, se quema un UCC21520 y en el cajón solo hay un TLP250.
+
+**Alternativas consideradas**
+
+| Alternativa | Por qué sí o por qué no |
+| --- | --- |
+| P9A y P9B en paralelo, en un solo pin digital | ❌ **Descartada.** En paralelo **gana el GND**: con un UCC en una rama y un TLP250 en la otra, el ATmega lee 500 ns y **el TLP250 conduce cruzado**. Rompe la falla segura |
+| Paralelo + la regla escrita "NO MEZCLAR MÓDULOS" | ❌ Es una regla, no un poka-yoke: en la trinchera las reglas se rompen por necesidad |
+| Un pin analógico con tres resistencias de distinto valor | Seguro y ahorra un pin, pero agrega una lectura analógica a algo que es naturalmente digital |
+| **Un pin digital por rama** | ✅ **Elegida:** la más simple, es segura con módulos mezclados y dice cuál rama es distinta |
+
+**Decisión**
+
+| Señal | Pin del CRÍTICO | Circuito |
+| --- | --- | --- |
+| **P9_A** (rama A) | **D8** | 10 kΩ de pull-up a 5 V, 2.2 kΩ en serie hacia el pin y 100 nF a GND junto al Nano (opcional) |
+| **P9_B** (rama B) | **A2** (como entrada digital) | El mismo |
+
+- **D2 (INT0) queda reservado** para el FAULT de sobrecorriente del sensor DC: es la única interrupción externa libre.
+- **A7 queda reservado** para el monitor del riel de 15 V (DC-008).
+- ❌ **D13 no sirve:** el LED "L" del Nano jala la línea hacia abajo contra el pull-up, y podría leer 500 ns con un TLP250 conectado.
+- ❌ **A6 y A7 no sirven:** en el ATmega328P son solo analógicos, sin entrada digital ni pull-up.
+
+**Reglas del firmware**
+1. Leer P9_A y P9_B **al arrancar, antes de habilitar la SPWM**, varias veces seguidas para filtrar el ruido.
+2. **Si las dos ramas no coinciden, se usa 1 µs en las dos** y se avisa en el LCD con "DT MIXTO (A)" o "DT MIXTO (B)", según la rama que tenga el TLP250.
+3. **Nunca invertir la lógica** (abierto = 500 ns): es la regla de la sección 2.1 de `identificacion_dt_pin9.md`.
+
+Serigrafía junto a las resistencias: **"P9: GND=500ns · ABIERTO=1µs"**.
+
+**Consecuencias**
+
+- ✅ Un cable roto, un módulo ausente o una mezcla de módulos llevan siempre a 1 µs: la falla segura se mantiene.
+- ✅ El LCD dice cuál rama tiene el módulo distinto.
+- ⚠️ Usa dos de los pines libres del CRÍTICO. Quedan libres D13 (solo como salida) y, reservados, D2 y A7.
 
 ---
 
