@@ -262,14 +262,16 @@ La cascada de DC-001 tiene tres etapas en serie: cuando algo falla, se apaga tod
 
 **Decisión 1: un LED por riel, en fila y en el orden de la cascada**
 
-LED de 3 mm de color estándar (Vf ≈ 2 V), a ~3 mA.
+LED rojos o verdes, **los cuatro del mismo tipo y color** (Vf ≈ 2 V), a **~1.3 mA** para que todos brillen parejo. Todas las resistencias son de **¼ W** y de valores E12.
 
 | LED | Confirma | Resistencia | Corriente | Potencia en R |
 | --- | --- | --- | --- | --- |
-| **48 V** | Hay batería; el fusible y R14 están bien | **22 kΩ, ½ W THT** (o 2 × 12 kΩ de ¼ W en serie) | 2.1 mA (2.8 mA a 64 V) | 0.18 W a 64 V |
-| **15 V** | El XL7015 funciona | 4.7 kΩ | 2.8 mA | 36 mW |
-| **8 V** | El MP1584 funciona (o está el puente) | 2.2 kΩ | 2.7 mA | 16 mW |
-| **5 V** | El 7805 funciona | 1 kΩ | 3.0 mA | 9 mW |
+| **48 V** | Hay batería; el fusible y R14 están bien | **47 kΩ ¼ W** | 0.98 mA (1.3 mA a 64 V) | 80 mW a 64 V |
+| **15 V** | El XL7015 funciona | 10 kΩ | 1.3 mA | 17 mW |
+| **8 V** | El MP1584 funciona (o está el puente) | 4.7 kΩ | 1.3 mA | 8 mW |
+| **5 V** | El 7805 funciona | 2.2 kΩ | 1.4 mA | 4 mW |
+
+*Historial:* la primera versión usaba 22 kΩ de ½ W en el LED de 48 V y ~3 mA en los demás. Se cambió a 47 kΩ (propuesta del arquitecto): basta una resistencia de ¼ W, se calienta menos junto al cobre de 48 V y gasta menos batería; los demás LED se bajaron a ~1.3 mA para que brillen igual. Un LED blanco o azul (Vf ≈ 3 V) brillaría menos con estos valores.
 
 **El LED de 48 V es obligatorio:** es el único que se alimenta directo de la batería, no de la cascada. Sin él, "todo apagado" no distingue una falla de batería de una falla del XL7015.
 
@@ -319,7 +321,7 @@ Serigrafía junto a los LED: **"TODOS ENCENDIDOS = HAY VOLTAJE · EL PRIMERO APA
 
 - ✅ El usuario sabe **dónde** está la falla (los LED), y el técnico sabe **qué tan mal** está (los test points con su valor de referencia).
 - ⚠️ **El LED dice "hay voltaje", no "el voltaje es correcto".** Un XL7015 ajustado a 20 V prende el LED de 15 V igual. El valor lo confirman el test point o el LCD.
-- ⚠️ Los cuatro LED suman ~11 mA repartidos en los cuatro rieles: **~0.2 W** vistos desde la batería (el LED de 48 V solo se lleva ~0.1 W). Es el precio de poder ver el estado de la cascada.
+- ✅ Los cuatro LED suman ~5 mA repartidos en los cuatro rieles: **~0.1 W** vistos desde la batería. Es el precio de poder ver el estado de la cascada.
 
 ---
 
