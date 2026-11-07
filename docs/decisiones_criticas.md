@@ -37,7 +37,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-008](#dc-008-tablero-de-diagnóstico-de-la-alimentación-led-test-points-y-valores-de-referencia) | Tablero de diagnóstico de la alimentación: LED, test points y valores de referencia | Control | 2026-11-06 | Vigente |
 | [DC-009](#dc-009-objetivo-a-futuro-holgura-de-diseño-para-capacidad-médica) | Objetivo a futuro: holgura de diseño para capacidad médica | Todo el sistema | 2026-11-06 | Objetivo (no vigente) |
 | [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms) | Reparto de tareas entre los dos ATmega, enlace I2C con latido y CAN para el BMS | Control | 2026-11-07 | Vigente |
-| [DC-011](#dc-011-lectura-de-p9-un-pin-por-rama-nunca-en-paralelo) | Lectura de P9: un pin por rama, nunca en paralelo | Control | 2026-11-07 | Vigente |
+| [DC-011](#dc-011-lectura-de-p9-las-dos-ramas-en-un-solo-pin-analógico-nunca-en-paralelo-directo) | Lectura de P9: las dos ramas en un solo pin analógico, nunca en paralelo directo | Control | 2026-11-07 | Vigente |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -310,7 +310,7 @@ Serigrafía junto a los LED: **"TODOS ENCENDIDOS = HAY VOLTAJE · EL PRIMERO APA
 
 - **El 5 V se mide a sí mismo:** el ATmega328P puede leer su **referencia interna de 1.1 V** usando AVCC como referencia. Entonces **VCC = 1.1 V × 1023 / lectura**. La referencia interna varía entre 1.0 y 1.2 V según la hoja de datos, así que se calibra una vez contra el multímetro y la constante se guarda en la EEPROM.
 - **El 48 V ya se mide** con el sensado de la batería (DC-007).
-- **Opcional:** el riel de 15 V en el pin A7 libre, con un divisor de **47 kΩ / 10 kΩ** (15 V → 2.63 V; llega a 5 V con 28.5 V).
+- **Opcional:** el riel de 15 V en el pin A2 libre (A7 se usa para P9, DC-011), con un divisor de **47 kΩ / 10 kΩ** (15 V → 2.63 V; llega a 5 V con 28.5 V).
 - **El LCD muestra los valores reales:** el usuario lee "BAT 51.2V · 15V OK · 5V 4.98V" en lugar de adivinar.
 
 **Consecuencias**
@@ -413,12 +413,12 @@ La tarjeta de control usa dos Arduino Nano (ATmega328P TQFP). Hay que repartir:
 - ✅ Una falla del LCD o del CAN no afecta la generación de la onda.
 - ⚠️ **El CRÍTICO carga con más trabajo:** la SPWM a 24 kHz deja ~666 ciclos de reloj por periodo, y además están los tres canales de ADC y los relés. Hay que medir en el banco cuánto tiempo ocupa la interrupción de la SPWM (con un pin que cambie de estado al entrar y salir, y el osciloscopio).
 - **Pines libres para crecer:**
-  - en el CRÍTICO: D2, D8, D13, A2 y A7 (A7, para el riel de 15 V del DC-008);
+  - en el CRÍTICO: D2 (reservado para el FAULT), D8, D13 y A2 (A2, para el riel de 15 V del DC-008; A7 queda para P9, DC-011);
   - en el AUX: D3, D7, A0, A2, A3, A6 y A7.
 
 ---
 
-## DC-011. Lectura de P9: un pin por rama, nunca en paralelo
+## DC-011. Lectura de P9: las dos ramas en un solo pin analógico, nunca en paralelo directo
 
 > **El poka-yoke se diseña para lo que puede pasar, no para lo que debería pasar.**
 
@@ -432,33 +432,45 @@ Cada módulo de gate driver declara su tiempo muerto por P9: **GND = 500 ns** (I
 | --- | --- |
 | P9A y P9B en paralelo, en un solo pin digital | ❌ **Descartada.** En paralelo **gana el GND**: con un UCC en una rama y un TLP250 en la otra, el ATmega lee 500 ns y **el TLP250 conduce cruzado**. Rompe la falla segura |
 | Paralelo + la regla escrita "NO MEZCLAR MÓDULOS" | ❌ Es una regla, no un poka-yoke: en la trinchera las reglas se rompen por necesidad |
-| Un pin analógico con tres resistencias de distinto valor | Seguro y ahorra un pin, pero agrega una lectura analógica a algo que es naturalmente digital |
-| **Un pin digital por rama** | ✅ **Elegida:** la más simple, es segura con módulos mezclados y dice cuál rama es distinta |
+| Un pin digital por rama (D8 y A2) | Seguro, pero usa dos pines libres del CRÍTICO |
+| **Un pin analógico con tres resistencias de distinto valor** | ✅ **Elegida:** un solo pin, segura con módulos mezclados, y dice cuál rama es distinta |
 
-**Decisión**
+**Decisión (bloque "SPWM DT CONFIG")**
 
-| Señal | Pin del CRÍTICO | Circuito |
-| --- | --- | --- |
-| **P9_A** (rama A) | **D8** | 10 kΩ de pull-up a 5 V, 2.2 kΩ en serie hacia el pin y 100 nF a GND junto al Nano (opcional) |
-| **P9_B** (rama B) | **A2** (como entrada digital) | El mismo |
+```
+5V ──[R12 10k]──┬──► A7 (solo analógico)
+                ├──[R13 10k]── P9_A (J1-5)
+                └──[R14 20k]── P9_B (J3-5)
+```
 
-- **D2 (INT0) queda reservado** para el FAULT de sobrecorriente del sensor DC: es la única interrupción externa libre.
-- **A7 queda reservado** para el monitor del riel de 15 V (DC-008).
-- ❌ **D13 no sirve:** el LED "L" del Nano jala la línea hacia abajo contra el pull-up, y podría leer 500 ns con un TLP250 conectado.
-- ❌ **A6 y A7 no sirven:** en el ATmega328P son solo analógicos, sin entrada digital ni pull-up.
+| Rama A | Rama B | Voltaje en A7 | Cuentas del ADC (10 bits, 5 V) | Firmware |
+| --- | --- | --- | --- | --- |
+| Abierto | Abierto | **5.00 V** | ~1023 | 1 µs |
+| Abierto | GND | **3.33 V** | ~682 | 1 µs, con aviso "DT MIXTO (A)" (la rama A tiene el módulo de 1 µs) |
+| GND | Abierto | **2.50 V** | ~512 | 1 µs, con aviso "DT MIXTO (B)" |
+| GND | GND | **2.00 V** | ~409 | **500 ns** |
+| — | — | **< 1.8 V** | < ~368 | 1 µs, con aviso "FALLA P9" (corto a GND en el nodo) |
+
+- **Solo se permiten 500 ns si la lectura cae entre 1.8 y 2.2 V** (~368 a ~450 cuentas). Cualquier otro valor da 1 µs.
+- **Margen:** entre el caso de 500 ns (2.00 V) y el más cercano (2.50 V) hay ~100 cuentas. Con resistencias al 1 % sobra.
+- **R13 y R14 también protegen el pin:** limitan la corriente si llega un voltaje indebido por el cable de P9.
+- **100 nF de A7 a GND,** junto al Nano, para filtrar el ruido de la conmutación de 24 kHz.
+- **A7 es el uso ideal:** es solo analógico, y aquí solo se necesita una lectura analógica. **El monitor del riel de 15 V (DC-008) pasa a A2.**
+- **D2 (INT0) queda reservado** para el FAULT de sobrecorriente del sensor DC.
 
 **Reglas del firmware**
-1. Leer P9_A y P9_B **al arrancar, antes de habilitar la SPWM**, varias veces seguidas para filtrar el ruido.
-2. **Si las dos ramas no coinciden, se usa 1 µs en las dos** y se avisa en el LCD con "DT MIXTO (A)" o "DT MIXTO (B)", según la rama que tenga el TLP250.
+1. Leer A7 **al arrancar, antes de habilitar la SPWM**, varias veces seguidas, y promediar.
+2. **Si las ramas no coinciden, se usa 1 µs en las dos** y se avisa en el LCD con la rama que tiene el módulo distinto.
 3. **Nunca invertir la lógica** (abierto = 500 ns): es la regla de la sección 2.1 de `identificacion_dt_pin9.md`.
+4. **Si se cambia una resistencia del bloque, se recalcula la tabla.** R13 y R14 deben ser distintas: si son iguales, los dos casos mixtos dan el mismo voltaje y ya no se sabe cuál rama es distinta (aunque la falla segura se mantiene).
 
-Serigrafía junto a las resistencias: **"P9: GND=500ns · ABIERTO=1µs"**.
+Serigrafía junto al bloque: **"P9: GND=500ns · ABIERTO=1µs · R13≠R14"**.
 
 **Consecuencias**
 
-- ✅ Un cable roto, un módulo ausente o una mezcla de módulos llevan siempre a 1 µs: la falla segura se mantiene.
-- ✅ El LCD dice cuál rama tiene el módulo distinto.
-- ⚠️ Usa dos de los pines libres del CRÍTICO. Quedan libres D13 (solo como salida) y, reservados, D2 y A7.
+- ✅ Un cable roto, un módulo ausente, una mezcla de módulos o un corto en el nodo llevan siempre a 1 µs: la falla segura se mantiene.
+- ✅ Usa un solo pin, y el LCD dice cuál rama tiene el módulo distinto.
+- ⚠️ La lectura depende del ADC y de la referencia de 5 V. Las ventanas son anchas a propósito para tolerar el ±4 % del 7805.
 
 ---
 
