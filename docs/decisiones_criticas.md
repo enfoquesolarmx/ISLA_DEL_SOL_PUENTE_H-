@@ -39,6 +39,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms) | Reparto de tareas entre los dos ATmega, enlace I2C con latido y CAN para el BMS | Control | 2026-11-07 | Vigente |
 | [DC-011](#dc-011-lectura-de-p9-las-dos-ramas-en-un-solo-pin-analógico-nunca-en-paralelo-directo) | Lectura de P9: las dos ramas en un solo pin analógico, nunca en paralelo directo | Control | 2026-11-07 | Vigente |
 | [DC-012](#dc-012-los-nano-se-alimentan-por-5v-pin-27-nunca-por-vin) | Los Nano se alimentan por +5V (pin 27), nunca por VIN | Control | 2026-11-07 | Vigente |
+| [DC-013](#dc-013-corriente-ac-con-pinza-sct-013-015-en-el-crítico-a2) | Corriente AC con pinza SCT-013-015 en el CRÍTICO (A2) | Control | 2026-11-07 | Vigente |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -311,7 +312,7 @@ Serigrafía junto a los LED: **"TODOS ENCENDIDOS = HAY VOLTAJE · EL PRIMERO APA
 
 - **El 5 V se mide a sí mismo:** el ATmega328P puede leer su **referencia interna de 1.1 V** usando AVCC como referencia. Entonces **VCC = 1.1 V × 1023 / lectura**. La referencia interna varía entre 1.0 y 1.2 V según la hoja de datos, así que se calibra una vez contra el multímetro y la constante se guarda en la EEPROM.
 - **El 48 V ya se mide** con el sensado de la batería (DC-007).
-- **Opcional:** el riel de 15 V en el pin A2 libre (A7 se usa para P9, DC-011), con un divisor de **47 kΩ / 10 kΩ** (15 V → 2.63 V; llega a 5 V con 28.5 V).
+- **Opcional:** el riel de 15 V en un pin analógico libre del **AUX** (en el CRÍTICO, A2 se usa para la corriente AC, DC-013, y A7 para P9, DC-011), con un divisor de **47 kΩ / 10 kΩ** (15 V → 2.63 V; llega a 5 V con 28.5 V).
 - **El LCD muestra los valores reales:** el usuario lee "BAT 51.2V · 15V OK · 5V 4.98V" en lugar de adivinar.
 
 **Consecuencias**
@@ -385,7 +386,7 @@ La tarjeta de control usa dos Arduino Nano (ATmega328P TQFP). Hay que repartir:
 | --- | --- |
 | SPWM: HA/LA en D9/D10 (Timer1), HB/LB en D11/D3 | CAN con el BMS: MCP2515 por SPI (CS en D9, INT en D2) |
 | Sensado AC del inversor (A0) y de la red (A6) | LCD por I2C **en un bus aparte** (D4/D5, I2C por software) |
-| Batería (A3) y temperatura (A1) | Sensor de corriente AC ZMCT103C (A1) |
+| Batería (A3) y temperatura (A1) | ~~Sensor de corriente AC ZMCT103C (A1)~~ → reemplazado por el SCT-013-015 en el CRÍTICO (DC-013); el AUX recibe el monitor del riel de 15 V |
 | Relés de transferencia (D4, D5, D6) y encendido (D12) | Ventilador (D6), buzzer, LED y botón (D8) |
 | **Esclavo o maestro del enlace I2C (A4/A5)** | **El otro extremo del enlace I2C (A4/A5)** |
 
@@ -414,8 +415,8 @@ La tarjeta de control usa dos Arduino Nano (ATmega328P TQFP). Hay que repartir:
 - ✅ Una falla del LCD o del CAN no afecta la generación de la onda.
 - ⚠️ **El CRÍTICO carga con más trabajo:** la SPWM a 24 kHz deja ~666 ciclos de reloj por periodo, y además están los tres canales de ADC y los relés. Hay que medir en el banco cuánto tiempo ocupa la interrupción de la SPWM (con un pin que cambie de estado al entrar y salir, y el osciloscopio).
 - **Pines libres para crecer:**
-  - en el CRÍTICO: D2 (reservado para el FAULT), D8, D13 y A2 (A2, para el riel de 15 V del DC-008; A7 queda para P9, DC-011);
-  - en el AUX: D3, D7, A0, A2, A3, A6 y A7.
+  - en el CRÍTICO: D2 (reservado para el FAULT), D8 y D13 (A2 se usa para la corriente AC, DC-013; A7 para P9, DC-011);
+  - en el AUX: D3, D7, A0, A1, A2, A3, A6 y A7 (uno de ellos, para el monitor del riel de 15 V, DC-013).
 
 ---
 
@@ -456,7 +457,7 @@ Cada módulo de gate driver declara su tiempo muerto por P9: **GND = 500 ns** (I
 - **Margen:** entre el caso de 500 ns (2.00 V) y el más cercano (2.50 V) hay ~100 cuentas. Con resistencias al 1 % sobra.
 - **R13 y R14 también protegen el pin:** limitan la corriente si llega un voltaje indebido por el cable de P9.
 - **100 nF de A7 a GND,** junto al Nano, para filtrar el ruido de la conmutación de 24 kHz.
-- **A7 es el uso ideal:** es solo analógico, y aquí solo se necesita una lectura analógica. **El monitor del riel de 15 V (DC-008) pasa a A2.**
+- **A7 es el uso ideal:** es solo analógico, y aquí solo se necesita una lectura analógica. **El monitor del riel de 15 V (DC-008) pasa al AUX** (DC-013).
 - **D2 (INT0) queda reservado** para el FAULT de sobrecorriente del sensor DC.
 
 **Reglas del firmware**
@@ -502,6 +503,79 @@ La red se llamaba "5V" en el esquemático y en el PCB, así que el error **no se
 
 ---
 
+## DC-013. Corriente AC con pinza SCT-013-015 en el CRÍTICO (A2)
+
+> **Un solo sensor, en el lugar correcto, sirve para los dos modos y para la compensación del tiempo muerto.**
+
+**Contexto**
+
+Se necesita medir la corriente AC para:
+1. el **modo inversor** (DC → AC): corriente, watts reales, factor de potencia y apagado por sobrecarga sostenida;
+2. el **modo cargador** (AC → DC): la corriente que viene de la red;
+3. la **compensación adaptativa del tiempo muerto**, que usa `d_comando = d_ideal + signo(i) · DT · f_sw` (`docs/compensacion_adaptativa_tiempo_muerto.md`).
+
+**Alternativas consideradas**
+
+| Alternativa | Por qué sí o por qué no |
+| --- | --- |
+| Módulo ZMCT103C | Rango de 0–10 A (lineal hasta 6 A); el cable de 127 V tiene que **pasar por el agujero**, así que hay que cortarlo o pasarlo, y meterlo cerca de la tarjeta [10] |
+| **Pinza SCT-013-015** | ✅ **Elegida:** núcleo abierto, se abraza el cable sin cortarlo; **los 127 V nunca entran a la tarjeta de control**; 15 A → 1 V RMS con la resistencia de carga integrada; plug de 3.5 mm; se cambia sin herramientas [11] |
+| En el AUX | ❌ El signo de la corriente se necesita en cada periodo de la portadora, dentro de la interrupción de la SPWM: por I2C llegaría tarde. Tampoco se podrían medir watts reales con el voltaje en un micro y la corriente en otro |
+
+**Decisión**
+
+- **SCT-013-015 en el CRÍTICO, pin A2.** El monitor del riel de 15 V (DC-008) pasa al **AUX**.
+- **La pinza abraza el cable del devanado de 127 V del transformador,** entre el transformador y los relés de transferencia. Ahí pasa la corriente de los dos modos:
+  - **inversor:** del transformador hacia la carga, signo **positivo**;
+  - **cargador:** de la red hacia el transformador, signo **negativo**. El signo también dice hacia dónde va la energía.
+- **La flecha "K→L" del SCT apunta del transformador hacia la carga.** Un signo invertido hace que la compensación **empeore** el 3er armónico.
+- **Abraza un solo conductor** (la fase). Si abraza fase y neutro juntos, las corrientes se cancelan.
+
+**Circuito en la tarjeta de control**
+
+```
+Jack 3.5 mm (PJ-320A)
+ Punta (tip) ──[1 kΩ]──┬──► A2 del CRÍTICO
+                       ║ 10 nF a GND (junto al Nano)
+ Cuerpo (sleeve) ──────┴── BIAS 2.5 V (10k/10k + 10 µF + 100 nF)
+ Anillo (ring) ──── sin conexión
+```
+
+| Corriente | Pico del SCT | En el ADC |
+| --- | --- | --- |
+| 7.9 A RMS (1000 W a 127 V) | ±0.75 V | 1.75–3.25 V |
+| 15 A RMS | ±1.41 V | 1.09–3.91 V |
+| Saturación del ADC | ±2.5 V | ~18.7 A RMS (~26.5 A de pico) |
+
+- **Resolución:** ~52 mA por cuenta.
+- **Sin divisor y sin resistencia de carga extra:** el SCT-013-015 ya entrega volts.
+- **Poka-yoke:** el **SCT-013-000** (100 A, salida de corriente) usa el mismo plug y **no** trae resistencia de carga. Serigrafía junto al jack: **"SOLO SCT-013-015 (15A/1V)"**. La resistencia de 1 kΩ limita la corriente hacia el pin si se conecta el equivocado. Opcional: una huella de resistencia de carga marcada **"NO INSTALAR (solo SCT-013-000)"**.
+
+**El ADC del CRÍTICO**
+
+Con 4 canales (A0, A6, A3 y A2) a ~104 µs por conversión, cada canal se lee cada ~416 µs (~9° de la onda): demasiado grueso para el signo cerca del cruce por cero.
+- **Leer la corriente intercalada** (corriente, voltaje, corriente, red, corriente, batería…): se actualiza cada ~208 µs (~4.5°).
+- **O subir el reloj del ADC a 500 kHz** (prescaler de 32): ~26 µs por conversión. Arriba de 200 kHz se pierde algo de resolución, pero alcanza para el signo y el RMS [6].
+- **El desfase entre canales** por el multiplexor se resta por firmware, igual que en DC-006.
+
+**Límites (para no pedirle al SCT lo que no puede dar)**
+
+| Límite | Consecuencia | Qué hacer |
+| --- | --- | --- |
+| No ve la corriente de magnetización (solo circula por el primario) | Con poca carga, el signo cerca del cruce por cero puede salir mal | La zona lineal `I_TH` de la compensación ya lo suaviza; la compensación rinde más con carga media y alta |
+| Error de fase de la pinza (unos grados, mayor con poca corriente) | El cambio de signo se corre unos grados, y los watts y el factor de potencia salen con error | Calibrar el desfase en el banco con una carga resistiva conocida |
+| **No ve corriente DC** | **No detecta la componente DC del primario** (la que satura el núcleo) | **El shunt + INA240 del primario sigue en el plan** (`docs/sensado_corriente.md`). El SCT no lo reemplaza |
+| Se satura en arranques muy grandes | No sirve como protección rápida | La protección por sobrecorriente sigue siendo el sensor DC con su FAULT por hardware (D2) |
+
+**Consecuencias**
+
+- ✅ Un solo sensor da la corriente de los dos modos, los watts reales y el factor de potencia, y el signo para el tiempo muerto adaptativo.
+- ✅ Los 127 V se quedan fuera de la tarjeta de control.
+- ⚠️ El CRÍTICO suma un cuarto canal de ADC: hay que medir en el banco el tiempo de las interrupciones (DC-010).
+- **Pines del CRÍTICO después de este cambio:** D2 reservado para el FAULT, D8 y D13 libres; ya no quedan entradas analógicas libres.
+
+---
+
 ## Críticas esperadas y preguntas abiertas
 
 Lo que sabemos que se puede discutir. Se deja escrito a propósito:
@@ -527,6 +601,8 @@ Quien tenga datos (mediciones, una alternativa probada, una falla documentada) p
 7. Organización Mundial de la Salud, *Close to one billion people globally are served by health-care facilities with no electricity access or with unreliable electricity*, 14 de enero de 2023. <https://www.who.int/news/item/14-01-2023-close-to-one-billion-people-globally-are-served-by-health-care-facilities-with-no-electricity-access-or-with-unreliable-electricity>
 8. NXP Semiconductors, *UM10204 — I2C-bus specification and user manual*: tiempos de subida, fórmula t ≈ 0.8473 × R × C y corriente máxima de 3 mA.
 9. OpenDTU-OnBattery, *Pylontech battery*: conexión del puerto CAN (RJ45 pin 4 = CAN-H, pin 5 = CAN-L, pin 6 = GND). <https://github.com/helgeerbe/OpenDTU-OnBattery/wiki/Pylontech-battery>
+10. Qingxian Zeming Langxi Electronic, *ZMCT103C*, hoja de datos: relación 1000:1, rango de 0–10 A con 50 Ω, linealidad ≤0.2 % entre el 5 % y el 120 %. <https://datasheetspdf.com/datasheet/ZMCT103C.html>
+11. YHDC, *SCT-013-015 split core current transformer, 15 A / 1 V*, hoja de datos: salida de voltaje con resistencia de carga integrada, abertura de 13 × 13 mm, plug de 3.5 mm. <https://zbotic.in/wp-content/uploads/2020/06/SCT013-015-0-15A-0-1V.pdf>
 
 ---
 
