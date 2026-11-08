@@ -286,6 +286,10 @@ U4A (límite, descarga):   + (3) = V_LIM_ALTO  − (2) = INA_RC      → OUT (1)
 U4B (límite, carga):      + (5) = INA_RC      − (6) = V_LIM_BAJO  → OUT (7) ─┴── I_LIM (J2-5)
 ```
 
+![LM393: canal A y canal B](img/esquematico_lm393_dos_canales.png)
+
+*Cómo trabaja un LM393 por dentro: un solo chip con dos comparadores que miran la misma señal del INA, cada uno con su umbral. En la V0.2 hay dos chips así: U3 (disparo) y U4 (límite).*
+
 **Regla para no equivocarse:** en el canal de **descarga** (A), **el umbral va en el +**; en el canal de **carga** (B), **INA_RC va en el +**. Una salida baja cuando su + queda por debajo de su −.
 
 ### 7.4 SENSOR_OK (fail-safe)
@@ -349,6 +353,42 @@ U4B (límite, carga):      + (5) = INA_RC      − (6) = V_LIM_BAJO  → OUT (7)
 | "SENSOR_DC_INA_COMPARADOR" y "V.0.2/8-NOV-26.J.G" | ✅ |
 | "LÍMITE ±75 A" junto a U4 y "DISPARO ±105 A" junto a U3 | ⏳ Sugerido |
 | **"CAL: 0.33 mΩ / ±75 / ±105 A"** | ⏳ Sugerido |
+
+### 8.1 Evidencia del proceso: de la V0.1 a la V0.2
+
+Las capturas de KiCad tomadas durante la revisión del 2026-11-08, en orden. Se conservan como evidencia de qué se encontró y cómo se corrigió.
+
+**Paso 1. Esquemático de partida (V0.1).** Una sola ventana (U3) con FAULT directo a J2-3, J2-5 libre y C14 en una red "6V".
+
+![V0.1: esquemático de partida](img/evidencia_01_v01_esquematico_c14_6v.png)
+
+**Paso 2. Primer esquemático con U4, escalera de 5 resistencias y THT.** La revisión encontró **U4A con las entradas invertidas** (+ en INA_RC): I_LIM habría quedado en 0 V todo el tiempo. Todavía sin Q1.
+
+![U4A con las entradas invertidas](img/evidencia_02_esquematico_u4a_invertido.png)
+
+| PCB con THT, todavía sin Q1 | 3D con THT, todavía sin Q1 (J2 con "FAULT" y "NC") |
+| --- | --- |
+| ![PCB sin Q1](img/evidencia_03_pcb_tht_sin_q1.png) | ![3D sin Q1](img/evidencia_04_3d_tht_sin_q1.png) |
+
+**Paso 3. U4A corregido:** + = V_LIM_ALTO, − = INA_RC.
+
+![U4A corregido](img/evidencia_05_u4a_corregido.png)
+
+**Paso 4. Q1 (BC547) y R6 agregados.** J2-3 = SENSOR_OK y J2-5 = I_LIM en el esquemático. La serigrafía de J2 todavía tenía los nombres viejos y se corrigió después (sección 8).
+
+![3D con Q1, antes de la serigrafía final](img/evidencia_06_3d_con_q1.png)
+
+**Paso 5. V0.2 terminada:** las capturas de la sección 8 (J2 y Q1, capas F.Cu y B.Cu, cara inferior con "V.0.2/8-NOV-26.J.G" y esquemático de KiCad).
+
+**Referencia: la V0.1 como estaba en el repositorio**
+
+| Cara de componentes V0.1 | Cara de soldadura V0.1 |
+| --- | --- |
+| ![V0.1 superior](img/sensor_dc_3d_superior.png) | ![V0.1 inferior](img/sensor_dc_3d_inferior.png) |
+
+![V0.1 en el editor de PCB](img/sensor_dc_editor_pcb.png)
+
+> **Para que las imágenes se vean**, la carpeta `img/` debe estar junto a este README (en GitHub: `hardware/sensores/sensor-dc-ina-comparador/img/`). Para leerlo sin GitHub o imprimirlo: `sensor_dc_v02.pdf`, con todas las imágenes incluidas.
 
 ---
 
