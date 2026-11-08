@@ -105,7 +105,7 @@ ISLA_DEL_SOL_PUENTE_H-/
     └── sensores/
         └── sensor-dc-ina-comparador/
             ├── README.md
-            ├── SENSOR_DC_INA_COMPARADOR.kicad_pro / .kicad_sch / .kicad_pcb
+            ├── SENSOR_DC_INA_COMPARADOR_V2.kicad_pro / .kicad_sch / .kicad_pcb   ← V0.2
             ├── SSA2512_Littelfuse_Kelvin.kicad_mod ← huella del shunt
             └── SSA2512_Littelfuse.step             ← modelo 3D del shunt
 ```

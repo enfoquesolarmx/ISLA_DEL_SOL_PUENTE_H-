@@ -6,6 +6,7 @@
 - **Estado:** esquemático y layout V0.2 terminados, ERC/DRC sin errores. Pendiente: fabricación y validación en banco
 - **Compatible con:** ATmega328P, ATmega4809, STM32, ESP32 y otros MCU de 3.3 V o 5 V, sin cambiar piezas
 - **Decisiones que implementa:** [DC-014](../../../docs/decisiones_criticas.md#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado) (SENSOR_OK fail-safe) · [DC-016](../../../docs/decisiones_criticas.md#dc-016-corto-circuito-en-ac-niveles-de-protección-arranque-de-motores-arco-transferencia-y-reintentos) (niveles 0 y 1: disparo y límite)
+- **Archivos de KiCad (V0.2):** `SENSOR_DC_INA_COMPARADOR_V2.kicad_pro` / `.kicad_sch` / `.kicad_pcb`, con la huella `SSA2512_Littelfuse_Kelvin.kicad_mod` y el modelo `SSA2512_Littelfuse.step`. La V0.1 queda en el historial de Git.
 - **Documentos relacionados:** [Corte del PWM por hardware](../../../docs/corte_por_hardware.md) · [Sensado de corriente](../../../docs/sensado_corriente.md)
 
 > **En una línea:** el módulo tiene que decir **"estoy aquí y estoy bien"** todo el tiempo (SENSOR_OK en 0 V). Si se calla por cualquier razón (falla, cable roto, sin alimentación, sobrecorriente), el inversor se apaga por hardware.
@@ -460,6 +461,7 @@ Las capturas de KiCad tomadas durante la revisión del 2026-11-08, en orden. Se 
 | 2026-11-08 | **U4 (segundo LM393) para el límite ±75 A**, escalera de 5 resistencias, J2-5 = I_LIM (DC-016) | Disparo ±105 A y límite ±75 A con los 3 shunts de diseño | — |
 | 2026-11-08 | Revisión antes de fabricar: U4A con entradas invertidas, Q1 faltante, C14 en "6V" | Corregidos. ERC/DRC sin errores | Fabricar V0.2 |
 | 2026-11-08 | Resistencias y capacitores a THT; serigrafía V.0.2/8-NOV-26.J.G | Listo para Gerbers | Validación en banco (sección 10) |
+| 2026-11-08 | Archivos de KiCad V0.2 en el repositorio; verificación de redes en la PCB: U3 (1/7 FAULT, 3 V_ALTO, 6 V_BAJO), U4 (1/7 I_LIM, 3 V_LIM_ALTO, 6 V_LIM_BAJO), Q1 (1 SENSOR_OK, 2 FAULT, 3 GND), J2 (1 I_OUT · 3 SENSOR_OK · 5 I_LIM), C14 en 5V | Coinciden con el diseño | Fabricar |
 
 ---
 
