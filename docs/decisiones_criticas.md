@@ -716,15 +716,59 @@ Los detectores de arco comerciales usan estas mismas firmas: inhiben la detecci�
 | 2. Clasificación | Mientras el nivel 1 está activo, el CRÍTICO calcula por medio ciclo V<sub>rms</sub> (A0), I<sub>rms</sub> (A2, SCT-013), Z, factor de potencia y la tendencia del pico | Firmware | 2–3 ciclos (~50 ms) | Según el resultado |
 | 3. Sobrecarga térmica | Curva I²t con I<sub>rms</sub>: permite 150 % unos segundos, 110 % minutos | Firmware | s–min | Sí |
 
-**Reglas de clasificación del nivel 2 (valores iniciales, se calibran con datos de campo de la V1)**
+**Clasificación del nivel 2: tres huellas, y por defecto se corta**
 
-| Condición | Diagnóstico | Acción |
+La lógica es la misma de SENSOR_OK (DC-014): **la tolerancia se gana, no se supone.** Ante una sobrecorriente, el inversor corta a los 2–3 ciclos **salvo que la huella del motor se confirme desde el primer ciclo y se siga confirmando en cada medio ciclo.** Las huellas de corto y de arco adelantan el corte; la del motor es la única que lo pospone.
+
+Medición común por medio ciclo (el CRÍTICO, sincronizado con el cruce por cero de A0):
+
+| Variable | De dónde | Para qué |
 | --- | --- | --- |
-| Z < ~1.6 Ω (V < ~30 % con la corriente en el límite) durante 2–3 ciclos | **CORTO** | Apagar, candado, reintentos |
-| Z entre ~1.6 y ~8 Ω, factor de potencia < 0.6, pico decreciente, Z subiendo | **ARRANQUE DE MOTOR** | Sostener el límite hasta 3 s |
-| Lo anterior, pero Z no sube en 3 s | **ROTOR BLOQUEADO** | Apagar, candado |
-| Medios ciclos de corriente alta sueltos, con variación > ~20 % entre medios ciclos de la misma polaridad | **POSIBLE ARCO (paralelo)** | Apagar, candado, aviso "REVISAR CABLEADO" |
-| Arco serie | **No detectable en la V1** | Límite declarado (V2: detector de arco con banda de alta frecuencia) |
+| V<sub>rms</sub> | A0 (AC_FB_A0, voltaje de salida) | Profundidad de la caída |
+| I<sub>rms</sub>, I<sub>pico</sub> | A2 (I_AC, SCT-013) | Magnitud y tendencia |
+| Z = V<sub>rms</sub> / I<sub>rms</sub> | Calculado | Corto contra motor |
+| FP = P / (V<sub>rms</sub> · I<sub>rms</sub>), con P = promedio de v·i | Calculado (muestras alternadas de A0 y A2, corrigiendo el desfase de muestreo) | Inductivo (motor) o no |
+| Variación de I<sub>pico</sub> entre medios ciclos de la misma polaridad | Calculado | Caos (arco) |
+
+Con el ADC a ~9.6 kHz alternando A0 y A2: ~4.8 kHz por canal, **~40 muestras por medio ciclo**. Suficiente para RMS, pico y factor de potencia; no para el ruido de alta frecuencia del arco serie.
+
+| Función | Devuelve verdadero si… (valores iniciales, se calibran con datos de campo de la V1) | Acción |
+| --- | --- | --- |
+| `huella_corto()` | Z < ~1.6 Ω **o** V<sub>rms</sub> < ~30 % de 127 V, durante 2 medios ciclos seguidos | **Cortar** (D12 = 0), candado, reintentos |
+| `huella_arco()` | Variación de I<sub>pico</sub> > ~20 % entre medios ciclos de la misma polaridad, o medios ciclos de corriente alta sueltos, o saltos de V<sub>rms</sub> | **Cortar**, candado, "REVISAR CABLEADO" |
+| `huella_motor()` | **Todo a la vez:** Z entre ~1.6 y ~8 Ω, V<sub>rms</sub> > ~40 %, FP < ~0.6, I<sub>pico</sub> **bajando** y Z **subiendo** medio ciclo a medio ciclo | **Sostener** el límite, máximo 3 s y presupuesto I²t |
+| Ninguna (sobrecorriente sin huella) | — | **Cortar a los 2–3 ciclos** |
+| `huella_motor()` deja de cumplirse antes de 3 s, o llega a 3 s | **Rotor bloqueado** o algo que se disfrazó de motor | **Cortar**, candado |
+
+```c
+// CRÍTICO: se llama al final de cada medio ciclo mientras el nivel 1 (límite) está activo
+void clasificar(const MedioCiclo *m) {
+  if (huella_corto(m))  { cortar(F_CORTO); return; }       // D12 = 0 → EN_HW → 74HC08
+  if (huella_arco(m))   { cortar(F_ARCO);  return; }
+  if (huella_motor(m))  {
+    if (++mc_motor > MAX_MC_MOTOR /* 3 s = 360 medios ciclos */ || i2t_agotado()) cortar(F_ROTOR);
+    return;                                               // se sostiene: la huella se gana cada medio ciclo
+  }
+  if (++mc_sin_huella >= 5) cortar(F_SOBRECORRIENTE);      // por defecto: cortar (~40 ms)
+}
+```
+
+**Energía en un arco paralelo con este esquema** (límite ~24 A, arco de ~40 V ≈ 960 W): corte a ~50 ms ≈ **~48 J**. El criterio con que IEC 62606 fijó los tiempos de los detectores de arco es del orden de **100 J con 40 V**, y les permite hasta **0.12 s a 32 A** [17]. Con la regla anterior (3 s para todo lo que "pareciera motor") eran ~2.9 kJ: 30 veces el criterio. **Un arco que se disfrace de motor pierde la tolerancia en cuanto deja de evolucionar como motor.**
+
+**Arco serie (terminal floja): no detectable en la V1.** La corriente no sube, así que ninguna huella lo ve. Límite declarado; la V2 necesita un detector de arco con banda de alta frecuencia. Mitigación en la V1: **NTC pegado a las terminales de salida** hacia el AUX (A1, A3 o A6 libres; apagar y avisar "TERMINAL CALIENTE" arriba de ~70 °C), punteras en los cables y revisión de apriete en cada mantenimiento.
+
+**Chispa e incendio: lo que la electrónica no evita**
+
+- **La chispa inicial no se puede evitar:** nace al tocarse los conductores, en µs, y la primera energía sale del capacitor del filtro de salida (½·C·V²; con 10 µF a 180 V pico, ~160 mJ). Eso es **mil veces** la energía mínima de ignición del hidrógeno (0.016 mJ) y unas 600 veces la de vapores de solventes o propano (~0.2–0.25 mJ) [18]. **Con vapores inflamables, ninguna protección evita la ignición: se controla con el lugar de instalación.**
+- **Lo que sí controla la protección** es cuánto dura el arco y cuánta energía recibe.
+- **El lado de 48 V DC es el más peligroso:** un arco en DC no se apaga solo (no hay cruce por cero) y una batería de litio entrega miles de amperes. Ahí no protege el inversor: solo el **fusible DC clase T pegado al borne de la batería**.
+- **Instalación de trinchera:** gabinete metálico cerrado; nada inflamable cerca (combustible, solventes, tela, paja); ventilación si la batería es de plomo-ácido (hidrógeno); cables de calibre correcto, en tubo, sin empalmes al aire; extintor clase C a la mano.
+
+**Inconsistencia de umbrales detectada (resolver con la medición de la V1)**
+
+El umbral duro del shunt DC (60–80 A en el bus, [sensado de corriente](sensado_corriente.md)) es **menor** que el pico de un arranque de motor en el primario (90–140 A, misma tabla). Tal como está, **el nivel 0 dispararía con cada arranque de compresor antes de que el nivel 2 pueda clasificar.** Opciones: subir el umbral duro arriba de ~140 A (los MOSFET deben aguantar ese pico más el sobretiro medido) o limitar el arranque a ~1.5 × nominal. Lo decide la inductancia de dispersión medida.
+
+**Nota sobre la pinza:** el SCT-013-015 entrega 1 V a 15 A. Con el límite de ~24 A son ~1.6 V<sub>rms</sub> (2.26 V pico) sobre el bias de 2.5 V: cabe en 0–5 V, pero **justo**. Un corto franco antes del límite recorta la lectura; la clasificación debe hacerse con el límite ya activo.
 
 **Reintentos después de un corto:** 3 intentos separados 5–10 s, con arranque suave. Después, bloqueo con "CORTO EN SALIDA" en el LCD y rearme solo con ENTER. Un motor que arranca no llega al tercer intento; un corto real sí.
 
@@ -740,14 +784,15 @@ Los detectores de arco comerciales usan estas mismas firmas: inhiben la detecci�
 
 **Consecuencias**
 
-- ✅ Los arranques de motor dejan de disparar la protección; los cortos se apagan en ~50 ms con candado; el MOSFET sigue protegido en µs.
+- ✅ Los arranques de motor dejan de disparar la protección; los cortos y los arcos paralelos se apagan en ~50 ms (~48 J en el arco) con candado; el MOSFET sigue protegido en µs.
+- ✅ Por defecto se corta: la tolerancia del motor se gana medio ciclo a medio ciclo.
 - ✅ Todo con piezas que ya están: el segundo canal del LM393, D2 del CRÍTICO, A0 y A2.
 - ⚠️ El nivel 2 depende del firmware del CRÍTICO: si se cuelga, quedan el nivel 0 (hardware) y el watchdog.
 - ⚠️ El shunt DC no ve los estados cero: el sensor AC del primario ([sensado de corriente](sensado_corriente.md), sección 4) cierra ese hueco en una revisión posterior.
 - ⚠️ **El arco serie no se detecta en la V1.** Una conexión floja puede calentarse sin que el inversor lo note: apriete y revisión de terminales en cada mantenimiento.
 - **Pendiente:** confirmar el segundo canal del LM393 hacia D2 del CRÍTICO en la tarjeta del sensor y en J6 (requiere un pin más en el conector, o usar J6-5, hoy sin conectar).
 
-**Referencias:** [16].
+**Referencias:** [16], [17], [18].
 
 ---
 
@@ -783,6 +828,8 @@ Quien tenga datos (mediciones, una alternativa probada, una falla documentada) p
 14. MDDI, *Leakage Current Standards Simplified*: condiciones de medición (polaridad invertida, neutro y tierra abiertos, 110 % del voltaje). <https://www.mddionline.com/components/leakage-current-standards-simplified>
 15. NICEIC, *Medical IT systems* (BS 7671 sección 710, IEC 61557-8, EN 61558-2-15): transformador aislador, monitor de aislamiento con alarma a 50 kΩ, fuga del devanado a tierra ≤ 0.5 mA. <https://niceic.com/newsletter/medical-it-systems/>
 16. Eaton Corp. (X. Zhou, J. J. Shea, J. C. Engel, K. L. Parker, T. J. Miller), *Arc fault circuit interrupter and method of parallel and series arc fault detection*, patente US 7,558,033 B2, 7 de julio de 2009: firmas del arco (ruido de banda ancha, variación caótica entre medios ciclos), el arco serie no aumenta la corriente, inhibición durante el arranque de motores (factor de potencia no unitario) y de cargas con pico decreciente. <https://patents.google.com/patent/US7558033>
+17. BEAMA, *Arc Fault Detection Devices (AFDD) — FAQ fact sheet*: tiempos máximos de corte de IEC 62606 (2.5 A → 1 s … 32–63 A → 0.12 s), criterio de ~100 J con 40 V para la ignición del aislamiento de un cable. <https://www.beama.org.uk/static/84330bcd-90bc-4fe3-87df9d092ec14b89/BEAMA-ARC-FAULT-DETECTION-AFDD-FAQ-Fact-Sheet.pdf>
+18. Dow, *Ignition energy* (tabla de energías mínimas de ignición en aire): hidrógeno 0.016 mJ; metano 0.21 mJ; propano, hexano, heptano e isooctano 0.24–0.25 mJ; acetona 0.19 mJ. <https://nl.dow.com/content/dam/corp/documents/ehs/779-07309-06-l3g-06-05-c-10-industrieel-reinigen-bijlage-8-ignition-energy.pdf>
 
 ---
 
