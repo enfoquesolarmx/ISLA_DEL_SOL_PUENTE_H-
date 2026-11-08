@@ -770,6 +770,8 @@ void clasificar(const MedioCiclo *m) {
 
 El umbral duro del shunt DC (60–80 A en el bus, [sensado de corriente](sensado_corriente.md)) es **menor** que el pico de un arranque de motor en el primario (90–140 A, misma tabla). Tal como está, **el nivel 0 dispararía con cada arranque de compresor antes de que el nivel 2 pueda clasificar.** Opciones: subir el umbral duro arriba de ~140 A (los MOSFET deben aguantar ese pico más el sobretiro medido) o limitar el arranque a ~1.5 × nominal. Lo decide la inductancia de dispersión medida.
 
+**Resolución (2026-11-08):** con los **3 shunts de diseño** (0.333 mΩ) y la escalera de 5 resistencias del módulo V0.2, el **límite queda en ±75 A** (1.6 × el pico nominal de 46 A) y el **disparo duro en ±105 A** (2.3 ×). El arranque se sostiene en el límite (hasta ~12.8 A<sub>rms</sub> en la salida) y no llega al disparo. Queda por medir el sobretiro sobre los 105 A con la inductancia de dispersión.
+
 **Nota sobre la pinza:** el SCT-013-015 entrega 1 V a 15 A. Con el límite de ~24 A son ~1.6 V<sub>rms</sub> (2.26 V pico) sobre el bias de 2.5 V: cabe en 0–5 V, pero **justo**. Un corto franco antes del límite recorta la lectura; la clasificación debe hacerse con el límite ya activo.
 
 **Reintentos después de un corto:** 3 intentos separados 5–10 s, con arranque suave. Después, bloqueo con "CORTO EN SALIDA" en el LCD y rearme solo con ENTER. Un motor que arranca no llega al tercer intento; un corto real sí.
@@ -792,7 +794,7 @@ El umbral duro del shunt DC (60–80 A en el bus, [sensado de corriente](sensado
 - ⚠️ El nivel 2 depende del firmware del CRÍTICO: si se cuelga, quedan el nivel 0 (hardware) y el watchdog.
 - ⚠️ El shunt DC no ve los estados cero: el sensor AC del primario ([sensado de corriente](sensado_corriente.md), sección 4) cierra ese hueco en una revisión posterior.
 - ⚠️ **El arco serie no se detecta en la V1.** Una conexión floja puede calentarse sin que el inversor lo note: apriete y revisión de terminales en cada mantenimiento.
-- **Pendiente:** confirmar el segundo canal del LM393 hacia D2 del CRÍTICO en la tarjeta del sensor y en J6 (requiere un pin más en el conector, o usar J6-5, hoy sin conectar).
+- **Resuelto (2026-11-08, módulo del sensor V0.2):** el canal B del LM393 original ya cuidaba el sentido de carga, así que el límite se hizo con **un segundo LM393 (U4)** en el módulo, con salida **I_LIM por J2-5 / J6-5** hacia D2 del CRÍTICO (pull-up 10 kΩ, 1 kΩ en serie y 1 nF). Ver el [README del módulo](../hardware/sensores/sensor-dc-ina-comparador/README.md).
 
 **Referencias:** [16], [17], [18].
 
