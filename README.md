@@ -105,7 +105,7 @@ ISLA_DEL_SOL_PUENTE_H-/
     └── sensores/
         └── sensor-dc-ina-comparador/
             ├── README.md
-            ├── SENSOR_DC_INA_COMPARADOR.kicad_pro / .kicad_sch / .kicad_pcb
+            ├── SENSOR_DC_INA_COMPARADOR_V2.kicad_pro / .kicad_sch / .kicad_pcb   ← V0.2
             ├── SSA2512_Littelfuse_Kelvin.kicad_mod ← huella del shunt
             └── SSA2512_Littelfuse.step             ← modelo 3D del shunt
 ```
@@ -146,7 +146,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 
 | Módulo | Documento | Archivos KiCad | Qué incluye |
 | --- | --- | --- | --- |
-| **SENSOR_DC_INA_COMPARADOR** | [README](hardware/sensores/sensor-dc-ina-comparador/README.md) | ✓ Esquemático, PCB, huella y modelo 3D del shunt | Medición bidireccional del bus DC con INA240A1 (I_OUT 0–3.3 V, compatible con ATmega, STM32 y ESP32); **protección de sobrecorriente por hardware** con LM393 en ventana y salida FAULT de colector abierto (~2–3 µs); shunts Littelfuse SSA2512 de 1 mΩ en **1, 2 o 3 piezas** (±34 / ±68 / ±102 A) con sensado Kelvin por *net tie*; fórmulas, límite de modo común del LM393, BOM y validación en banco |
+| **SENSOR_DC_INA_COMPARADOR** **V0.2** | [README](hardware/sensores/sensor-dc-ina-comparador/README.md) | ✓ Esquemático y PCB V0.2 (ERC/DRC sin errores), THT para la trinchera | Medición bidireccional del bus DC con INA240A1 (I_OUT 0–3.3 V, compatible con ATmega, STM32 y ESP32). **Dos ventanas por hardware** con LM393: **disparo duro** (U3, ±105 A) y **límite de corriente** (U4, ±75 A, salida **I_LIM**). Salida **SENSOR_OK fail-safe** (Q1 BC547: 0 V = sensor bien; sin módulo, sin 15 V o con el cable roto = corte). 3 shunts Littelfuse SSA2512 de 1 mΩ (0.333 mΩ) con sensado Kelvin. Incluye cómo se llegó a la V0.2, tabla de seguridad con las fallas de una sola pieza, evidencia del proceso, BOM y validación en banco |
 
 
 ### Por dónde empezar a estudiar
@@ -158,7 +158,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 5. **[Módulo TLP250](hardware/gate-drivers/tlp250-trinchera/README.md):** cómo resolver lo mismo con partes de tienda local, y los errores típicos al diseñar un tótem.
 6. **[Módulo IR2110](hardware/gate-drivers/ir2110-trinchera/README.md):** el driver legacy clásico con tierras separadas y tótem para muchos MOSFET.
 7. **[Tarjeta del puente H](hardware/puente_h/README.md)** y su **[auditoría](hardware/puente_h/auditoria/README.md):** cómo se juntan los módulos, el banco de capacitores, el layout de potencia y cómo comprobar antes de fabricar que el cobre y los componentes aguantan.
-8. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md):** cómo medir la corriente del bus y cortar las compuertas por hardware antes que el fusible.
+8. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md) (V0.2):** cómo medir la corriente del bus, limitarla para que arranquen los motores y cortar las compuertas por hardware antes que el fusible, con la salida fail-safe SENSOR_OK.
 9. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
 
 ## Herramientas
@@ -175,7 +175,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | Módulo TLP250 de trinchera | V.0.1 diseñado; pendiente fabricar y validar |
 | Módulo IRS2186 | Diseñado con P9 en J1; pendiente fabricar y validar |
 | Módulo IR2110 + tótem TIP41C/TIP42C (trinchera) | V.0.1 diseñado (DRC sin errores); pendiente fabricar y validar |
-| Módulo SENSOR_DC_INA_COMPARADOR | Esquemático y layout listos; pendiente DRC final (costura de GND), serigrafía y fabricar |
+| Módulo SENSOR_DC_INA_COMPARADOR | **V0.2** (2026-11-08): SENSOR_OK fail-safe, límite ±75 A (U4) e I_LIM; ERC/DRC sin errores. Pendiente: fabricar y validar en banco |
 | Firmware | Pendiente |
 | Validación en banco | Pendiente |
 

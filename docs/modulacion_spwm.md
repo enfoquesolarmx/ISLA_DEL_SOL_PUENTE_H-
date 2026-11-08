@@ -9,6 +9,8 @@ Explica las tres formas clásicas de modular un puente H monofásico (bipolar, u
 | **Inversor** (batería → carga) | **Híbrida** (unipolar con una pierna a frecuencia de línea) | 24 kHz | 60 Hz |
 | **Cargador** (red → batería) | **Unipolar** | 24 kHz | 24 kHz |
 
+> **Actualización (2026-11-08, [DC-018](decisiones_criticas.md#dc-018-modulación-híbrida-a-24-khz-también-en-el-cargador-y-socket-multimodelo-atmega328p--atmega4809)):** el cargador pasa a **híbrido** (pierna A a 24 kHz, pierna B a 60 Hz, topología *totem-pole*). En el ATmega328P la pierna B está en Timer2 (8 bits), que no da 24 kHz con las dos salidas activas, y en el ATmega4809 D11 no tiene PWM. Con la pierna B a 60 Hz, la misma tarjeta funciona con los dos chips. Costo: el doble de rizo que el unipolar, por validar en banco. Respaldo: unipolar a ~31.4 kHz con Timer1 y Timer2 sincronizados (solo 328P). El análisis de este documento sobre la modulación unipolar se conserva como referencia.
+
 ---
 
 ## 1. El puente H y sus tres estados de salida

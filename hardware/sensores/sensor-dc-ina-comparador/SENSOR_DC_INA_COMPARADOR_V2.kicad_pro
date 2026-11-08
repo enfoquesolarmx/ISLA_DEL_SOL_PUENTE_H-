@@ -58,7 +58,16 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [],
+      "drc_exclusions": [
+        [
+          "lib_footprint_mismatch|107750000|89650000|dd6dcf3a-497c-42c3-8615-63f8827911e3|00000000-0000-0000-0000-000000000000",
+          ""
+        ],
+        [
+          "nonmirrored_text_on_back_layer|111390000|89710000|508f985d-1265-4b3c-9e15-1994f7f7881b|00000000-0000-0000-0000-000000000000",
+          ""
+        ]
+      ],
       "meta": {
         "version": 2
       },
@@ -465,7 +474,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "SENSOR_DC_INA_COMPARADOR.kicad_pro",
+    "filename": "SENSOR_DC_INA_COMPARADOR_V2.kicad_pro",
     "version": 3
   },
   "net_settings": {

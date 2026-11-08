@@ -159,7 +159,7 @@ Las referencias corresponden al esquemático de KiCad de la tarjeta de control (
 
 | Ref. | Valor | Función | Por qué ese valor | Si falta o falla |
 | --- | --- | --- | --- | --- |
-| J6 | Phoenix 5 pines | Entrada desde el sensor: 1 I_OUT, 2 GND, **3 SENSOR_OK**, 4 GND, 5 NC | GND a ambos lados de las señales: cada señal viaja con su retorno | Suelto: R26 sube la línea → **corte** |
+| J6 | Phoenix 5 pines | Entrada desde el sensor: 1 I_OUT, 2 GND, **3 SENSOR_OK**, 4 GND, **5 I_LIM** (límite, DC-016) | GND a ambos lados de las señales: cada señal viaja con su retorno | Suelto: R26 sube la línea → **corte** |
 | R26 | 10 kΩ a 5V | Pull-up de SENSOR_OK. **Siempre empuja a Q1 a encender**; solo Q_OK se lo impide | 0.5 mA: suficiente para dar base a Q1 y fácil de hundir por Q_OK | Abierta: Q1 sin base, no corta por sensor ausente. **Es la pieza más crítica del bloque**: revisarla en banco (prueba 1) |
 | J_RIESGO | jumper 2 pines, **rojo** | Riesgo autorizado: pone SENSOR_OK a GND a la fuerza → **opera sin protección de sobrecorriente** | Físico, visible, no depende del firmware | Puesto por error: el equipo opera **sin protección**. Por eso es rojo y lleva serigrafía |
 | R16 | 10 kΩ | Resistencia de base de Q1 (Q_EN) | Con R26: (5 − 0.7) / 20 kΩ ≈ **0.21 mA** de base → Q1 hunde 5 mA con ganancia forzada de ~24 | Abierta: Q1 no corta por sensor |
