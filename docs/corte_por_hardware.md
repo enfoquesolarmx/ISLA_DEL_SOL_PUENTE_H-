@@ -12,15 +12,15 @@
 
 ![Circuito completo de corte: sensor DC, SENSOR_OK, EN_HW, 74HC08 y drivers A y B](img/esquematico_corte_completo.png)
 
-*PDF vectorial para imprimir: [`img/esquematico_corte_completo.pdf`](img/esquematico_corte_completo.pdf) · script: [`img/completo_tw.py`](img/completo_tw.py)*
+*Script que lo genera: [`img/completo_tw.py`](img/completo_tw.py)*
 
 ### Diagrama 2. Detalle de SENSOR_OK (lógica invertida, fail-safe)
 
 ![SENSOR_OK: Q_OK en la tarjeta del sensor y Q_EN en la tarjeta de control](img/esquematico_sensor_ok.png)
 
-*PDF vectorial: [`img/esquematico_sensor_ok.pdf`](img/esquematico_sensor_ok.pdf) · script: [`img/sensor_ok_tw.py`](img/sensor_ok_tw.py)*
+*Script que lo genera: [`img/sensor_ok_tw.py`](img/sensor_ok_tw.py)*
 
-> **Para que las imágenes se vean**, la carpeta `docs/img/` debe estar junto a este archivo (en GitHub se ve sola al subir el repositorio completo). Para imprimir con diagramas incluidos: [`img/corte_por_hardware.pdf`](img/corte_por_hardware.pdf).
+> **Para que las imágenes se vean**, la carpeta `docs/img/` debe estar junto a este archivo. Los PDF (diagramas vectoriales y este documento listo para imprimir) no van en el repositorio (`.gitignore` excluye `*.pdf`): se publican en las *releases*.
 
 ---
 
