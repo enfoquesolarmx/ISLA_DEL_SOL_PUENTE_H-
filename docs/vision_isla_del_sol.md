@@ -168,6 +168,8 @@ Y el diseño evita, a propósito, lo que vuelve obsoleto a un equipo antes de ti
 
 **La escala del problema:** en 2022 el mundo generó un récord de **62 millones de toneladas de residuos electrónicos**, y solo el **22.3 %** se recolectó y recicló de forma documentada. Para 2030 se esperan ~82 millones de toneladas [12]. Por su parte, la Unión Europea aprobó en 2024 una directiva que promueve la reparación de bienes, conocida como "derecho a reparar" [13]. La Isla del Sol va en la misma dirección desde el diseño: **lo que se puede reparar no se tira.**
 
+> El problema actual también es político: se prefieren sistemas no modulares, con firmware cerrado, productos diseñados para terminar en chatarra. Aunque los escritorios del poder, en cualquier capital, vayan en reversa en el entendimiento de la física, la electrónica abierta y la dignidad humana no retroceden. **Se defienden desde abajo, banco de trabajo por banco de trabajo, compartiendo lo que el sistema prefiere mantener oculto.**
+
 ### 5.2 Formar técnicos es parte del hardware
 
 Un equipo soberano necesita personas que lo entiendan. Por eso el repositorio no solo publica archivos: explica **por qué** cada valor, documenta los errores que se cometieron y cómo se corrigieron, y deja herramientas para comprobar el diseño antes de fabricar. Cada técnico que aprende con estos documentos es una trinchera más.
@@ -219,6 +221,8 @@ El NREL lo plantea en su hoja de ruta sobre inversores *grid-forming* (2020): la
 **Quien controle esos algoritmos y sus normas tendrá mucho poder sobre el sistema eléctrico.** Un firmware cerrado decide cómo se comporta la red sin que nadie pueda revisarlo; uno abierto y documentado se puede auditar, corregir y adaptar.
 
 **En una isla, el algoritmo es la red.** La Isla del Sol es una pequeña red 100 % de inversor: no hay ningún rotor, y los 60 Hz y los 127 V **saldrán** de la tabla de senos y del Timer1 del ATmega. Hoy existe la **física**: el puente H, los módulos, el sensor y la auditoría. El **algoritmo todavía no nace**, y es el siguiente paso del proyecto. Es también el que **valida todo el esfuerzo al final**: ahí la **matemática** (la senoidal, la modulación, el lazo de control) se encuentra con la **física** (el cobre, los MOSFET, los capacitores), y solo cuando las dos funcionan juntas la isla tiene energía. Si ese firmware es cerrado, la comunidad no controla su propia red. Si es abierto, documentado y lo entienden sus técnicos, la comunidad es dueña de la física de su sistema. Es la soberanía de la sección 5, llevada al nivel más profundo.
+
+> **Entre más información se transfiere, más se estabiliza el sistema.** El cobre muestra qué se hizo; la Isla del Sol deja escrito también **por qué**: cada decisión del arquitecto, las alternativas descartadas y las críticas que se esperan, en la [bitácora de decisiones críticas](decisiones_criticas.md).
 
 ---
 
