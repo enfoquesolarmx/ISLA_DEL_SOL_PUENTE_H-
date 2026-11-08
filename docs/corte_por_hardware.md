@@ -1,16 +1,26 @@
 # Corte del PWM por hardware: SENSOR_OK, EN_HW y 74HC08
 
-**Proyecto:** Isla del Sol — Puente H SPWM (inversor 48 V → 127 V / 60 Hz, 1000 W; modo cargador 1 kVA)
-**Tarjeta:** control (dos ATmega328P en Arduino Nano: CRÍTICO y AUX) + tarjeta del sensor DC (junto a los shunts del puente H)
-**Bloque del esquemático:** `COMPUERTAS LOGICAS AND`
-**Estado:** esquemático validado (2026-11-08). **Tiempos y corrientes calculados, todavía no medidos en banco.**
-**Decisión asociada:** [DC-014](decisiones_criticas.md#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado)
+- **Proyecto:** Isla del Sol — Puente H SPWM (inversor 48 V → 127 V / 60 Hz, 1000 W; modo cargador 1 kVA)
+- **Tarjeta:** control (dos ATmega328P en Arduino Nano: CRÍTICO y AUX) + tarjeta del sensor DC (junto a los shunts del puente H)
+- **Bloque del esquemático:** `COMPUERTAS LOGICAS AND`
+- **Estado:** esquemático validado (2026-11-08). **Tiempos y corrientes calculados, todavía no medidos en banco.**
+- **Decisión asociada:** [DC-014](decisiones_criticas.md#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado)
 
 > **En resumen: el inversor solo puede conmutar si cuatro condiciones dicen "sí" al mismo tiempo, y cualquiera de ellas lo apaga sin pedirle permiso al firmware. Si algo falta, se suelta o se muere, el resultado es "apagado".**
 
-![Circuito completo de corte](img/esquematico_corte_completo.png)
+### Diagrama 1. Circuito completo: sensor DC → SENSOR_OK → EN_HW → 74HC08 → drivers
 
-*Diagrama completo (PNG de alta resolución y PDF vectorial en `docs/img/`). El script que lo genera está en `docs/img/completo_tw.py`.*
+![Circuito completo de corte: sensor DC, SENSOR_OK, EN_HW, 74HC08 y drivers A y B](img/esquematico_corte_completo.png)
+
+*PDF vectorial para imprimir: [`img/esquematico_corte_completo.pdf`](img/esquematico_corte_completo.pdf) · script: [`img/completo_tw.py`](img/completo_tw.py)*
+
+### Diagrama 2. Detalle de SENSOR_OK (lógica invertida, fail-safe)
+
+![SENSOR_OK: Q_OK en la tarjeta del sensor y Q_EN en la tarjeta de control](img/esquematico_sensor_ok.png)
+
+*PDF vectorial: [`img/esquematico_sensor_ok.pdf`](img/esquematico_sensor_ok.pdf) · script: [`img/sensor_ok_tw.py`](img/sensor_ok_tw.py)*
+
+> **Para que las imágenes se vean**, la carpeta `docs/img/` debe estar junto a este archivo (en GitHub se ve sola al subir el repositorio completo). Para imprimir con diagramas incluidos: [`img/corte_por_hardware.pdf`](img/corte_por_hardware.pdf).
 
 ---
 
@@ -98,13 +108,13 @@ Para quien lo lea en terminal o lo imprima sin la imagen:
 
  Red EN_HW (todo conectado al mismo nodo):
 
-   colector de Q1 ────────┐
-   D12 CRÍTICO ── R25 1k ── SW on/off ──┤
-   GND ── R24 10k ────────┤
-   D7 AUX (AUX_KILL) ──|◄── D9 1N4148 ──┤      (cátodo hacia D7: el AUX solo puede apagar)
-   D8 CRÍTICO ── R38 1k ──┤      (EN_HW_SENSE: el CRÍTICO ve si le quitaron el permiso)
-                          │
-                          └──► EN_HW ──► pines 2, 5, 10 y 13 del 74HC08
+   colector de Q1 ──────────────────────────┐
+   D12 CRÍTICO ── R25 1k ── SW on/off ──────┤
+   GND ── R24 10k ──────────────────────────┤
+   D7 AUX (AUX_KILL) ──|◄── D9 1N4148 ──────┤   cátodo hacia D7: el AUX solo puede apagar
+   D8 CRÍTICO ── R38 1k ────────────────────┤   EN_HW_SENSE: el CRÍTICO ve si le quitaron el permiso
+                                            │
+                                            └──► EN_HW ──► pines 2, 5, 10 y 13 del 74HC08
 
  [3] 74HC08 (U4, DIP-14 en zócalo)
 
@@ -241,7 +251,7 @@ La primera versión usaba una línea **FAULT activa en 0**: el sensor la bajaba 
 
 Con una señal de "falla", **el silencio significa "todo bien"**, y un sensor que no está siempre guarda silencio. Con lógica invertida, **el sensor tiene que estar diciendo "estoy bien" todo el tiempo** para que el inversor opere. Es el mismo principio del "hombre muerto" de los trenes: si el operador suelta la palanca, el tren frena.
 
-**Por eso Q_OK y Q1:** Q_OK convierte la salida del LM393 (suelta = bien) en "jalo la línea a 0 = estoy aquí y estoy bien", y Q1 convierte "nadie jala la línea" en "corto EN_HW".
+**Por eso Q_OK y Q1** (ver el diagrama 2): Q_OK convierte la salida del LM393 (suelta = bien) en "jalo la línea a 0 = estoy aquí y estoy bien", y Q1 convierte "nadie jala la línea" en "corto EN_HW".
 
 ### 7.3 Hardware y no firmware para la presencia del sensor
 
