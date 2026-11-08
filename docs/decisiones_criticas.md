@@ -43,6 +43,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-014](#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado) | Corte del PWM por hardware con lógica fail-safe (SENSOR_OK) y doble candado | Control + sensor DC | 2026-11-08 | Vigente |
 | [DC-015](#dc-015-corriente-de-fuga-y-aislamiento-se-diseñan-en-la-versión-2-después-de-validar-la-versión-1-en-campo) | Corriente de fuga y aislamiento: se diseñan en la versión 2, después de validar la versión 1 en campo | Sistema | 2026-11-08 | Diferida (V2) |
 | [DC-016](#dc-016-corto-circuito-en-ac-niveles-de-protección-arranque-de-motores-arco-transferencia-y-reintentos) | Corto circuito en AC: niveles de protección, arranque de motores, arco, transferencia y reintentos | Control + potencia | 2026-11-08 | Vigente (V1) |
+| [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809) | Presupuesto de CPU y memoria de los ATmega328P, y alternativa en el mismo socket: Nano Every (ATmega4809) | Control | 2026-11-08 | Vigente (V1) / alternativa abierta |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -796,6 +797,92 @@ El umbral duro del shunt DC (60–80 A en el bus, [sensado de corriente](sensado
 
 ---
 
+## DC-017. Presupuesto de CPU y memoria de los ATmega328P, y alternativa en el mismo socket: Nano Every (ATmega4809)
+
+> **El CRÍTICO carga con lo más pesado: SPWM inversor-cargador, protecciones en tiempo real, huellas de corto, arco y motor (DC-016) y el enlace con el AUX. Con 2 KB de RAM, alcanza solo con disciplina, y hay que medirlo, no suponerlo.**
+
+**Contexto (la preocupación)**
+
+El ATmega328P trabaja a 16 MHz con **2 KB de RAM**, 32 KB de flash y 1 KB de EEPROM. Cada decisión de esta bitácora le ha ido sumando trabajo al CRÍTICO. Si se programa con las funciones normales de Arduino (`analogRead()`, `digitalWrite()`, `float`, `Serial`, `Wire` como maestro), **no alcanza**: `analogRead()` bloquea ~112 µs y `Wire.endTransmission()` bloquea hasta que el bus responde.
+
+**Presupuesto estimado del CRÍTICO (por medir)**
+
+Inversor y cargador **nunca corren al mismo tiempo**: el presupuesto es el del modo más pesado, no la suma.
+
+| Tarea | Frecuencia | Ciclos por llamada | Carga del CPU |
+| --- | --- | --- | --- |
+| Actualizar el SPWM (tabla seno × índice) | 24 kHz | ~80–120 | 12–18 % |
+| ADC: acumular v, i, v², i², v·i (sin guardar muestras) | 9.6 kHz | ~100 | ~6 % |
+| Lazo de corriente del cargador (PI) | ~4.8 kHz | ~200 | ~6 % (solo cargador) |
+| Huellas, RMS y regulación (enteros) | 120 Hz | ~3,000–5,000 | 2–4 % |
+| PCINT de D8, INT0 de D2 | Solo con eventos | Pocos | ~0 % |
+| I2C con el AUX | 10–20 mensajes/s | Interrupción corta | < 1 % |
+| **Total** | | | **~25–35 %** |
+
+| Recurso | Uso estimado | Disponible |
+| --- | --- | --- |
+| RAM | Acumuladores ~100 B + buffers de Wire ~160 B + variables ~200 B + pila ~300 B ≈ **800 B** | 2,048 B |
+| Flash | ≈ **10–16 KB** (tabla seno de un cuarto de onda: 100–200 B) | ~30 KB con Optiboot |
+| EEPROM | Calibraciones | 1 KB |
+
+El riesgo no es el promedio sino **la latencia**: el AVR no tiene prioridades entre interrupciones. Una interrupción larga retrasa la del SPWM y **deforma la onda**, pero no quita protección: el corte duro es hardware (DC-014).
+
+**Decisión (V1): reglas de programación obligatorias en el CRÍTICO**
+
+1. **El CRÍTICO es esclavo I2C; el AUX es el maestro.** El CRÍTICO nunca espera al bus.
+2. **ADC por interrupción con disparo automático por timer.** Nunca `analogRead()`.
+3. **Registros directos** (`PORTB`, `PINB`) en las interrupciones. Nunca `digitalWrite()`.
+4. **Enteros y punto fijo, sin `float`.** El RMS se compara al cuadrado, sin raíz.
+5. **Sin `Serial`.** La depuración sale por I2C al AUX y de ahí al LCD.
+6. **Acumuladores, no buffers:** las huellas suman por medio ciclo y se reinician en el cruce por cero.
+7. **Al AUX va todo lo que no es tiempo real:** LCD, buzzer, registro de eventos, curva térmica I²t (con los RMS que manda el CRÍTICO), CAN con el BMS, ventiladores, reintentos y mensajes.
+
+**Cómo se mide en la V1 (con la placa real)**
+
+- **CPU:** el **D7 del CRÍTICO** (libre) se pone en 1 al entrar a cada interrupción y en 0 al salir. En el osciloscopio, el porcentaje del tiempo en alto es la carga del CPU, y el pulso más ancho es la peor latencia.
+- **Flash:** el reporte de `avr-size` al compilar.
+- **RAM:** una función de RAM libre que el AUX muestra en el LCD.
+- **Criterio de aceptación:** CPU < 50 % en el peor modo y RAM libre > 30 %. Si no se cumple: primero bajar la actualización del SPWM a 12 kHz (una de cada dos portadoras, con más distorsión). **Nunca se quita una protección para ganar espacio.**
+
+**Alternativa en el mismo socket: Nano Every (ATmega4809)**
+
+Mismo tamaño y misma distribución de pines que el Nano (D0–D13, A0–A7, +5V, GND): **entra en el mismo socket** [19][20].
+
+| Punto | Nano (328P) | Nano Every (4809) | Impacto |
+| --- | --- | --- | --- |
+| Socket, posiciones, lógica de 5 V | — | Iguales | ✅ |
+| RAM / flash | 2 KB / 32 KB | **6 KB / 48 KB** | ✅ 3 veces la RAM |
+| PWM por hardware | D3, D5, D6, D9, D10, D11 | D3 (TCB1), D5, D9, D10 (TCA0), D6 (TCB0). **D11 sin PWM** | ⚠️ |
+| Timers y registros | Timer1 y Timer2 (OC1A/B, OC2A/B) | Otra arquitectura (TCA0, TCB) | ❌ El código del SPWM a nivel registro se reescribe |
+| Interrupciones externas | Solo D2 (INT0) y D3 (INT1) | En todos los pines | ✅ El código cambia |
+| A6 / A7 | Solo analógicos | También digitales | ✅ |
+| I2C (A4/A5), SPI (D11–D13) | — | Mismos pines | ✅ |
+| EEPROM | 1 KB | **256 B** | ⚠️ Contarla |
+| Programación | Bootloader por USB | UPDI por el mismo USB (puente SAMD11) | Solo cambia la herramienta |
+
+**Dónde sí y dónde no:**
+
+- **AUX: cambio directo, sin tocar la tarjeta.** LCD, CAN por SPI, I2C, ventilador por PWM en D6 (TCB0), buzzer, SENSOR_OK en D3 y BOTON_LCD en A7 no dependen de registros del 328P. Se adapta el firmware y el AUX gana 3 veces la RAM, justo donde más se ocupa: LCD, CAN, registro de eventos e I²t.
+- **CRÍTICO: no es directo.** El modo inversor (híbrida) cabe: la pierna A a 24 kHz en el TCA0 (D9/D10) y la pierna B a 60 Hz por software. Pero **el modo cargador (unipolar) necesita las dos piernas a 24 kHz, 4 canales PWM rápidos**, y en el Every D11 no tiene PWM y D3 está en un TCB más limitado. **Requiere reasignar HB/LB en la PCB.**
+
+**Ruta**
+
+1. **V1:** los dos Nano con 328P (pines validados). Medir CPU y RAM con el método de arriba.
+2. **Si el AUX se queda corto:** cambiar a Nano Every en el mismo socket.
+3. **Si el CRÍTICO se queda corto:** decisión de V2 con reasignación de pines del SPWM (Nano Every, o un STM32 con entrada de falla del PWM por hardware, ver [sensado de corriente](sensado_corriente.md)).
+
+**Consecuencias**
+
+- ✅ El presupuesto queda escrito y se puede verificar con un osciloscopio en la trinchera.
+- ✅ Hay una salida de emergencia para el AUX sin rediseñar la tarjeta.
+- ⚠️ El firmware del CRÍTICO no puede escribirse "estilo Arduino": las siete reglas son obligatorias, y quien lo modifique debe conocerlas.
+- ⚠️ El presupuesto es estimado. La medición de la V1 manda.
+- **Idea para la V2 del CRÍTICO:** el diseño de la PCB podría dejar HB/LB en pines con PWM rápido en **ambos** micros, para que el cambio al Every también sea directo en el CRÍTICO.
+
+**Referencias:** [19], [20].
+
+---
+
 ## Críticas esperadas y preguntas abiertas
 
 Lo que sabemos que se puede discutir. Se deja escrito a propósito:
@@ -830,6 +917,8 @@ Quien tenga datos (mediciones, una alternativa probada, una falla documentada) p
 16. Eaton Corp. (X. Zhou, J. J. Shea, J. C. Engel, K. L. Parker, T. J. Miller), *Arc fault circuit interrupter and method of parallel and series arc fault detection*, patente US 7,558,033 B2, 7 de julio de 2009: firmas del arco (ruido de banda ancha, variación caótica entre medios ciclos), el arco serie no aumenta la corriente, inhibición durante el arranque de motores (factor de potencia no unitario) y de cargas con pico decreciente. <https://patents.google.com/patent/US7558033>
 17. BEAMA, *Arc Fault Detection Devices (AFDD) — FAQ fact sheet*: tiempos máximos de corte de IEC 62606 (2.5 A → 1 s … 32–63 A → 0.12 s), criterio de ~100 J con 40 V para la ignición del aislamiento de un cable. <https://www.beama.org.uk/static/84330bcd-90bc-4fe3-87df9d092ec14b89/BEAMA-ARC-FAULT-DETECTION-AFDD-FAQ-Fact-Sheet.pdf>
 18. Dow, *Ignition energy* (tabla de energías mínimas de ignición en aire): hidrógeno 0.016 mJ; metano 0.21 mJ; propano, hexano, heptano e isooctano 0.24–0.25 mJ; acetona 0.19 mJ. <https://nl.dow.com/content/dam/corp/documents/ehs/779-07309-06-l3g-06-05-c-10-industrieel-reinigen-bijlage-8-ignition-energy.pdf>
+19. ESP32.co.uk, *Arduino Nano Every pinout (ATmega4809): GPIO, ADC, PWM, UPDI*: PWM en D3 (TCB1), D5, D9, D10 (TCA0) y D6 (TCB0); D11 sin PWM; interrupciones en todos los pines; 48 KB de flash, 6 KB de RAM, 256 B de EEPROM; distribución de pines compatible con el Nano. <https://esp32.co.uk/arduino-nano-every-pinout-atmega4809-gpio-adc-pwm-updi/>
+20. Zbotic, *Arduino Nano Every vs classic Nano: full comparison*: mismo tamaño y pines, otra arquitectura de timers (el código a nivel registro del 328P no es compatible), programación por UPDI. <https://zbotic.in/arduino-nano-every-vs-classic-nano-full-comparison/>
 
 ---
 
