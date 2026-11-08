@@ -130,6 +130,14 @@ Para quien lo lea en terminal o lo imprima sin la imagen:
    pin 14 = 5V con C12 100 nF pegado · pin 7 = GND
 ```
 
+**El mismo circuito como esquemático:**
+
+![Circuito completo de corte: sensor DC, SENSOR_OK, EN_HW, 74HC08 y drivers A y B](img/esquematico_corte_completo.png)
+
+**Detalle de SENSOR_OK (bloques [1] y [2]):**
+
+![SENSOR_OK: Q_OK en la tarjeta del sensor y Q_EN en la tarjeta de control](img/esquematico_sensor_ok.png)
+
 > **Ojo: hay dos "D3".** El **D3 del CRÍTICO** es la entrada PWM **LB_IN**. El **D3 del AUX** es **SENSOR_OK** (INT1). Son pines de chips diferentes. Por eso las redes llevan prefijo: `AUX_D3_SENSOR_OK`, `CRIT_D8_EN_SENSE`.
 
 ---
