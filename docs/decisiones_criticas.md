@@ -44,6 +44,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-015](#dc-015-corriente-de-fuga-y-aislamiento-se-diseñan-en-la-versión-2-después-de-validar-la-versión-1-en-campo) | Corriente de fuga y aislamiento: se diseñan en la versión 2, después de validar la versión 1 en campo | Sistema | 2026-11-08 | Diferida (V2) |
 | [DC-016](#dc-016-corto-circuito-en-ac-niveles-de-protección-arranque-de-motores-arco-transferencia-y-reintentos) | Corto circuito en AC: niveles de protección, arranque de motores, arco, transferencia y reintentos | Control + potencia | 2026-11-08 | Vigente (V1) |
 | [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809) | Presupuesto de CPU y memoria de los ATmega328P, y alternativa en el mismo socket: Nano Every (ATmega4809) | Control | 2026-11-08 | Vigente (V1) / alternativa abierta |
+| [DC-018](#dc-018-modulación-híbrida-a-24-khz-también-en-el-cargador-y-socket-multimodelo-atmega328p--atmega4809) | Modulación híbrida a 24 kHz también en el cargador, y socket multimodelo ATmega328P / ATmega4809 | Control | 2026-11-08 | Vigente (V1, por validar en banco) |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -883,6 +884,79 @@ Mismo tamaño y misma distribución de pines que el Nano (D0–D13, A0–A7, +5V
 
 ---
 
+## DC-018. Modulación híbrida a 24 kHz también en el cargador, y socket multimodelo ATmega328P / ATmega4809
+
+> **Una sola tarjeta, el mismo socket y la misma función, con dos firmwares. Si un Nano clásico no se consigue o se queda corto, se pone un Nano Every y se carga su firmware, sin soldar nada.**
+
+**Contexto (el hallazgo)**
+
+[Modulación SPWM](modulacion_spwm.md) define el inversor como **híbrido** (pierna A a 24 kHz, pierna B a 60 Hz) y el cargador como **unipolar** (las dos piernas a 24 kHz, sincronizadas). Al revisar la compatibilidad con el ATmega4809 (DC-017) apareció que **el cargador unipolar no cabe bien ni en el 328P**:
+
+- La pierna A (HA D9 / LA D10) está en **Timer1**, de 16 bits, y es la única documentada en [identificación por P9](identificacion_dt_pin9.md): TOP = 333, OCR1B = OCR1A + DT.
+- La pierna B (HB D11 / LB D3) está en **Timer2**, de 8 bits. Con las dos salidas activas, Timer2 no puede fijar 24 kHz exactos (con TOP fijo da ~31.4 kHz) y es un timer distinto del de la pierna A.
+- En el 4809, **D11 no tiene PWM** y D3 está en un TCB de 8 bits no sincronizado [19].
+
+**Alternativas consideradas**
+
+| Alternativa | Por qué sí o por qué no |
+| --- | --- |
+| Cargador unipolar a 24 kHz en el 328P | Timer2 no da 24 kHz con las dos salidas. **Descartada** |
+| **Cargador unipolar a ~31.4 kHz en el 328P:** Timer1 y Timer2 en *phase-correct* de 8 bits (TOP = 255, sin preescalador: 16 MHz / 510 = 31.37 kHz), sincronizados con `GTCCR` (`TSM`, `PSRSYNC`, `PSRASY`, contadores a cero y liberación conjunta) | Funciona, pero con ~30 % más pérdidas de conmutación, el tiempo muerto pesa más (1 µs = 3.1 % del periodo), la resolución baja a 255 pasos y **solo funciona en el 328P**. **Respaldo** si el rizo del híbrido resulta excesivo |
+| Reasignar la pierna B a pines con PWM en los dos chips (D5/D6) | En el 328P cae en Timer0 (se pierde `millis()`, 8 bits); en el 4809, D6 está en un TCB no sincronizado. **Descartada** |
+| **Cargador híbrido: pierna A a 24 kHz, pierna B a 60 Hz** (topología *totem-pole*: una pierna rápida y una lenta a la frecuencia de la red) | La pierna B no necesita PWM: D11 y D3 son salidas digitales en los dos chips. Usa el mismo par rápido del inversor. **Elegida** |
+
+**Decisión**
+
+1. **Inversor y cargador usan modulación híbrida a 24 kHz.** La pierna A (D9/D10) conmuta a 24 kHz con el tiempo muerto de P9; la pierna B (D11/D3) cambia de estado en cada cruce por cero.
+2. **El socket del CRÍTICO y del AUX es multimodelo:** Nano (ATmega328P) o Nano Every (ATmega4809), sin cambios en la PCB. Los dos se alimentan por **+5V (pin 27)**, que está en la misma posición; VIN sin conectar (DC-012).
+3. **Dos firmwares con lógica común:** la lógica (SPWM, tiempo muerto, huellas de DC-016, protecciones, I2C) se escribe una vez; la capa que toca timers, ADC e interrupciones se escribe **una por chip**, en archivos separados.
+4. **El 4809 trabaja a 20 MHz** (con MegaCoreX; el *core* oficial corre a 16 MHz).
+
+**Equivalencias en el CRÍTICO**
+
+| Parte | 328P a 16 MHz | 4809 a 20 MHz |
+| --- | --- | --- |
+| Pierna A, 24 kHz (D9/D10) | Timer1, 16 bits, *phase-correct*, TOP = 333 (24.02 kHz) | TCA0, 16 bits, *dual-slope*, PER = 416 (24.04 kHz) |
+| Tiempo muerto | OC1B invertido, OCR1B = OCR1A + DT | Salida invertida en el pin (INVEN), CMP1 = CMP0 + DT |
+| Paso del tiempo muerto | 62.5 ns | **50 ns** |
+| Tiempo muerto de 500 ns / 1 µs (P9) | 8 / 16 cuentas | 10 / 20 cuentas |
+| Resolución del ciclo de trabajo | 333 pasos | 416 pasos (+25 %) |
+| Pierna B, 60 Hz (D11/D3) | Salidas digitales | Salidas digitales |
+| D2 (límite de corriente), D8 (EN_HW_SENSE) | INT0 y PCINT0 | Interrupción en cualquier pin |
+| A0, A2, A7 | ADC de 10 bits | ADC de 10 bits, referencia VDD |
+| I2C (A4/A5) | ✅ | ✅ |
+| CPU disponible (presupuesto de DC-017) | ~25–35 % de uso | ~20–28 % de uso |
+| EEPROM | 1 KB | **256 B** |
+| Reloj | Resonador externo | **Oscilador interno**, ±1.5 % a 25 °C, ±2–3 % en todo el rango [21] |
+
+**Reglas para el 4809 a 20 MHz**
+
+- **Voltaje:** a 20 MHz el chip necesita 4.5–5.5 V. El 7805 entrega 5.0 V ±4 %: cumple. **Detector de bajo voltaje (BOD) a ~4.3 V**: si el 5 V cae, el chip se reinicia; mientras tanto R24 deja EN_HW en 0 y el inversor queda apagado (DC-014).
+- **Precisión de los 60 Hz:** con el oscilador interno, la salida en modo inversor quedaría en 60 Hz ±1–2 Hz. Corrección sin hardware: cuando hay red (modo cargador), el CRÍTICO mide el periodo real de 60 Hz con su timer, calcula el error de su reloj y lo guarda en EEPROM; en modo inversor ajusta el paso del SPWM con ese factor. En modo cargador no importa, porque se sincroniza con la red.
+- **Constantes a partir de `F_CPU`:** PER, cuentas del tiempo muerto, preescalador del ADC y velocidad del I2C se calculan, no se escriben fijas.
+- **TCA0 en modo de 16 bits** deja sin `analogWrite()` a D5, D9 y D10. No afecta al CRÍTICO: el SPWM usa registros directos (DC-017).
+
+**Lo que se valida en banco (V1)**
+
+1. **Rizo del cargador híbrido:** el doble que el unipolar (relación 2:1 de [modulación SPWM](modulacion_spwm.md)). Medir la corriente de carga y su rizo; si es excesivo, pasar al respaldo unipolar a 31.4 kHz (solo 328P).
+2. **Transición de la pierna B en el cruce por cero,** en modo cargador: corriente y voltaje con el osciloscopio.
+3. **Mismo comportamiento con los dos chips:** las pruebas de [corte por hardware](corte_por_hardware.md) y las huellas de DC-016 con el 328P y con el 4809.
+4. **Frecuencia de salida del 4809 en modo inversor,** antes y después de la calibración contra la red.
+
+**Consecuencias**
+
+- ✅ El cargador funciona en el 328P actual sin cambiar la tarjeta.
+- ✅ La trinchera tiene dos opciones de micro en el mismo socket: el 328P de lo que haya en la tienda y el 4809 de más capacidad.
+- ✅ Las protecciones por hardware (74HC08, SENSOR_OK, EN_HW, AUX_KILL) no dependen del micro.
+- ⚠️ Dos firmwares que mantener. Cada cambio en la lógica común se prueba en los dos.
+- ⚠️ El cargador híbrido tiene más rizo y está sin validar.
+- ⚠️ El 4809 depende de la calibración contra la red para tener 60 Hz precisos en modo inversor.
+- **Reemplaza** la elección del cargador unipolar de [modulación SPWM](modulacion_spwm.md), que debe actualizarse con esta decisión.
+
+**Referencias:** [19], [21].
+
+---
+
 ## Críticas esperadas y preguntas abiertas
 
 Lo que sabemos que se puede discutir. Se deja escrito a propósito:
@@ -919,6 +993,7 @@ Quien tenga datos (mediciones, una alternativa probada, una falla documentada) p
 18. Dow, *Ignition energy* (tabla de energías mínimas de ignición en aire): hidrógeno 0.016 mJ; metano 0.21 mJ; propano, hexano, heptano e isooctano 0.24–0.25 mJ; acetona 0.19 mJ. <https://nl.dow.com/content/dam/corp/documents/ehs/779-07309-06-l3g-06-05-c-10-industrieel-reinigen-bijlage-8-ignition-energy.pdf>
 19. ESP32.co.uk, *Arduino Nano Every pinout (ATmega4809): GPIO, ADC, PWM, UPDI*: PWM en D3 (TCB1), D5, D9, D10 (TCA0) y D6 (TCB0); D11 sin PWM; interrupciones en todos los pines; 48 KB de flash, 6 KB de RAM, 256 B de EEPROM; distribución de pines compatible con el Nano. <https://esp32.co.uk/arduino-nano-every-pinout-atmega4809-gpio-adc-pwm-updi/>
 20. Zbotic, *Arduino Nano Every vs classic Nano: full comparison*: mismo tamaño y pines, otra arquitectura de timers (el código a nivel registro del 328P no es compatible), programación por UPDI. <https://zbotic.in/arduino-nano-every-vs-classic-nano-full-comparison/>
+21. Microchip, *Oscillators and Clocks* (hoja de datos de la familia AVR con OSC20M): precisión del oscilador interno de 16/20 MHz, ±1.5 % calibrado de fábrica a 25 °C, ±2 % de 0 a 70 °C, ±3 % en todo el rango; paso de calibración del usuario. <https://onlinedocs.microchip.com/oxy/GUID-C541EA24-5EC3-41E5-9648-79068F9853C0-en-US-3/GUID-E7FE8424-FF3A-4E84-8E9A-83C19635B6BF.html> *(La página no indica el número de parte: confirmar contra la hoja de datos del ATmega4809.)*
 
 ---
 
