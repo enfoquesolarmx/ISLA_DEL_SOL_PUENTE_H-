@@ -994,29 +994,32 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 
 | Canal (ULN2003) | Pin del CRÍTICO | Bobinas |
 | --- | --- | --- |
-| AISLAR RED (salida 16) | D5 → J15-3 | K2 + K_L2 + RL_TN |
+| AISLAR RED (salida 16) | D5 → J15-3 | K2 + K_L2 |
 | TRAFO (salida 15) | D6 → J15-5 | K3 + K_L3 |
+| TN (salida 14) | **AUX D10** → J15-7, **a través de Q2 (AND con AISLAR)** | RL_TN |
+
+   **Actualización 2026-11-09:** RL_TN pasa a canal propio para que el firmware decida la unión N–PE según el escenario. **Q2** (BC547 en seguidor de emisor: colector ← J15-7 por 1 kΩ, base ← AISLAR por 10 kΩ, emisor → I3 con 10 kΩ + 10 nF a GND) deja pasar TN **solo si AISLAR está activo**. En modo cargador o red, K2 sigue uniendo N-LOAD con N-GRID, y Q2 impide que RL_TN haga una doble unión con CFE aunque el AUX se equivoque, se cuelgue o el cable esté pelado. Referencias del esquemático KiCad: K_L2 = K4, K2 = K2, K_L3 = K1, K3 = K3, RL_TN = K5; todos Rayex L90S.
 
 3. **Tres estados; K2 + K3 a la vez no se usa:**
 
 | Modo | AISLAR | TRAFO | Casa en | Transformador |
 | --- | --- | --- | --- | --- |
 | **Red** (Nano apagado, en reset, cable suelto) | 0 | 0 | Red | Aislado |
-| **Inversor CASA** (fuente principal) | 1 | 0 | Transformador, **N unido a PE** por RL_TN | Alimenta la casa |
-| **Inversor CARGA** (UPS de cargas críticas) | 1 | 0 | Transformador, **sin unión N–PE** (RL_TN bloqueado por SW_TN) | Alimenta las cargas críticas |
+| **Inversor CASA** (fuente principal) | 1 | 0 | Transformador, **N unido a PE** por RL_TN (TN = 1) | Alimenta la casa |
+| **Inversor CARGA** (UPS de cargas críticas) | 1 | 0 | Transformador, **sin unión N–PE** (TN = 0 y SW_TN en CARGA) | Alimenta las cargas críticas |
 | **Cargador** | 0 | 1 | Red | Conectado a la red (a través del nodo de la carga) |
 
 4. **Candado por hardware (un BC547, Q_A):** la orden AISLAR jala a 0 V la entrada del canal TRAFO (base con 10 kΩ desde la orden cruda; 1 kΩ en serie en el canal TRAFO). Si llegan las dos órdenes, solo queda AISLAR = inversor.
 5. **Caída automática a la red:** en la tarjeta de control, D5 → 1 kΩ → J15-3, con un **1N4148 hacia EN_HW** (cátodo a EN_HW). Si el inversor se detiene por cualquier causa (SENSOR_OK, AUX_KILL, switch, reset), K2 se suelta solo y la casa cae a la red, sin esperar al firmware.
-6. **Autoprueba contra relé soldado:** un **PC817** con 2 × 47 kΩ / 1 W y 1N4007 antiparalelo detecta voltaje en la carga → J15-7 **PRES_CARGA** → AUX D10 (10 kΩ a 5 V y 1 µF). Al pasar a inversor con red presente, la carga debe quedar sin voltaje antes de arrancar el SPWM; si no, "K2 SOLDADO" y se queda en la red.
-7. **Relés:** **Rayex L90S** para K2, K_L2, K3 y K_L3 (NO 30 A / NC 20 A a 240 VAC, 2500 VAC bobina–contacto, bobina de 12 V con 160 Ω / 0.9 W) [24], con **39 Ω ½ W** en serie desde 15 V. RL_TN: SRD de 12 V con 100 Ω. ULN2003 con **COM (pin 9) a 15 V**: sus diodos internos son el flyback de las bobinas.
+6. **~~Autoprueba contra relé soldado (PC817 → PRES_CARGA)~~ — eliminada el 2026-11-09:** J15-7 y AUX D10 pasan a la orden TN. **Consecuencia aceptada:** un contacto soldado (K_L2 o K2) ya no se detecta automáticamente. Caso a vigilar: K_L2 soldado en NC, con red presente e inversor con unión → la casa queda con L de CFE y N del inversor unido a PE, y la corriente regresa por la tierra (sin paralelo red–inversor, porque K_L3 y el NO de K_L2 siguen abiertos). **Mitigaciones:** prueba manual periódica (con orden INV: 0 V entre L-GRID y L-LOAD; LED + multímetro), alarma de firmware si el LCD dice INV con carga y el inversor no entrega corriente (SCT), y **huella del PC817 sin poblar (DNP)** para recuperar la verificación si se necesita.
+7. **Relés:** **Rayex L90S** para K2, K_L2, K3 y K_L3 (NO 30 A / NC 20 A a 240 VAC, 2500 VAC bobina–contacto, bobina de 12 V con 160 Ω / 0.9 W) [24], con **39 Ω ½ W** en serie desde 15 V. RL_TN: también L90S con 39 Ω (en el esquemático KiCad, K5). ULN2003 con **COM (pin 9) a 15 V**: sus diodos internos son el flyback de las bobinas.
 8. **Protecciones de potencia:** fusible lento de **10–12 A** entre K_L3 y el transformador (solo el camino del cargador); **breaker de 20 A** hacia la carga; **MOV 14D241K** en J_LOAD. Sin capacitores en paralelo con los contactos.
 8b. **Capacitor del filtro de salida en la entrada del transformador:** **C_F 4.7 µF MKP X2, ≥ 310 VAC**, entre L-INV y N-INV, **antes de los relés** (siempre del lado del transformador). Con los ~2 mH del secundario (dispersión + inductor E65 N87) forma el filtro LC de f₀ ≈ 1.64 kHz que quita la portadora de 24 kHz ([compensación adaptativa del tiempo muerto](compensacion_adaptativa_tiempo_muerto.md)).
    - **Polipropileno (MKP) clase X2, no poliéster (MKT):** el poliéster tiene más pérdidas y se calienta con el rizo de 24 kHz; la clase X2 está hecha para ir entre fase y neutro de la red.
    - **R_B 2 × 100 kΩ ½ W en paralelo:** descarga C_F a menos de 60 V en ~1 s (τ = 200 kΩ × 4.7 µF ≈ 0.94 s) después de apagar; disipa ~0.08 W.
    - **R_D 22 Ω 5 W + C_D 4.7 µF X2, sin poblar:** red de amortiguamiento para la etapa 3 (pico de los armónicos 27° y 29°).
    - En modo cargador, C_F queda conectado a la red por K3/K_L3: ~0.22 A reactivos a 127 V / 60 Hz, sin problema para los relés.
-9. **J15:** 1 15V · 2 GND · 3 AISLAR RED (D5) · 4 GND · 5 TRAFO (D6) · 6 GND · 7 PRES_CARGA (AUX D10) · 8 **MODO_TN (CRÍTICO D4)**. C1 100 µF + C2 100 nF en la entrada de 15 V; C3 100 nF en COM; 10 kΩ y 1 nF en cada entrada del ULN2003.
+9. **J15:** 1 15V · 2 GND · 3 AISLAR RED (D5) · 4 GND · 5 TRAFO (D6) · 6 GND · 7 **TN (AUX D10, salida)** · 8 **MODO_TN (CRÍTICO D4)**. C1 100 µF + C2 100 nF en la entrada de 15 V; C3 100 nF en COM; 10 kΩ y 1 nF (10 nF en I3) en cada entrada usada del ULN2003; **I4–I7 a GND**.
 
 10. **Dos modos de inversor: CASA (con unión N–PE) y CARGA (sin unión N–PE).** Se eligen en el SETUP por menú **y** con un selector físico; los dos tienen que coincidir.
 
@@ -1026,7 +1029,7 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 | **INVERSOR CARGA** | **UPS de cargas críticas**, derivado de un circuito de la red | **No.** La salida queda flotante respecto a PE; la tierra de los equipos pasa directa (PE IN = PE OUT) | **CARGA** (abierto) | Red primero; el inversor solo entra cuando la red falla |
 
    - **SW_TN:** selector deslizable **DPDT** en la tarjeta de relés, lado 15 V (no toca 127 V).
-     - **Polo A:** en serie con la bobina de RL_TN. En CARGA, RL_TN no puede cerrar aunque el canal AISLAR esté activo.
+     - **Polo A:** en serie con la bobina de RL_TN. En CARGA, RL_TN no puede cerrar aunque AISLAR y TN estén activos. Así la unión exige **tres permisos en serie**: SW_TN (instalador) Y AISLAR (CRÍTICO, por Q2) Y TN (AUX, según el escenario).
      - **Polo B:** lleva **MODO_TN** por J15-8 al **CRÍTICO D4** (pull-up de 10 kΩ y 1 nF): CASA = 0, CARGA = 1.
    - **Regla de coincidencia:** el CRÍTICO compara MODO_TN con el modo del menú (que le pasa el AUX por I2C) **antes de cada arranque del inversor**. Si no coinciden, **no invierte**, se queda en la red y muestra "CONFIG N–PE NO COINCIDE". Un cable J15 suelto lee 1 (CARGA): si el menú dice CASA, también bloquea.
    - **El software no puede cambiar la unión:** solo la verifica. Cambiar de modo exige mover el selector físico **y** confirmar dos veces en el menú, con el inversor en espera; el cambio queda en el registro de eventos.
@@ -1044,27 +1047,29 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 11. **LED de diagnóstico en la tarjeta de relés (lado 15 V):**
    - **LED 15V** verde junto al ULN2003 (15 V → 4.7 kΩ → LED → GND, ~3 mA): la tarjeta recibe energía por J15-1.
    - **Un LED por relé**, a un lado de su bobina (15 V → 2.2 kΩ ¼ W → LED → lado bajo de la bobina, ~6 mA): azules K2, K_L2 y RL_TN (canal AISLAR); ámbar K3 y K_L3 (canal TRAFO). El LED de RL_TN va **después de SW_TN-A**: en modo CARGA queda apagado, así muestra la unión N–PE real.
-   - **El LED indica que la bobina recibe la orden, no que el contacto cerró** (con la bobina abierta enciende igual); el contacto se confirma con PRES_CARGA en el LCD.
+   - **El LED indica que la bobina recibe la orden, no que el contacto cerró** (con la bobina abierta enciende igual); el contacto se confirma con la prueba manual (multímetro) o con la corriente del inversor en el LCD.
    - **Diagnóstico del cable J15:** 15V apagado = sin energía (cable, XL7015) → todo a la red · LED de relé apagado con orden en el LCD = J15-3 o J15-5 abierto · **LED encendido sin orden = línea pelada contra 15 V: revisar el cable IDC de inmediato** · parpadeo = GND flojo o IDC mal prensado.
 
 **Análisis de falla de un solo relé**
 
 | Falla | Consecuencia |
 | --- | --- |
-| K2 soldado en NC | Al pedir inversor el NO no puede cerrar; Q_A impide cerrar K3 → la casa sigue en la red, el transformador aislado. La autoprueba lo detecta |
+| K2 soldado en NC | Al pedir inversor el NO no puede cerrar; Q_A impide cerrar K3 → el neutro de la casa sigue en la red y no hay paralelo. **Sin PC817 no se detecta solo**: prueba manual periódica |
 | K2 soldado en NO | La casa queda en el transformador; la red no entra. Sin paralelo |
 | K3 soldado cerrado | En inversor, K2 sigue aislando la red. En modo red, el transformador queda en la red con el puente apagado: el pico del secundario (~180 V / 4.16 ≈ 43 V) es menor que la batería, los diodos del puente no conducen |
 | Bobinas sin energía (Nano, cable, 15 V) | Todo a la red |
-| RL_TN no cierra (bobina, contacto o SW_TN) en modo CASA | Salida sin unión N–PE (queda como en modo CARGA): una falla a chasis no dispara. Se detectará con el monitor de aislamiento de la V2 (DC-015); mientras tanto, prueba de continuidad N–PE en el arranque del sitio |
+| RL_TN cerrado sin orden (Q2 en corto C–E y TN = 1 en modo cargador) | Doble unión mientras carga: requiere **dos** fallas (Q2 dañado **y** orden TN errónea) |
+| RL_TN no cierra (bobina, contacto, Q2 o SW_TN) en modo CASA | Salida sin unión N–PE (queda como en modo CARGA): una falla a chasis no dispara. Se detectará con el monitor de aislamiento de la V2 (DC-015); mientras tanto, prueba de continuidad N–PE en el arranque del sitio |
 
 **Reglas de firmware (obligatorias)**
 
-- **A inversor:** EN_HW = 0 → TRAFO = 0 → pausa 50 ms → AISLAR = 1 → pausa 50 ms → autoprueba con PRES_CARGA → EN_HW = 1 → SPWM.
+- **A inversor:** EN_HW = 0 → TRAFO = 0 → pausa 50 ms → AISLAR = 1 → pausa 50 ms → AUX: TN (D10) según el escenario → EN_HW = 1 → SPWM.
+- **Salir de inversor:** EN_HW = 0 → TN = 0 → AISLAR = 0. Si el AUX pierde el I2C con el CRÍTICO, suelta TN.
 - **A cargador:** EN_HW = 0 → AISLAR = 0 → pausa 50 ms → verificar red con AC_FB_GRID → TRAFO = 1 → el puente solo rectifica, sincronizado con la red.
 - **Con AISLAR = 0, el puente nunca genera voltaje de inversor.**
 - **Si el inversor se detiene, se sueltan los dos canales** (además del diodo de EN_HW).
 - **Antes de cada arranque del inversor:** MODO_TN (D4) debe coincidir con el modo del menú (CASA = 0, CARGA = 1); si no, no invertir y alarma "CONFIG N–PE NO COINCIDE".
-- **Autochequeo del sensor:** en modo red con red presente, PRES_CARGA debe indicar voltaje; si no, sensor o cable J15-7 dañado.
+- **TN solo con AISLAR:** el AUX nunca pide TN sin que el CRÍTICO confirme modo inversor por I2C (Q2 lo bloquea de todos modos).
 
 **Reglas de PCB**
 
