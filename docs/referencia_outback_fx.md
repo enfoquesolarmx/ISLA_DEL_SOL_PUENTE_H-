@@ -145,8 +145,33 @@ La NOM-001-SEDE-2012 [R2] (misma numeración que el NEC):
 | Filtro de salida | C1 5 µF en el transformador + toroide en el neutro | C_F 4.7 µF MKP X2 en el transformador, antes de los relés |
 | Bornes | Weidmüller 10 mm², vivos en los extremos | Phoenix SPT 2.5 |
 | Exige al instalador | Saber de puesta a tierra (250-24 / 250-30) | Nada sobre la unión N–PE: el equipo la resuelve |
+| Modo de uso (respaldo o principal) | Lo define la instalación y la unión que haga el instalador | **Se elige en el SETUP por menú:** DERIVADOR TIPO UPS o FUENTE PRINCIPAL (sección 8.1) |
 
 **Lectura:** el FX es más simple y barato en relés, pero **traslada la responsabilidad** de la unión N–PE al instalador y la de la sincronía y el anti-isla al firmware. La V1 gasta más relés para que **un trinchero sin formación en puesta a tierra** no pueda equivocarse. Las dos son válidas; están pensadas para usuarios distintos.
+
+### 8.1 Modo de operación de la V1: se configura en el SETUP, por menú
+
+El FX deja al instalador decidir **cómo** se usa el equipo. En la V1 esa decisión se toma **en la puesta en marcha, desde el menú del SETUP**, y queda guardada:
+
+| Opción del menú | Uso | Prioridad | Sin red | Carga desde la red |
+| --- | --- | --- | --- | --- |
+| **1. DERIVADOR TIPO UPS** de un circuito de red | Respaldo de uno o varios circuitos de una casa con CFE | **RED primero.** El inversor entra solo cuando la red falla o sale de rango, y regresa a la red cuando vuelve estable (con tiempo de confirmación) | **Es una falla:** alarma "SIN RED" y registro del evento | Sí, normal: mantiene la batería llena |
+| **2. FUENTE PRINCIPAL** de energía | Sitio aislado, o casa donde la batería y el sol son la fuente principal | **INVERSOR primero.** La red o la planta en la entrada AC solo se usan como respaldo (batería baja) y para cargar | **Es lo normal:** sin alarma | Solo cuando la batería baja del umbral configurado, o por orden del usuario |
+
+**Reglas del menú:**
+
+1. **Lo maneja el AUX** (interfaz de usuario, DC-010): guarda el modo en EEPROM con verificación (CRC) y se lo pasa al CRÍTICO por I2C.
+2. **Valor de fábrica, y respuesta ante una EEPROM dañada: modo 1, DERIVADOR TIPO UPS.** Es el modo conservador: funciona con red o sin ella, y nunca deja de usar la red si existe.
+3. **Cambiar el modo exige confirmar dos veces** en el SETUP y solo se permite con el inversor **en espera** (sin invertir). El cambio queda en el registro de eventos.
+4. **El modo cambia la POLÍTICA de transferencia, NO la seguridad.** El candado Q_A, la secuencia EN_HW = 0 → soltar → pausa ≥ 50 ms → activar (DC-016/DC-019) y el valor por defecto en RED sin energía son iguales en los dos modos.
+
+**La unión N–PE en la V1 no depende del modo:**
+
+- Como la V1 **conmuta el neutro** (K2), cada vez que el inversor alimenta, su salida queda **aislada** del neutro de la red: es un sistema derivado separadamente (250-30) **en los dos modos**. Por eso RL_TN une N–PE siempre que se aísla, sea UPS o principal. No se forma doble unión, porque el neutro de la acometida ya no está conectado.
+- **RL_TN comparte canal con K2 y K_L2** (AISLAR, D5). Por diseño, **el software no puede apagarlo por separado**: una falla de firmware o de menú no puede dejar la salida sin unión.
+- Si un instalador necesita **unión externa** (por ejemplo, un tablero de cargas propio que ya trae su unión), la decisión es **física**: se quita el faston con seguro **J_TN** que abre el contacto de RL_TN, y se anota en la etiqueta del equipo. **El menú puede mostrar el estado de J_TN** (si se agrega su lectura), pero no lo cambia.
+
+**Diferencia con el FX:** en el FX, el modo de uso (respaldo o principal) **obliga** al instalador a decidir la unión N–PE (sección 7). En la V1, el menú solo decide **la prioridad de la energía**, y la unión la resuelve el hardware.
 
 ---
 
