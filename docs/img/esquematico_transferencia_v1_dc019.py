@@ -150,6 +150,25 @@ def build(out, dpi):
             d += elm.Dot()
             d += elm.Line().at((X0 + 4.0, y)).toy(s.c[1])
             d += elm.Line().tox(s.c[0])
+        # output filter capacitor + damper (DNP) + bleeder, across L-INV / N-INV
+        for x, kind, tag in [(X0 + 0.7, 'C', 'C_F'), (X0 + 1.9, 'RC', 'R_D+C_D'), (X0 + 3.1, 'R', 'R_B')]:
+            d += elm.Dot().at((x, 14.2))
+            d += elm.Dot().at((x, 4.2))
+            if kind == 'C':
+                d += elm.Capacitor().at((x, 14.2)).toy(11.0)
+                d += elm.Line().toy(4.2)
+            elif kind == 'R':
+                d += elm.Resistor().at((x, 14.2)).toy(10.8)
+                d += elm.Line().toy(4.2)
+            else:
+                d += elm.Resistor().at((x, 14.2)).toy(12.0)
+                d += elm.Capacitor().toy(9.9)
+                d += elm.Line().toy(4.2)
+            d += elm.Label().at((x + 0.12, 12.6 if kind != 'RC' else 13.2)).label(tag, loc='right', fontsize=FP - 4, halign='left', color=ORG)
+        d += elm.Label().at((X0 + 0.2, 16.0)).label(
+            'FILTRO DE SALIDA (lado del transformador, antes de los relés):\n'
+            'C_F 4.7 µF MKP X2 310 VAC · R_D 22 Ω 5 W + C_D 4.7 µF X2 (sin poblar, etapa 3) · R_B 2 × 100 kΩ ½ W',
+            loc='right', fontsize=FP - 3, halign='left', color=ORG)
         # load buses
         XB = X0 + 15.5
         d += elm.Line().at(sL.a).tox(XB)
@@ -201,12 +220,12 @@ def build(out, dpi):
         d += elm.Line().at(op.emitter).right(0.6)
         d += elm.Ground()
         # TN bond
-        d += elm.Dot().at((X0 + 2.0, 4.2))
-        d += elm.Line().at((X0 + 2.0, 4.2)).toy(1.6)
+        d += elm.Dot().at((X0 + 3.5, 4.2))
+        d += elm.Line().at((X0 + 3.5, 4.2)).toy(1.6)
         d += elm.Switch().right(2.4).label('RL_TN (NO) SRD', loc='bottom', fontsize=FP - 2, color=BLUE)
         d += elm.Line().right(0.6)
         d += elm.Ground()
-        d += elm.Label().at((X0 + 6.2, 1.0)).label('PE: unión N–PE solo en modo inversor', loc='right', fontsize=FP - 2, halign='left', color=GRAY)
+        d += elm.Label().at((X0 + 7.6, 1.0)).label('PE: unión N–PE solo en modo inversor', loc='right', fontsize=FP - 2, halign='left', color=GRAY)
 
         # ================= TABLE / NOTES =================
         TY = -1.2
@@ -229,7 +248,9 @@ def build(out, dpi):
             '  • Con K2 apagado el puente nunca genera voltaje de inversor; en modo cargador solo rectifica sincronizado con la red.\n'
             '  • Separación: 3 mm entre pours de distinto origen (GRID / INV / LOAD) · 5 mm a bobinas y lógica · ranura entre zonas.\n'
             '  • J15: 1 15V · 2 GND · 3 AISLAR RED (D5) · 4 GND · 5 TRAFO (D6) · 6 GND · 7 PRES_CARGA (AUX D10) · 8 GND.  D4 queda libre.\n'
-            '  • Dos puentes faston con seguro (L y N del trafo hacia K_L3/K3) = seccionador de servicio del cargador; colores distintos.',
+            '  • Dos puentes faston con seguro (L y N del trafo hacia K_L3/K3) = seccionador de servicio del cargador; colores distintos.\n'
+            '  • C_F 4.7 µF MKP X2 (polipropileno, ≥ 310 VAC) entre L-INV y N-INV, ANTES de los relés: forma el LC con los ~2 mH del secundario (f₀ ≈ 1.64 kHz).\n'
+            '    No poliéster (MKT): calienta con el rizo de 24 kHz.  R_B 2 × 100 kΩ ½ W descarga C_F a < 60 V en ~1 s.  R_D + C_D: amortiguamiento, sin poblar (etapa 3).',
             loc='right', fontsize=FS - 1, halign='left', valign='top')
 
 
