@@ -97,25 +97,30 @@ def build(out, dpi):
         d += elm.Label().at((UX0 - 0.1, 8.1)).label('2', loc='left', fontsize=FP - 2, halign='right', valign='bottom', color=GRAY)
 
         # rail 15V + COM
+        # power LED next to the ULN2003
+        d += elm.Dot().at((15.6, 21.0))
+        d += elm.Resistor().at((15.6, 21.0)).down(1.4).label('4.7k', loc='bottom', fontsize=FP - 3)
+        d += elm.LED().down(1.4).color(GREEN).label('LED\n15V', loc='bottom', fontsize=FP - 3, color=GREEN)
+        d += elm.Ground()
         RAIL = 21.0
         d += elm.Line().at((19.0, 18.0)).toy(RAIL)
         d += elm.Label().at((19.15, 18.15)).label('9 COM', loc='right', fontsize=FP - 2, halign='left', valign='bottom', color=GRAY)
-        d += elm.Line().at((19.0, RAIL)).tox(35.0)
-        d += elm.Dot(open=True).at((35.0, RAIL)).label('15V\n(J15-1)', loc='top', fontsize=FP)
+        d += elm.Line().at((15.6, RAIL)).tox(38.0)
+        d += elm.Dot(open=True).at((38.0, RAIL)).label('15V\n(J15-1)', loc='top', fontsize=FP)
         d += elm.Dot().at((19.0, 20.0))
         d += elm.Capacitor().at((19.0, 20.0)).left(1.6).label('C3 100n', loc='top', fontsize=FP - 2, color=GREEN)
         d += elm.Ground()
-        for xc, lab, pol in [(32.6, 'C1\n100µ', True), (34.0, 'C2\n100n', False)]:
+        for xc, lab, pol in [(36.4, 'C1\n100µ', True), (37.6, 'C2\n100n', False)]:
             d += elm.Dot().at((xc, RAIL))
             d += elm.Capacitor(polar=pol).at((xc, RAIL)).down(1.4).label(lab, loc='bottom', fontsize=FP - 2, color=GREEN)
             d += elm.Ground()
 
         # coils
-        coils1 = [('K2', 21.6), ('K_L2', 24.0), ('RL_TN', 26.4)]
-        coils2 = [('K3', 28.8), ('K_L3', 31.2)]
-        d += elm.Line().at((UX1, 16.0)).tox(26.4)
+        coils1 = [('K2', 21.6), ('K_L2', 24.6), ('RL_TN', 27.6)]
+        coils2 = [('K3', 30.6), ('K_L3', 33.6)]
+        d += elm.Line().at((UX1, 16.0)).tox(27.6)
         d += elm.Label().at((UX1 + 0.1, 16.1)).label('16', loc='right', fontsize=FP - 2, halign='left', valign='bottom', color=GRAY)
-        d += elm.Line().at((UX1, 8.0)).tox(31.2)
+        d += elm.Line().at((UX1, 8.0)).tox(35.0)
         d += elm.Label().at((UX1 + 0.1, 8.1)).label('15', loc='right', fontsize=FP - 2, halign='left', valign='bottom', color=GRAY)
         for name, x in coils1 + coils2:
             yb = 16.0 if (name, x) in coils1 else 8.0
@@ -124,18 +129,32 @@ def build(out, dpi):
             d += elm.Resistor().at((x, RAIL)).down(1.4).label(r, loc='bottom', fontsize=FP - 3)
             d += elm.RBox(w=0.7, h=0.45).down(1.4).label(name, loc='bottom', fontsize=FP - 2, color=BLUE if yb == 16.0 else RED)
             if name == 'RL_TN':
+                d += elm.Dot()
+                ntn = d.here
                 d += elm.Switch().down(1.6).label('SW_TN-A', loc='left', fontsize=FP - 3, color=ORG)
             d += elm.Line().toy(yb)
             d += elm.Dot().at((x, yb))
-        d += elm.Label().at((21.0, 3.6)).label('Canal 1 (16): K2 + K_L2 + RL_TN = MODO INVERSOR\nCanal 2 (15): K3 + K_L3 = MODO CARGADOR\nL90S: 39 Ω ½ W · SRD (RL_TN): 100 Ω',
+            # status LED per relay: 15V -> 2.2k -> LED -> coil low side
+            xl = x + 1.4
+            col = BLUE if yb == 16.0 else ORG
+            d += elm.Dot().at((xl, RAIL))
+            d += elm.Resistor().at((xl, RAIL)).down(1.4).label('2.2k', loc='bottom', fontsize=FP - 4)
+            d += elm.LED().down(1.4).color(col)
+            if name == 'RL_TN':
+                d += elm.Line().toy(ntn[1])
+                d += elm.Line().tox(x)
+            else:
+                d += elm.Line().toy(yb)
+                d += elm.Line().tox(x)
+        d += elm.Label().at((21.0, 3.6)).label('Canal 1 (16): K2 + K_L2 + RL_TN = MODO INVERSOR\nCanal 2 (15): K3 + K_L3 = MODO CARGADOR\nL90S: 39 Ω ½ W · SRD (RL_TN): 100 Ω\nLED por relé (a la derecha de cada bobina): 2.2 kΩ ¼ W (~6 mA) · azul = INVERSOR · ámbar = CARGADOR\nLED_RL_TN después de SW_TN-A: apagado en modo CARGA (sin unión)\nLED 15V verde junto al ULN: 4.7 kΩ (~3 mA)',
                                               loc='right', fontsize=FP - 1, halign='left', color=GRAY)
 
         # ================= SLOT =================
-        d += elm.Line().at((37.0, 1.0)).toy(24.0).linestyle('--').color(RED)
-        d += elm.Label().at((37.0, 24.4)).label('RANURA · ≥ 5 mm', fontsize=FP, color=RED)
+        d += elm.Line().at((40.0, 1.0)).toy(24.0).linestyle('--').color(RED)
+        d += elm.Label().at((40.0, 24.4)).label('RANURA · ≥ 5 mm', fontsize=FP, color=RED)
 
         # ================= POWER =================
-        X0 = 41.0
+        X0 = 44.0
         d += elm.Label().at((X0 - 2.0, 23.0)).label('[C] TARJETA DE RELÉS — lado 127 V', loc='right', fontsize=22, halign='left', color=RED)
 
         def spdt_block(y, pole, grid, inv, load, ref):
@@ -259,6 +278,8 @@ def build(out, dpi):
             '  • Con K2 apagado el puente nunca genera voltaje de inversor; en modo cargador solo rectifica sincronizado con la red.\n'
             '  • Separación: 3 mm entre pours de distinto origen (GRID / INV / LOAD) · 5 mm a bobinas y lógica · ranura entre zonas.\n'
             '  • J15: 1 15V · 2 GND · 3 AISLAR RED (D5) · 4 GND · 5 TRAFO (D6) · 6 GND · 7 PRES_CARGA (AUX D10) · 8 MODO_TN (CRÍTICO D4).\n'
+            '  • LED de diagnóstico: 15V apagado = sin energía (cable o XL7015) · LED de relé apagado con orden = J15-3/J15-5 abierto ·\n'
+            '    LED de relé encendido SIN orden (LCD en RED) = línea pelada contra 15 V: revisar el cable IDC.  El LED indica bobina mandada, no contacto cerrado.\n'
             '  • SW_TN (DPDT): CASA = unión N–PE (polo A en la bobina de RL_TN) · CARGA = sin unión.  El polo B avisa al CRÍTICO; si no coincide con el menú, NO invierte.\n'
             '  • Dos puentes faston con seguro (L y N del trafo hacia K_L3/K3) = seccionador de servicio del cargador; colores distintos.\n'
             '  • C_F 4.7 µF MKP X2 (polipropileno, ≥ 310 VAC) entre L-INV y N-INV, ANTES de los relés: forma el LC con los ~2 mH del secundario (f₀ ≈ 1.64 kHz).\n'

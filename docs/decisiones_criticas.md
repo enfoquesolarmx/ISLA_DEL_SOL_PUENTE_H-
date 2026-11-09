@@ -1041,6 +1041,12 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
      - **ninguna otra unión N–PE aguas abajo** (tableros, planta).
      - Con red conectada no se forma doble unión: K2 abre el neutro de la red antes de que RL_TN cierre, y en modo RED la unión es solo la de la acometida.
 
+11. **LED de diagnóstico en la tarjeta de relés (lado 15 V):**
+   - **LED 15V** verde junto al ULN2003 (15 V → 4.7 kΩ → LED → GND, ~3 mA): la tarjeta recibe energía por J15-1.
+   - **Un LED por relé**, a un lado de su bobina (15 V → 2.2 kΩ ¼ W → LED → lado bajo de la bobina, ~6 mA): azules K2, K_L2 y RL_TN (canal AISLAR); ámbar K3 y K_L3 (canal TRAFO). El LED de RL_TN va **después de SW_TN-A**: en modo CARGA queda apagado, así muestra la unión N–PE real.
+   - **El LED indica que la bobina recibe la orden, no que el contacto cerró** (con la bobina abierta enciende igual); el contacto se confirma con PRES_CARGA en el LCD.
+   - **Diagnóstico del cable J15:** 15V apagado = sin energía (cable, XL7015) → todo a la red · LED de relé apagado con orden en el LCD = J15-3 o J15-5 abierto · **LED encendido sin orden = línea pelada contra 15 V: revisar el cable IDC de inmediato** · parpadeo = GND flojo o IDC mal prensado.
+
 **Análisis de falla de un solo relé**
 
 | Falla | Consecuencia |
