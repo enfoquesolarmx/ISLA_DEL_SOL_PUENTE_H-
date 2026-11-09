@@ -45,6 +45,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-016](#dc-016-corto-circuito-en-ac-niveles-de-protección-arranque-de-motores-arco-transferencia-y-reintentos) | Corto circuito en AC: niveles de protección, arranque de motores, arco, transferencia y reintentos | Control + potencia | 2026-11-08 | Vigente (V1) |
 | [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809) | Presupuesto de CPU y memoria de los ATmega328P, y alternativa en el mismo socket: Nano Every (ATmega4809) | Control | 2026-11-08 | Vigente (V1) / alternativa abierta |
 | [DC-018](#dc-018-modulación-híbrida-a-24-khz-también-en-el-cargador-y-socket-multimodelo-atmega328p--atmega4809) | Modulación híbrida a 24 kHz también en el cargador, y socket multimodelo ATmega328P / ATmega4809 | Control | 2026-11-08 | Vigente (V1, por validar en banco) |
+| [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo) | Transferencia red / inversor / cargador: tres estados y ninguna falla de un relé forma paralelo | Tarjeta de relés | 2026-11-08 | Vigente (V1, por validar en banco) |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -959,6 +960,103 @@ Mismo tamaño y misma distribución de pines que el Nano (D0–D13, A0–A7, +5V
 
 ---
 
+## DC-019. Transferencia red / inversor / cargador: tres estados y ninguna falla de un relé forma paralelo
+
+> **La casa nunca puede tener dos fuentes a la vez, ni siquiera si un relé se suelda. Sin energía en las bobinas, la casa queda en la red.**
+
+![Tarjeta de transferencia V1](img/esquematico_transferencia_v1_dc019.png)
+
+*Script: [`img/esquematico_transferencia_v1_dc019.py`](img/esquematico_transferencia_v1_dc019.py).*
+
+**Contexto**
+
+Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera de la tarjeta de control (DC-015). El CRÍTICO los manda por J15 a través de un ULN2003. Hacía falta decidir la topología, el relé y qué pasa cuando algo falla. Como referencia se revisó un inversor comercial de inyección a red: usa **4 relés NO** (dos en serie en L y dos en N) porque IEC 62109-2 y VDE 0126-1-1 piden **dos interruptores en serie** para que un contacto soldado no deje energizada la red [22]. La Isla del Sol no inyecta a la red; su objetivo es el respaldo con transferencia. Lo que sí aplica es el principio: **una sola falla no puede poner las dos fuentes en paralelo.**
+
+**Alternativas consideradas**
+
+| Alternativa | Por qué no / por qué sí |
+| --- | --- |
+| Relés de PCB pequeños (SRD, 10 A) cargando al motor | 1 HP a 115 V = 16 A a plena carga y del orden de 6 veces al arrancar: un SRD se suelda. **Descartada para potencia** |
+| Contactores con enclavamiento mecánico, manejados por relés SRD | La opción más robusta para muchos arranques al día. Queda como **alternativa** (diagrama de contactores) |
+| 4 relés NO en serie (estilo inversor de inyección) | Con el Nano apagado la casa se queda sin energía; pensado para otro objetivo. **Descartada** |
+| **K2 + K_L2 conmutados (SPDT) + K3 + K_L3 (NO), Rayex L90S** | Conmutador de 2 polos y 2 tiros (DPDT), el interruptor de transferencia básico [23]: la carga no puede tener las dos fuentes. Fail-safe a la red. **Elegida** |
+
+**Decisión**
+
+1. **Topología (la misma en L y en N):**
+
+| Relé | COM (11) | NC (12) | NO (14) |
+| --- | --- | --- | --- |
+| K2 (N) / K_L2 (L): transferencia | LOAD | GRID | INV (transformador) |
+| K3 (N) / K_L3 (L): conexión del cargador | INV (transformador, por puente faston con seguro) | sin conectar | LOAD |
+
+2. **Un canal por modo, no por relé:**
+
+| Canal (ULN2003) | Pin del CRÍTICO | Bobinas |
+| --- | --- | --- |
+| AISLAR RED (salida 16) | D5 → J15-3 | K2 + K_L2 + RL_TN |
+| TRAFO (salida 15) | D6 → J15-5 | K3 + K_L3 |
+
+3. **Tres estados; K2 + K3 a la vez no se usa:**
+
+| Modo | AISLAR | TRAFO | Casa en | Transformador |
+| --- | --- | --- | --- | --- |
+| **Red** (Nano apagado, en reset, cable suelto) | 0 | 0 | Red | Aislado |
+| **Inversor** | 1 | 0 | Transformador (N unido a PE por RL_TN) | Alimenta la casa |
+| **Cargador** | 0 | 1 | Red | Conectado a la red (a través del nodo de la carga) |
+
+4. **Candado por hardware (un BC547, Q_A):** la orden AISLAR jala a 0 V la entrada del canal TRAFO (base con 10 kΩ desde la orden cruda; 1 kΩ en serie en el canal TRAFO). Si llegan las dos órdenes, solo queda AISLAR = inversor.
+5. **Caída automática a la red:** en la tarjeta de control, D5 → 1 kΩ → J15-3, con un **1N4148 hacia EN_HW** (cátodo a EN_HW). Si el inversor se detiene por cualquier causa (SENSOR_OK, AUX_KILL, switch, reset), K2 se suelta solo y la casa cae a la red, sin esperar al firmware.
+6. **Autoprueba contra relé soldado:** un **PC817** con 2 × 47 kΩ / 1 W y 1N4007 antiparalelo detecta voltaje en la carga → J15-7 **PRES_CARGA** → AUX D10 (10 kΩ a 5 V y 1 µF). Al pasar a inversor con red presente, la carga debe quedar sin voltaje antes de arrancar el SPWM; si no, "K2 SOLDADO" y se queda en la red.
+7. **Relés:** **Rayex L90S** para K2, K_L2, K3 y K_L3 (NO 30 A / NC 20 A a 240 VAC, 2500 VAC bobina–contacto, bobina de 12 V con 160 Ω / 0.9 W) [24], con **39 Ω ½ W** en serie desde 15 V. RL_TN: SRD de 12 V con 100 Ω. ULN2003 con **COM (pin 9) a 15 V**: sus diodos internos son el flyback de las bobinas.
+8. **Protecciones de potencia:** fusible lento de **10–12 A** entre K_L3 y el transformador (solo el camino del cargador); **breaker de 20 A** hacia la carga; **MOV 14D241K** en J_LOAD. Sin capacitores en paralelo con los contactos.
+8b. **Capacitor del filtro de salida en la entrada del transformador:** **C_F 4.7 µF MKP X2, ≥ 310 VAC**, entre L-INV y N-INV, **antes de los relés** (siempre del lado del transformador). Con los ~2 mH del secundario (dispersión + inductor E65 N87) forma el filtro LC de f₀ ≈ 1.64 kHz que quita la portadora de 24 kHz ([compensación adaptativa del tiempo muerto](compensacion_adaptativa_tiempo_muerto.md)).
+   - **Polipropileno (MKP) clase X2, no poliéster (MKT):** el poliéster tiene más pérdidas y se calienta con el rizo de 24 kHz; la clase X2 está hecha para ir entre fase y neutro de la red.
+   - **R_B 2 × 100 kΩ ½ W en paralelo:** descarga C_F a menos de 60 V en ~1 s (τ = 200 kΩ × 4.7 µF ≈ 0.94 s) después de apagar; disipa ~0.08 W.
+   - **R_D 22 Ω 5 W + C_D 4.7 µF X2, sin poblar:** red de amortiguamiento para la etapa 3 (pico de los armónicos 27° y 29°).
+   - En modo cargador, C_F queda conectado a la red por K3/K_L3: ~0.22 A reactivos a 127 V / 60 Hz, sin problema para los relés.
+9. **J15:** 1 15V · 2 GND · 3 AISLAR RED (D5) · 4 GND · 5 TRAFO (D6) · 6 GND · 7 PRES_CARGA (AUX D10) · 8 GND. **D4 queda libre.** C1 100 µF + C2 100 nF en la entrada de 15 V; C3 100 nF en COM; 10 kΩ y 1 nF en cada entrada del ULN2003.
+
+**Análisis de falla de un solo relé**
+
+| Falla | Consecuencia |
+| --- | --- |
+| K2 soldado en NC | Al pedir inversor el NO no puede cerrar; Q_A impide cerrar K3 → la casa sigue en la red, el transformador aislado. La autoprueba lo detecta |
+| K2 soldado en NO | La casa queda en el transformador; la red no entra. Sin paralelo |
+| K3 soldado cerrado | En inversor, K2 sigue aislando la red. En modo red, el transformador queda en la red con el puente apagado: el pico del secundario (~180 V / 4.16 ≈ 43 V) es menor que la batería, los diodos del puente no conducen |
+| Bobinas sin energía (Nano, cable, 15 V) | Todo a la red |
+
+**Reglas de firmware (obligatorias)**
+
+- **A inversor:** EN_HW = 0 → TRAFO = 0 → pausa 50 ms → AISLAR = 1 → pausa 50 ms → autoprueba con PRES_CARGA → EN_HW = 1 → SPWM.
+- **A cargador:** EN_HW = 0 → AISLAR = 0 → pausa 50 ms → verificar red con AC_FB_GRID → TRAFO = 1 → el puente solo rectifica, sincronizado con la red.
+- **Con AISLAR = 0, el puente nunca genera voltaje de inversor.**
+- **Si el inversor se detiene, se sueltan los dos canales** (además del diodo de EN_HW).
+- **Autochequeo del sensor:** en modo red con red presente, PRES_CARGA debe indicar voltaje; si no, sensor o cable J15-7 dañado.
+
+**Reglas de PCB**
+
+- Los relés **atraviesan la ranura**: bobina del lado de 15 V, contactos del lado de 127 V.
+- **3 mm** entre pours de distinto origen (GRID, INV, LOAD), **5 mm** a bobinas y lógica.
+- Corriente de la carga (16 A con 1 oz): pour de ~9 mm en una capa o ~5 mm en cada capa con vías; estañar o soldar cable de 2.5 mm². Conectores Phoenix SPT 2,5 (22 A, 2.5 mm²) con puntera.
+- Dos puentes faston con seguro (L y N del transformador hacia K_L3 y K3), de colores distintos: seccionador de servicio del cargador.
+
+**Consecuencias**
+
+- ✅ Ninguna falla de un solo relé pone la red en paralelo con el inversor.
+- ✅ Fail-safe: sin bobinas energizadas, la casa está en la red.
+- ✅ Desde cargador, la transferencia a inversor solo suelta la red.
+- ⚠️ La sincronización del cargador con la red y la autoprueba dependen del firmware.
+- ⚠️ El L90S no publica clasificación en HP; el NC (red) pasa 16 A continuos con 1 HP. Validar con la caída de voltaje en el contacto (< 80 mV a plena carga) y la temperatura (< 70 °C después de 1 h).
+- ⚠️ No es un inversor de inyección: no aplica IEC 62109-2 / VDE 0126 tal cual. La instalación en una casa debe cumplir la **NOM-001-SEDE** y la revisa un electricista o una unidad de verificación.
+- **Reemplaza** la asignación anterior de J15 (K1_D4_L1, K2_D5_N, K3_D6_TN).
+
+**Anexo: referencia industrial (OutBack FX, 2026-11-09).** Se midió en banco la tarjeta de AC de un OutBack FX de 120 V: **neutro común** (IN = OUT = XFMR NEU, ningún relé lo abre), **tierra de chasis pasante** (2 bornes PE) y **sin unión N–PE interna**: la unión la decide y la hace el instalador, una sola vez (NOM-001-SEDE-2012 250-24 / 250-30). Como el FX no conmuta el neutro, no es un sistema derivado separadamente y no necesita RL_TN. La V1 sí conmuta el neutro (K2), así que en modo inversor **sí** es sistema derivado separadamente y RL_TN se queda. El FX también valida C_F ≈ 5 µF en el transformador (C1 505J 400 V). Estudio completo, fotos, mediciones y guía de los 4 casos de instalación: [`referencia_outback_fx.md`](referencia_outback_fx.md). **No cambia la V1**; es la base de la versión de bajo costo (relé 3PDT con clasificación HP, neutro sólido, puente J_TN).
+
+**Referencias:** [22], [23], [24], [25].
+
+---
+
 ## Críticas esperadas y preguntas abiertas
 
 Lo que sabemos que se puede discutir. Se deja escrito a propósito:
@@ -996,6 +1094,10 @@ Quien tenga datos (mediciones, una alternativa probada, una falla documentada) p
 19. ESP32.co.uk, *Arduino Nano Every pinout (ATmega4809): GPIO, ADC, PWM, UPDI*: PWM en D3 (TCB1), D5, D9, D10 (TCA0) y D6 (TCB0); D11 sin PWM; interrupciones en todos los pines; 48 KB de flash, 6 KB de RAM, 256 B de EEPROM; distribución de pines compatible con el Nano. <https://esp32.co.uk/arduino-nano-every-pinout-atmega4809-gpio-adc-pwm-updi/>
 20. Zbotic, *Arduino Nano Every vs classic Nano: full comparison*: mismo tamaño y pines, otra arquitectura de timers (el código a nivel registro del 328P no es compatible), programación por UPDI. <https://zbotic.in/arduino-nano-every-vs-classic-nano-full-comparison/>
 21. Microchip, *Oscillators and Clocks* (hoja de datos de la familia AVR con OSC20M): precisión del oscilador interno de 16/20 MHz, ±1.5 % calibrado de fábrica a 25 °C, ±2 % de 0 a 70 °C, ±3 % en todo el rango; paso de calibración del usuario. <https://onlinedocs.microchip.com/oxy/GUID-C541EA24-5EC3-41E5-9648-79068F9853C0-en-US-3/GUID-E7FE8424-FF3A-4E84-8E9A-83C19635B6BF.html> *(La página no indica el número de parte: confirmar contra la hoja de datos del ATmega4809.)*
+22. eeNews Europe, *Best-in-class grid-protection for next-generation PV inverters*: IEC 62109-2 y VDE 0126-1-1 piden dos interruptores en serie; relés NO monoestables; separación de contactos de 1.5 mm, ahora 1.8 mm. <https://www.eenewseurope.com/en/best-in-class-grid-protection-for-next-generation-pv-inverters/>
+23. EC&M, *Transfer Switches Simplified*: el interruptor de transferencia básico es de dos polos y dos tiros; con él es imposible que las dos fuentes alimenten la carga a la vez. <https://www.ecmweb.com/basics/transfer-switches-simplified>
+24. Rayex, *L90 / L90S Power Relay*: 1 Form C, 30 A (NO) / 20 A (NC) a 240 VAC, bobina de 12 V con 160 Ω y 0.9 W, 2500 VAC (L90S). <https://manualmachine.com/datasheet/l9005w/27845111-specification>
+25. OutBack Power Systems, *GVFX/GTFX Series Inverter/Charger Installation Manual*, puesta a tierra: neutros comunes en todo el sistema, unión N–PE en un solo punto y retiro de las demás (incluida la de la planta). <https://manualsdir.com/manuals/407161/outback-power-systems-gvfx-series-inverter_charger-installation-manual-gtfx-series-inverter_charger-installation-manual.html?page=74>
 
 ---
 
