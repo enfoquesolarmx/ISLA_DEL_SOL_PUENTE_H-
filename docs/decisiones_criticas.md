@@ -1002,7 +1002,8 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 | Modo | AISLAR | TRAFO | Casa en | Transformador |
 | --- | --- | --- | --- | --- |
 | **Red** (Nano apagado, en reset, cable suelto) | 0 | 0 | Red | Aislado |
-| **Inversor** | 1 | 0 | Transformador (N unido a PE por RL_TN) | Alimenta la casa |
+| **Inversor CASA** (fuente principal) | 1 | 0 | Transformador, **N unido a PE** por RL_TN | Alimenta la casa |
+| **Inversor CARGA** (UPS de cargas críticas) | 1 | 0 | Transformador, **sin unión N–PE** (RL_TN bloqueado por SW_TN) | Alimenta las cargas críticas |
 | **Cargador** | 0 | 1 | Red | Conectado a la red (a través del nodo de la carga) |
 
 4. **Candado por hardware (un BC547, Q_A):** la orden AISLAR jala a 0 V la entrada del canal TRAFO (base con 10 kΩ desde la orden cruda; 1 kΩ en serie en el canal TRAFO). Si llegan las dos órdenes, solo queda AISLAR = inversor.
@@ -1015,7 +1016,30 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
    - **R_B 2 × 100 kΩ ½ W en paralelo:** descarga C_F a menos de 60 V en ~1 s (τ = 200 kΩ × 4.7 µF ≈ 0.94 s) después de apagar; disipa ~0.08 W.
    - **R_D 22 Ω 5 W + C_D 4.7 µF X2, sin poblar:** red de amortiguamiento para la etapa 3 (pico de los armónicos 27° y 29°).
    - En modo cargador, C_F queda conectado a la red por K3/K_L3: ~0.22 A reactivos a 127 V / 60 Hz, sin problema para los relés.
-9. **J15:** 1 15V · 2 GND · 3 AISLAR RED (D5) · 4 GND · 5 TRAFO (D6) · 6 GND · 7 PRES_CARGA (AUX D10) · 8 GND. **D4 queda libre.** C1 100 µF + C2 100 nF en la entrada de 15 V; C3 100 nF en COM; 10 kΩ y 1 nF en cada entrada del ULN2003.
+9. **J15:** 1 15V · 2 GND · 3 AISLAR RED (D5) · 4 GND · 5 TRAFO (D6) · 6 GND · 7 PRES_CARGA (AUX D10) · 8 **MODO_TN (CRÍTICO D4)**. C1 100 µF + C2 100 nF en la entrada de 15 V; C3 100 nF en COM; 10 kΩ y 1 nF en cada entrada del ULN2003.
+
+10. **Dos modos de inversor: CASA (con unión N–PE) y CARGA (sin unión N–PE).** Se eligen en el SETUP por menú **y** con un selector físico; los dos tienen que coincidir.
+
+| Modo (menú del SETUP) | Uso | Unión N–PE al invertir | SW_TN | Prioridad de energía |
+| --- | --- | --- | --- | --- |
+| **INVERSOR CASA** | **Fuente principal** de la casa o del sitio aislado; alimenta un tablero de cargas | **Sí.** RL_TN une N–PE (sistema derivado separadamente, NOM 250-30) | **CASA** (cerrado) | Inversor y batería primero; la red o la planta como respaldo y para cargar |
+| **INVERSOR CARGA** | **UPS de cargas críticas**, derivado de un circuito de la red | **No.** La salida queda flotante respecto a PE; la tierra de los equipos pasa directa (PE IN = PE OUT) | **CARGA** (abierto) | Red primero; el inversor solo entra cuando la red falla |
+
+   - **SW_TN:** selector deslizable **DPDT** en la tarjeta de relés, lado 15 V (no toca 127 V).
+     - **Polo A:** en serie con la bobina de RL_TN. En CARGA, RL_TN no puede cerrar aunque el canal AISLAR esté activo.
+     - **Polo B:** lleva **MODO_TN** por J15-8 al **CRÍTICO D4** (pull-up de 10 kΩ y 1 nF): CASA = 0, CARGA = 1.
+   - **Regla de coincidencia:** el CRÍTICO compara MODO_TN con el modo del menú (que le pasa el AUX por I2C) **antes de cada arranque del inversor**. Si no coinciden, **no invierte**, se queda en la red y muestra "CONFIG N–PE NO COINCIDE". Un cable J15 suelto lee 1 (CARGA): si el menú dice CASA, también bloquea.
+   - **El software no puede cambiar la unión:** solo la verifica. Cambiar de modo exige mover el selector físico **y** confirmar dos veces en el menú, con el inversor en espera; el cambio queda en el registro de eventos.
+   - **Valor de fábrica:** menú en **INVERSOR CARGA**, SW_TN en **CARGA**; también es el modo al que vuelve el menú si la EEPROM falla (CRC).
+   - **Requisitos de instalación del modo CARGA:**
+     - solo para cargas conectadas **aguas abajo del equipo** (contactos o circuitos dedicados), **nunca un tablero con su propia unión N–PE**;
+     - la PE de los equipos debe llegar desde la PE de la casa (borne PE IN);
+     - es la práctica de los UPS enchufables: verificar contra IEC 62040-1 / UL 1778 antes de certificar;
+     - con la salida flotante, una primera falla a chasis **no dispara** ninguna protección y no se detecta hasta tener el monitor de aislamiento de la V2 (DC-015).
+   - **Requisitos de instalación del modo CASA:**
+     - electrodo de puesta a tierra (250-50 / 250-52) en sitio aislado;
+     - **ninguna otra unión N–PE aguas abajo** (tableros, planta).
+     - Con red conectada no se forma doble unión: K2 abre el neutro de la red antes de que RL_TN cierre, y en modo RED la unión es solo la de la acometida.
 
 **Análisis de falla de un solo relé**
 
@@ -1025,6 +1049,7 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 | K2 soldado en NO | La casa queda en el transformador; la red no entra. Sin paralelo |
 | K3 soldado cerrado | En inversor, K2 sigue aislando la red. En modo red, el transformador queda en la red con el puente apagado: el pico del secundario (~180 V / 4.16 ≈ 43 V) es menor que la batería, los diodos del puente no conducen |
 | Bobinas sin energía (Nano, cable, 15 V) | Todo a la red |
+| RL_TN no cierra (bobina, contacto o SW_TN) en modo CASA | Salida sin unión N–PE (queda como en modo CARGA): una falla a chasis no dispara. Se detectará con el monitor de aislamiento de la V2 (DC-015); mientras tanto, prueba de continuidad N–PE en el arranque del sitio |
 
 **Reglas de firmware (obligatorias)**
 
@@ -1032,6 +1057,7 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 - **A cargador:** EN_HW = 0 → AISLAR = 0 → pausa 50 ms → verificar red con AC_FB_GRID → TRAFO = 1 → el puente solo rectifica, sincronizado con la red.
 - **Con AISLAR = 0, el puente nunca genera voltaje de inversor.**
 - **Si el inversor se detiene, se sueltan los dos canales** (además del diodo de EN_HW).
+- **Antes de cada arranque del inversor:** MODO_TN (D4) debe coincidir con el modo del menú (CASA = 0, CARGA = 1); si no, no invertir y alarma "CONFIG N–PE NO COINCIDE".
 - **Autochequeo del sensor:** en modo red con red presente, PRES_CARGA debe indicar voltaje; si no, sensor o cable J15-7 dañado.
 
 **Reglas de PCB**
@@ -1051,7 +1077,7 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 - ⚠️ No es un inversor de inyección: no aplica IEC 62109-2 / VDE 0126 tal cual. La instalación en una casa debe cumplir la **NOM-001-SEDE** y la revisa un electricista o una unidad de verificación.
 - **Reemplaza** la asignación anterior de J15 (K1_D4_L1, K2_D5_N, K3_D6_TN).
 
-**Anexo: referencia industrial (OutBack FX, 2026-11-09).** Se midió en banco la tarjeta de AC de un OutBack FX de 120 V: **neutro común** (IN = OUT = XFMR NEU, ningún relé lo abre), **tierra de chasis pasante** (2 bornes PE) y **sin unión N–PE interna**: la unión la decide y la hace el instalador, una sola vez (NOM-001-SEDE-2012 250-24 / 250-30). Como el FX no conmuta el neutro, no es un sistema derivado separadamente y no necesita RL_TN. La V1 sí conmuta el neutro (K2), así que en modo inversor **sí** es sistema derivado separadamente y RL_TN se queda. El FX también valida C_F ≈ 5 µF en el transformador (C1 505J 400 V). Estudio completo, fotos, mediciones y guía de los 4 casos de instalación: [`referencia_outback_fx.md`](referencia_outback_fx.md). **No cambia la V1**; es la base de la versión de bajo costo (relé 3PDT con clasificación HP, neutro sólido, puente J_TN).
+**Anexo: referencia industrial (OutBack FX, 2026-11-09).** Se midió en banco la tarjeta de AC de un OutBack FX de 120 V: **neutro común** (IN = OUT = XFMR NEU, ningún relé lo abre), **tierra de chasis pasante** (2 bornes PE) y **sin unión N–PE interna**: la unión la decide y la hace el instalador, una sola vez (NOM-001-SEDE-2012 250-24 / 250-30). Como el FX no conmuta el neutro, no es un sistema derivado separadamente y no necesita RL_TN. La V1 sí conmuta el neutro (K2), así que en modo inversor **sí** es sistema derivado separadamente: en **INVERSOR CASA** RL_TN hace la unión; en **INVERSOR CARGA** (UPS de cargas críticas) SW_TN la bloquea (punto 10). El FX también valida C_F ≈ 5 µF en el transformador (C1 505J 400 V). Estudio completo, fotos, mediciones y guía de los 4 casos de instalación: [`referencia_outback_fx.md`](referencia_outback_fx.md). **No cambia la V1**; es la base de la versión de bajo costo (relé 3PDT con clasificación HP, neutro sólido, puente J_TN).
 
 **Referencias:** [22], [23], [24], [25].
 

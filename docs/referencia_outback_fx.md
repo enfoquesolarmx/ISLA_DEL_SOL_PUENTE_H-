@@ -138,16 +138,16 @@ La NOM-001-SEDE-2012 [R2] (misma numeración que el NEC):
 | --- | --- | --- |
 | Relés de potencia | 1 (3PDT, polos en paralelo, por confirmar) | 5 (K2, K_L2, K3, K_L3, RL_TN) |
 | Neutro | Común, nunca se abre | Conmutado (K2/K3) |
-| Unión N–PE | Manual, la hace el instalador | **Automática** (RL_TN, solo en modo inversor) |
+| Unión N–PE | Manual, la hace el instalador, sin verificación | **Según el modo:** INVERSOR CASA = RL_TN une · INVERSOR CARGA = sin unión; selector SW_TN verificado contra el menú |
 | Estado sin energía | ❓ Salida del lado del inversor (por medir, M7) | **Carga en la RED** (fail-safe) |
 | Transformador | Siempre en la salida | Lo conecta K3/K_L3 solo para cargar |
 | Si se pega un relé | La red queda unida al inversor: el firmware debe detectarlo (anti-isla) | Ninguna falla de un solo relé forma paralelo red–inversor |
 | Filtro de salida | C1 5 µF en el transformador + toroide en el neutro | C_F 4.7 µF MKP X2 en el transformador, antes de los relés |
 | Bornes | Weidmüller 10 mm², vivos en los extremos | Phoenix SPT 2.5 |
-| Exige al instalador | Saber de puesta a tierra (250-24 / 250-30) | Nada sobre la unión N–PE: el equipo la resuelve |
+| Exige al instalador | Saber de puesta a tierra (250-24 / 250-30) | Elegir CASA o CARGA (menú + selector); el equipo bloquea si no coinciden |
 | Modo de uso (respaldo o principal) | Lo define la instalación y la unión que haga el instalador | **Se elige en el SETUP por menú:** DERIVADOR TIPO UPS o FUENTE PRINCIPAL (sección 8.1) |
 
-**Lectura:** el FX es más simple y barato en relés, pero **traslada la responsabilidad** de la unión N–PE al instalador y la de la sincronía y el anti-isla al firmware. La V1 gasta más relés para que **un trinchero sin formación en puesta a tierra** no pueda equivocarse. Las dos son válidas; están pensadas para usuarios distintos.
+**Lectura:** el FX es más simple y barato en relés, pero **traslada la responsabilidad** de la unión N–PE al instalador y la de la sincronía y el anti-isla al firmware. La V1 gasta más relés y un selector verificado contra el menú para que **un error del instalador no pase sin ser detectado**: si la unión elegida no coincide con el modo, el equipo no arranca. Las dos son válidas; están pensadas para usuarios distintos.
 
 ### 8.1 Modo de operación de la V1: se configura en el SETUP, por menú
 
@@ -165,13 +165,18 @@ El FX deja al instalador decidir **cómo** se usa el equipo. En la V1 esa decisi
 3. **Cambiar el modo exige confirmar dos veces** en el SETUP y solo se permite con el inversor **en espera** (sin invertir). El cambio queda en el registro de eventos.
 4. **El modo cambia la POLÍTICA de transferencia, NO la seguridad.** El candado Q_A, la secuencia EN_HW = 0 → soltar → pausa ≥ 50 ms → activar (DC-016/DC-019) y el valor por defecto en RED sin energía son iguales en los dos modos.
 
-**La unión N–PE en la V1 no depende del modo:**
+**La unión N–PE en la V1 sigue al modo, con doble confirmación (DC-019, punto 10):**
 
-- Como la V1 **conmuta el neutro** (K2), cada vez que el inversor alimenta, su salida queda **aislada** del neutro de la red: es un sistema derivado separadamente (250-30) **en los dos modos**. Por eso RL_TN une N–PE siempre que se aísla, sea UPS o principal. No se forma doble unión, porque el neutro de la acometida ya no está conectado.
-- **RL_TN comparte canal con K2 y K_L2** (AISLAR, D5). Por diseño, **el software no puede apagarlo por separado**: una falla de firmware o de menú no puede dejar la salida sin unión.
-- Si un instalador necesita **unión externa** (por ejemplo, un tablero de cargas propio que ya trae su unión), la decisión es **física**: se quita el faston con seguro **J_TN** que abre el contacto de RL_TN, y se anota en la etiqueta del equipo. **El menú puede mostrar el estado de J_TN** (si se agrega su lectura), pero no lo cambia.
+| Modo del menú | Equivale a | Unión N–PE al invertir | Selector físico SW_TN |
+| --- | --- | --- | --- |
+| **INVERSOR CASA** | Fuente principal (opción 2) | **Sí**, la hace RL_TN | CASA |
+| **INVERSOR CARGA** | Derivador tipo UPS de cargas críticas (opción 1) | **No**, la salida queda flotante y la PE pasa directa | CARGA |
 
-**Diferencia con el FX:** en el FX, el modo de uso (respaldo o principal) **obliga** al instalador a decidir la unión N–PE (sección 7). En la V1, el menú solo decide **la prioridad de la energía**, y la unión la resuelve el hardware.
+- El menú **declara** el modo y el selector SW_TN **hace** la unión. Su polo A está en la bobina de RL_TN; su polo B le avisa al CRÍTICO por J15-8 (MODO_TN, D4).
+- **Si el menú y el selector no coinciden, la V1 no invierte** y muestra "CONFIG N–PE NO COINCIDE". Así, ni un error de menú ni uno de firmware pueden dejar la unión mal hecha.
+- El valor de fábrica es CARGA/UPS en los dos.
+
+**Diferencia con el FX:** en el FX el instalador hace la unión con cables, y nada la verifica. En la V1 el instalador también decide, pero con un selector en la tarjeta, y el equipo **se niega a arrancar** si esa decisión contradice el menú.
 
 ---
 

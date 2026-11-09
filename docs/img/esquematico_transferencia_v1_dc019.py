@@ -46,7 +46,15 @@ def build(out, dpi):
         for y, t in [(16.0, 'J15-3 AISLAR RED'), (8.0, 'J15-5 TRAFO'), (5.0, 'J15-7 PRES_CARGA')]:
             d += elm.Dot(open=True).at((2.0, y))
             d += elm.Label().at((2.0, y + 0.35)).label(t, fontsize=FP - 1, color=GREEN, valign='bottom')
-        d += elm.Label().at((2.0, 1.8)).label('J15 (IDC 2×4): 1 15V · 2,4,6,8 GND', fontsize=FP - 2, color=GRAY)
+        d += elm.Label().at((2.0, 0.4)).label('J15 (IDC 2×4): 1 15V · 2,4,6 GND · 8 MODO_TN', fontsize=FP - 2, color=GRAY)
+        # MODO_TN sense: SW_TN pole B
+        d += elm.Dot(open=True).at((2.0, 2.6))
+        d += elm.Label().at((2.0, 2.95)).label('J15-8 MODO_TN', fontsize=FP - 1, color=GREEN, valign='bottom')
+        d += elm.Line().at((2.0, 2.6)).tox(5.0)
+        d += elm.Switch().right(2.0).label('SW_TN-B', loc='top', fontsize=FP - 2, color=ORG)
+        d += elm.Line().right(0.4)
+        d += elm.Ground()
+        d += elm.Label().at((8.0, 2.6)).label('CASA = cerrado → 0\nCARGA = abierto → 1\n(→ CRÍTICO D4, pull-up)', loc='right', fontsize=FP - 3, halign='left', color=ORG)
 
         # ================= RELAY BOARD LOGIC =================
         d += elm.Label().at((3.4, 23.0)).label('[B] TARJETA DE RELÉS — lado 15 V', loc='right', fontsize=22, halign='left', color=BLUE)
@@ -115,6 +123,8 @@ def build(out, dpi):
             d += elm.Dot().at((x, RAIL))
             d += elm.Resistor().at((x, RAIL)).down(1.4).label(r, loc='bottom', fontsize=FP - 3)
             d += elm.RBox(w=0.7, h=0.45).down(1.4).label(name, loc='bottom', fontsize=FP - 2, color=BLUE if yb == 16.0 else RED)
+            if name == 'RL_TN':
+                d += elm.Switch().down(1.6).label('SW_TN-A', loc='left', fontsize=FP - 3, color=ORG)
             d += elm.Line().toy(yb)
             d += elm.Dot().at((x, yb))
         d += elm.Label().at((21.0, 3.6)).label('Canal 1 (16): K2 + K_L2 + RL_TN = MODO INVERSOR\nCanal 2 (15): K3 + K_L3 = MODO CARGADOR\nL90S: 39 Ω ½ W · SRD (RL_TN): 100 Ω',
@@ -225,7 +235,7 @@ def build(out, dpi):
         d += elm.Switch().right(2.4).label('RL_TN (NO) SRD', loc='bottom', fontsize=FP - 2, color=BLUE)
         d += elm.Line().right(0.6)
         d += elm.Ground()
-        d += elm.Label().at((X0 + 7.6, 1.0)).label('PE: unión N–PE solo en modo inversor', loc='right', fontsize=FP - 2, halign='left', color=GRAY)
+        d += elm.Label().at((X0 + 7.6, 1.0)).label('PE: unión N–PE solo en INVERSOR CASA (SW_TN cerrado)', loc='right', fontsize=FP - 2, halign='left', color=GRAY)
 
         # ================= TABLE / NOTES =================
         TY = -1.2
@@ -233,7 +243,8 @@ def build(out, dpi):
             'ESTADOS:\n'
             '  Modo        D5 AISLAR  D6 TRAFO   K2 + K_L2     K3 + K_L3   RL_TN   Casa en           Transformador\n'
             '  RED         0          0          NC (red)      abiertos    abierto RED               aislado\n'
-            '  INVERSOR    1          0          NO (trafo)    abiertos    cerrado TRANSFORMADOR     alimenta la casa\n'
+            '  INV. CASA   1          0          NO (trafo)    abiertos    cerrado TRANSFORMADOR     alimenta la casa (fuente principal)\n'
+            '  INV. CARGA  1          0          NO (trafo)    abiertos    abierto TRANSFORMADOR     alimenta cargas críticas (UPS)\n'
             '  CARGADOR    0          1          NC (red)      cerrados    abierto RED               conectado a la red (cargando)\n'
             '  1 y 1       —          —          NO (trafo)    BLOQUEADOS por Q_A                    = INVERSOR (seguro)\n'
             '\n'
@@ -247,7 +258,8 @@ def build(out, dpi):
             '  • Falla de UN relé no forma paralelo: K2 soldado en NC → el NO no cierra y Q_A impide cerrar K3; K3 soldado → K2 sigue aislando la red.\n'
             '  • Con K2 apagado el puente nunca genera voltaje de inversor; en modo cargador solo rectifica sincronizado con la red.\n'
             '  • Separación: 3 mm entre pours de distinto origen (GRID / INV / LOAD) · 5 mm a bobinas y lógica · ranura entre zonas.\n'
-            '  • J15: 1 15V · 2 GND · 3 AISLAR RED (D5) · 4 GND · 5 TRAFO (D6) · 6 GND · 7 PRES_CARGA (AUX D10) · 8 GND.  D4 queda libre.\n'
+            '  • J15: 1 15V · 2 GND · 3 AISLAR RED (D5) · 4 GND · 5 TRAFO (D6) · 6 GND · 7 PRES_CARGA (AUX D10) · 8 MODO_TN (CRÍTICO D4).\n'
+            '  • SW_TN (DPDT): CASA = unión N–PE (polo A en la bobina de RL_TN) · CARGA = sin unión.  El polo B avisa al CRÍTICO; si no coincide con el menú, NO invierte.\n'
             '  • Dos puentes faston con seguro (L y N del trafo hacia K_L3/K3) = seccionador de servicio del cargador; colores distintos.\n'
             '  • C_F 4.7 µF MKP X2 (polipropileno, ≥ 310 VAC) entre L-INV y N-INV, ANTES de los relés: forma el LC con los ~2 mH del secundario (f₀ ≈ 1.64 kHz).\n'
             '    No poliéster (MKT): calienta con el rizo de 24 kHz.  R_B 2 × 100 kΩ ½ W descarga C_F a < 60 V en ~1 s.  R_D + C_D: amortiguamiento, sin poblar (etapa 3).',
