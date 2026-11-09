@@ -1051,7 +1051,9 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 - ⚠️ No es un inversor de inyección: no aplica IEC 62109-2 / VDE 0126 tal cual. La instalación en una casa debe cumplir la **NOM-001-SEDE** y la revisa un electricista o una unidad de verificación.
 - **Reemplaza** la asignación anterior de J15 (K1_D4_L1, K2_D5_N, K3_D6_TN).
 
-**Referencias:** [22], [23], [24].
+**Anexo: referencia industrial (OutBack FX, 2026-11-09).** Se midió en banco la tarjeta de AC de un OutBack FX de 120 V: **neutro común** (IN = OUT = XFMR NEU, ningún relé lo abre), **tierra de chasis pasante** (2 bornes PE) y **sin unión N–PE interna**: la unión la decide y la hace el instalador, una sola vez (NOM-001-SEDE-2012 250-24 / 250-30). Como el FX no conmuta el neutro, no es un sistema derivado separadamente y no necesita RL_TN. La V1 sí conmuta el neutro (K2), así que en modo inversor **sí** es sistema derivado separadamente y RL_TN se queda. El FX también valida C_F ≈ 5 µF en el transformador (C1 505J 400 V). Estudio completo, fotos, mediciones y guía de los 4 casos de instalación: [`referencia_outback_fx.md`](referencia_outback_fx.md). **No cambia la V1**; es la base de la versión de bajo costo (relé 3PDT con clasificación HP, neutro sólido, puente J_TN).
+
+**Referencias:** [22], [23], [24], [25].
 
 ---
 
@@ -1095,6 +1097,7 @@ Quien tenga datos (mediciones, una alternativa probada, una falla documentada) p
 22. eeNews Europe, *Best-in-class grid-protection for next-generation PV inverters*: IEC 62109-2 y VDE 0126-1-1 piden dos interruptores en serie; relés NO monoestables; separación de contactos de 1.5 mm, ahora 1.8 mm. <https://www.eenewseurope.com/en/best-in-class-grid-protection-for-next-generation-pv-inverters/>
 23. EC&M, *Transfer Switches Simplified*: el interruptor de transferencia básico es de dos polos y dos tiros; con él es imposible que las dos fuentes alimenten la carga a la vez. <https://www.ecmweb.com/basics/transfer-switches-simplified>
 24. Rayex, *L90 / L90S Power Relay*: 1 Form C, 30 A (NO) / 20 A (NC) a 240 VAC, bobina de 12 V con 160 Ω y 0.9 W, 2500 VAC (L90S). <https://manualmachine.com/datasheet/l9005w/27845111-specification>
+25. OutBack Power Systems, *GVFX/GTFX Series Inverter/Charger Installation Manual*, puesta a tierra: neutros comunes en todo el sistema, unión N–PE en un solo punto y retiro de las demás (incluida la de la planta). <https://manualsdir.com/manuals/407161/outback-power-systems-gvfx-series-inverter_charger-installation-manual-gtfx-series-inverter_charger-installation-manual.html?page=74>
 
 ---
 
