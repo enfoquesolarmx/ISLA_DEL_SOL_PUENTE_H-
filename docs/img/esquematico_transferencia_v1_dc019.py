@@ -169,7 +169,7 @@ def build(out, dpi):
         d += elm.Label().at((40.0, 24.4)).label('RANURA · ≥ 5 mm', fontsize=FP, color=RED)
 
         # ================= POWER =================
-        X0 = 44.0
+        X0 = 49.0
         d += elm.Label().at((X0 - 2.0, 23.0)).label('[C] TARJETA DE RELÉS — lado 127 V', loc='right', fontsize=22, halign='left', color=RED)
 
         def spdt_block(y, pole, grid, inv, load, ref):
@@ -188,8 +188,17 @@ def build(out, dpi):
         # N pole
         sN = spdt_block(8.0, 'N', 'N-GRID', 'N-INV', 'N-LOAD', 'K2')
         # inverter sources
-        for s, name, y in [(sL, 'L-INV (trafo)', 14.2), (sN, 'N-INV (trafo, J6)', 4.2)]:
-            d += elm.Dot(open=True).at((X0, y)).label(name, loc='left', fontsize=FS)
+        # L directo del trafo; N pasa por el inductor de filtro L_F (en el neutro, antes de C_F)
+        d += elm.Dot(open=True).at((X0 - 4.4, 14.2)).label('L-TRAFO', loc='left', fontsize=FS)
+        d += elm.Line().at((X0 - 4.4, 14.2)).tox(X0)
+        d += elm.Dot(open=True).at((X0 - 4.4, 4.2)).label('N-TRAFO', loc='left', fontsize=FS)
+        d += elm.Line().at((X0 - 4.4, 4.2)).tox(X0 - 3.8)
+        d += elm.Inductor2(loops=4).right(3.0).color(BLUE).label('L_F  E65 N87', loc='top', fontsize=FP - 1, color=BLUE)
+        d += elm.Line().tox(X0)
+        d += elm.Label().at((X0 - 2.3, 3.4)).label('(fuera de tarjeta,\nen el chasis, fastons)', fontsize=FP - 4, color=GRAY)
+        d += elm.Label().at((X0 + 0.15, 14.5)).label('L-INV', loc='right', fontsize=FP - 2, halign='left', valign='bottom', color=GRAY)
+        d += elm.Label().at((X0 + 0.15, 4.5)).label('N-INV', loc='right', fontsize=FP - 2, halign='left', valign='bottom', color=GRAY)
+        for s, name, y in [(sL, 'L-INV', 14.2), (sN, 'N-INV', 4.2)]:
             d += elm.Line().at((X0, y)).tox(X0 + 4.0)
             d += elm.Dot()
             d += elm.Line().at((X0 + 4.0, y)).toy(s.c[1])
@@ -210,8 +219,8 @@ def build(out, dpi):
                 d += elm.Line().toy(4.2)
             d += elm.Label().at((x + 0.12, 12.6 if kind != 'RC' else 13.2)).label(tag, loc='right', fontsize=FP - 4, halign='left', color=ORG)
         d += elm.Label().at((X0 + 0.2, 16.0)).label(
-            'FILTRO DE SALIDA (lado del transformador, antes de los relés):\n'
-            'C_F 4.7 µF MKP X2 310 VAC · R_D 22 Ω 5 W + C_D 4.7 µF X2 (sin poblar, etapa 3) · R_B 2 × 100 kΩ ½ W',
+            'FILTRO DE SALIDA (lado del transformador, antes de los relés), igual que el OutBack FX:\n'
+            'L_F E65 N87 en el NEUTRO · C_F 4.7 µF MKP X2 310 VAC · R_B 2 × 100 kΩ ½ W · R_D 22 Ω 5 W + C_D 4.7 µF X2 (huella opcional, DNP)',
             loc='right', fontsize=FP - 3, halign='left', color=ORG)
         # load buses
         XB = X0 + 15.5
@@ -286,7 +295,9 @@ def build(out, dpi):
             '  • SW_TN (DPDT): CASA = unión N–PE (polo A en la bobina de RL_TN) · CARGA = sin unión.  El polo B avisa al CRÍTICO; si no coincide con el menú, NO invierte.\n'
             '  • Dos puentes faston con seguro (L y N del trafo hacia K_L3/K3) = seccionador de servicio del cargador; colores distintos.\n'
             '  • C_F 4.7 µF MKP X2 (polipropileno, ≥ 310 VAC) entre L-INV y N-INV, ANTES de los relés: forma el LC con los ~2 mH del secundario (f₀ ≈ 1.64 kHz).\n'
-            '    No poliéster (MKT): calienta con el rizo de 24 kHz.  R_B 2 × 100 kΩ ½ W descarga C_F a < 60 V en ~1 s.  R_D + C_D: amortiguamiento, sin poblar (etapa 3).',
+            '    No poliéster (MKT): calienta con el rizo de 24 kHz.  R_B 2 × 100 kΩ ½ W descarga C_F a < 60 V en ~1 s.  R_D + C_D: huella opcional, poblar solo si el banco muestra oscilación.\n'
+            '  • L_F (E65 N87) en serie con el NEUTRO del trafo, ANTES de C_F (como el OutBack FX): L_F + dispersión ≈ 2 mH.  Fuera de la tarjeta (peso y calor), con fastons N-TRAFO → L_F → N-INV.\n'
+            '    Lleva toda la corriente de carga y de falla: entrehierro para no saturar con el pico de arranque (~18 A) y alambre que nunca se abra (el neutro no se interrumpe).',
             loc='right', fontsize=FS - 1, halign='left', valign='top')
 
 
