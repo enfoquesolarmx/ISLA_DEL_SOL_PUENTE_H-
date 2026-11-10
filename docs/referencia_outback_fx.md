@@ -6,6 +6,14 @@
 
 ---
 
+> **Aviso legal y uso de marcas.** *OutBack Power*, *Deltrol Controls*, *American Zettler*, *Arcotronics/KEMET*, *Weidmüller* y *EFC* son marcas de sus respectivos titulares. Se mencionan **solo para identificar** el equipo y las piezas estudiadas (uso nominativo o referencial).
+> - Este documento es un **análisis técnico con fines educativos, de investigación y de referencia**, hecho sobre un equipo **adquirido legalmente**, mediante inspección y mediciones propias sin energía.
+> - **Isla del Sol no está afiliado a estos fabricantes ni cuenta con su respaldo o aprobación.** Ninguna afirmación de este estudio representa información oficial de ellos.
+> - Las **fotografías son propias**. Los datos de piezas provienen de su marcado físico y de las hojas de datos públicas citadas en las referencias; no se reproducen documentos del fabricante, solo se citan.
+> - Isla del Sol **no copia** el diseño estudiado: lo usa como punto de comparación, y sus decisiones propias están justificadas en la bitácora (DC-019).
+> - Las mediciones corresponden a **una unidad y una revisión de tarjeta**; otras versiones pueden ser distintas. Este documento **no sustituye** al manual ni a las instrucciones de instalación del fabricante.
+> - **Seguridad:** las mediciones se hicieron **sin red, sin batería y con los capacitores descargados**. No intentes repetirlas con el equipo energizado.
+
 ## 1. Por qué estudiamos esta tarjeta
 
 El FX es un inversor-cargador de transformador de baja frecuencia, igual que Isla del Sol. Lleva años en campo, en sitios aislados y como respaldo, y está listado bajo UL. Ver cómo resolvió la transferencia, el filtro de salida y la puesta a tierra nos dice:
