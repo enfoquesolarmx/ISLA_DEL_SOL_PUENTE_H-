@@ -69,7 +69,7 @@ El riel de 5 V **no es solo alimentación: es la referencia del ADC** (AVCC). De
 | 15 V | Drivers (2 MOSFET a 24 kHz + 2 a 60 Hz) | 20–40 mA |
 | 15 V | Relés (2–3) | 60–150 mA |
 | 15 V | Ventilador de 12 V (si lo hay) | 100–200 mA |
-| 5 V | 2 Nano + LCD con luz de fondo + sensores | 100–170 mA |
+| 5 V | 2 microcontroladores (Arduino Nano) + LCD con luz de fondo + sensores | 100–170 mA |
 | **48 V** | **Entrada total** | **~0.1–0.2 A** (5–8 W) |
 
 **Alternativas consideradas**
@@ -86,7 +86,7 @@ Una cascada de tres etapas, cada una haciendo lo que mejor sabe hacer:
 
 ```
 48 V ──[XL7015, buck]──► 15 V ──[MP1584, buck]──► 8 V ──[7805, lineal]──► 5 V
- batería          drivers, relés,          cae solo 3 V:            Nano, LCD,
+ batería          drivers, relés,          cae solo 3 V:            MCU, LCD, 
                   ventilador               ~0.45 W a 150 mA         sensores, AVCC
 ```
 
@@ -134,7 +134,7 @@ La batería de 48 V llega hasta **58.4 V** (LiFePO4 16S cargada) o **62–64 V**
 - ⚠️ **El XL7015 no tiene UVLO ajustable:** sigue consumiendo con la batería casi vacía. El firmware, con la lectura de la batería (DC-007), debe apagar el inversor por bajo voltaje. Más adelante, el BMS o un relé de corte desconecta todo.
 - **Advertencias en la serigrafía** (el poka-yoke):
   - **"AJUSTAR A 15V ANTES DE INSERTAR"**, dentro del contorno del módulo: se ve justo cuando el socket está vacío. El potenciómetro puede venir de fábrica en 20 V o más.
-  - **"⚠ NUNCA PUENTEAR IN → OUT"**. En el MP1584 (DC-004) sí se puentea; aquí meterías **48 V al riel de 15 V** y quemarías los drivers, el 7805 y los Nano de un golpe.
+  - **"⚠ NUNCA PUENTEAR IN → OUT"**. En el MP1584 (DC-004) sí se puentea; aquí meterías **48 V al riel de 15 V** y quemarías los drivers, el 7805 y los microcontroladores de un golpe.
   - **"SOLO UNO"** (amplio o reducido).
 
 ---
@@ -230,7 +230,7 @@ Se necesitan dos lecturas AC: la salida del inversor (para el lazo de amplitud) 
 - **Divisor:** 100 kΩ + (8.2 kΩ + **trimmer Bourns 3296W de 2 kΩ**). Rango de ajuste de ±10 %, sin saturar nunca el ADC: con 16 VAC en vacío, como máximo ±2.1 V sobre el bias.
 - **El trimmer se conecta como reóstato** (el cursor unido a un extremo): si el cursor pierde contacto, la resistencia se va a 2 kΩ y el canal no queda flotando.
 - **Bias de 2.5 V con 10k/10k + 10 µF + 100 nF,** uno por canal, para que una señal no se cuele en la otra.
-- **10 nF pegados al pin del Nano** (A0 y A6): filtran la conmutación de 24 kHz. Desfase de ~2° a 60 Hz, **igual en los dos canales**, así que se cancela en la sincronía.
+- **10 nF pegados al pin del microcontrolador** (A0 y A6): filtran la conmutación de 24 kHz. Desfase de ~2° a 60 Hz, **igual en los dos canales**, así que se cancela en la sincronía.
 - **A6 solo existe en el ATmega328P TQFP** (el del Nano). En el DIP-28 no hay A6: hay que usar A1–A3.
 - **Serigrafía "12VAC / RET",** no "L1 / N": nadie debe pensar que ahí entra la red de 120 V.
 
@@ -291,7 +291,7 @@ LED rojos o verdes, **los cuatro del mismo tipo y color** (Vf ≈ 2 V), a **~1.3
 | 🟢 | 🟢 | 🟢 | ⚫ | Falla el 7805 (abierto), o hay un corto en el riel de 5 V |
 | 🟢 | 🟢 | 🟢 | 🟢 | Hay voltaje en todos los rieles. **Confirmar los valores con los test points** |
 
-Para distinguir el 7805 de un corto en el riel de 5 V: se desconectan las cargas de 5 V (los Nano, el LCD). Si el LED prende, el corto está en una carga; si sigue apagado, es el 7805.
+Para distinguir el 7805 de un corto en el riel de 5 V: se desconectan las cargas de 5 V (los microcontroladores, el LCD). Si el LED prende, el corto está en una carga; si sigue apagado, es el 7805.
 
 Serigrafía junto a los LED: **"TODOS ENCENDIDOS = HAY VOLTAJE · EL PRIMERO APAGADO = ETAPA EN FALLA"**.
 
@@ -309,12 +309,12 @@ Serigrafía junto a los LED: **"TODOS ENCENDIDOS = HAY VOLTAJE · EL PRIMERO APA
 
 **Decisión 3: protección contra el 7805 en corto**
 
-**Un 7805 puede fallar en corto,** con la entrada unida a la salida. Entonces los 8 V pasan al riel de 5 V, el LED de 5 V **sigue prendido** (un poco más brillante) y el tablero **no lo detecta**. A 8 V se queman los Nano y el LCD.
+**Un 7805 puede fallar en corto,** con la entrada unida a la salida. Entonces los 8 V pasan al riel de 5 V, el LED de 5 V **sigue prendido** (un poco más brillante) y el tablero **no lo detecta**. A 8 V se queman los microcontroladores y el LCD.
 
 | Componente | Función |
 | --- | --- |
 | **TVS SMAJ5.0A**, del riel de 5 V a GND | Conduce si el riel sube de ~6.4 V |
-| **Fusible reseteable (PTC) de ~500 mA**, en la entrada de 8 V del 7805 | Cuando el TVS conduce, la corriente sube y el PTC se abre: protege a los Nano |
+| **Fusible reseteable (PTC) de ~500 mA**, en la entrada de 8 V del 7805 | Cuando el TVS conduce, la corriente sube y el PTC se abre: protege a los microcontroladores |
 
 **Decisión 4: autodiagnóstico por firmware (costo cero de hardware)**
 
@@ -464,7 +464,7 @@ Cada módulo de gate driver declara su tiempo muerto por P9: **GND = 500 ns** (I
 - **Solo se permiten 500 ns si la lectura cae entre 1.8 y 2.2 V** (~368 a ~450 cuentas). Cualquier otro valor da 1 µs.
 - **Margen:** entre el caso de 500 ns (2.00 V) y el más cercano (2.50 V) hay ~100 cuentas. Con resistencias al 1 % sobra.
 - **R13 y R14 también protegen el pin:** limitan la corriente si llega un voltaje indebido por el cable de P9.
-- **100 nF de A7 a GND,** junto al Nano, para filtrar el ruido de la conmutación de 24 kHz.
+- **100 nF de A7 a GND,** junto al microcontrolador, para filtrar el ruido de la conmutación de 24 kHz.
 - **A7 es el uso ideal:** es solo analógico, y aquí solo se necesita una lectura analógica. **El monitor del riel de 15 V (DC-008) pasa al AUX** (DC-013).
 - **D2 (INT0) queda reservado** para el FAULT de sobrecorriente del sensor DC.
 
@@ -544,7 +544,7 @@ Se necesita medir la corriente AC para:
 ```
 Jack 3.5 mm (PJ-320A)
  Punta (tip) ──[1 kΩ]──┬──► A2 del CRÍTICO
-                       ║ 10 nF a GND (junto al Nano)
+                       ║ 10 nF a GND (junto al microcontrolador)
  Cuerpo (sleeve) ──────┴── BIAS 2.5 V (10k/10k + 10 µF + 100 nF)
  Anillo (ring) ──── sin conexión
 ```
@@ -643,7 +643,7 @@ El inversor no es equipo electromédico, pero si alimenta uno dentro del entorno
 
 1. **Transformador de salida (la fuente principal):** la pierna A conmuta 48 V a 24 kHz y la capacitancia entre devanados (cientos de pF a nF) inyecta modo común en la salida. Estimación sin ponderar: del orden de 1–2 mA con ~1 nF. **Por medir.**
 2. **Capacitores Y del filtro EMI** a tierra: ~50 µA por nF a 127 V / 60 Hz.
-3. **Tarjeta de control como barrera:** sensado AC, SCT-013, relés K1–K3 (si van en ella) y el USB del Nano. En primera falla, 127 V podrían llegar al LCD, los botones o el cable del switch.
+3. **Tarjeta de control como barrera:** sensado AC, SCT-013, relés K1–K3 (si van en ella) y el USB del microcontrolador. En primera falla, 127 V podrían llegar al LCD, los botones o el cable del switch.
 4. **Unión neutro–tierra y chasis:** sin una política definida.
 
 **Decisión**
@@ -659,7 +659,7 @@ El inversor no es equipo electromédico, pero si alimenta uno dentro del entorno
 | Medir la fuga de la V1 si hay instrumento (o con la red MD de la norma armada a mano), en condición normal, polaridad invertida, neutro abierto y tierra abierta | Es la línea base: dice cuánto hay que bajar y dónde |
 | Medir la capacitancia entre devanados del transformador de salida | Define si la V2 necesita pantalla electrostática |
 | Registrar si la salida opera flotante o con neutro a tierra en cada instalación | Base para elegir la arquitectura de la V2 |
-| El USB del Nano solo para programar, con el inversor apagado | Una laptop conectada a la red cierra un camino de fuga y de ruido |
+| El USB del microcontrolador solo para programar, con el inversor apagado | Una laptop conectada a la red cierra un camino de fuga y de ruido |
 | Anotar en DC-009 y en el README que la V1 no es apta para uso médico | Que nadie lo suponga |
 
 **Alcance de la versión 2 (para no olvidarlo)**
@@ -978,7 +978,7 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 | --- | --- |
 | Relés de PCB pequeños (SRD, 10 A) cargando al motor | 1 HP a 115 V = 16 A a plena carga y del orden de 6 veces al arrancar: un SRD se suelda. **Descartada para potencia** |
 | Contactores con enclavamiento mecánico, manejados por relés SRD | La opción más robusta para muchos arranques al día. Queda como **alternativa** (diagrama de contactores) |
-| 4 relés NO en serie (estilo inversor de inyección) | Con el Nano apagado la casa se queda sin energía; pensado para otro objetivo. **Descartada** |
+| 4 relés NO en serie (estilo inversor de inyección) | Con el microcontrolador apagado la casa se queda sin energía; pensado para otro objetivo. **Descartada** |
 | **K2 + K_L2 conmutados (SPDT) + K3 + K_L3 (NO), Rayex L90S** | Conmutador de 2 polos y 2 tiros (DPDT), el interruptor de transferencia básico [23]: la carga no puede tener las dos fuentes. Fail-safe a la red. **Elegida** |
 
 **Decisión**
@@ -998,25 +998,25 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 | TRAFO (salida 15) | D6 → J15-5 | K3 + K_L3 |
 | TN (salida 14) | **AUX D10** → J15-7, **a través de Q2 (AND con AISLAR)** | RL_TN |
 
-   **Actualización 2026-11-09:** RL_TN pasa a canal propio para que el firmware decida la unión N–PE según el escenario. **Q2** (BC547 en seguidor de emisor: colector ← J15-7 por 1 kΩ, base ← AISLAR por 10 kΩ, emisor → I3 con 10 kΩ + 10 nF a GND) deja pasar TN **solo si AISLAR está activo**. En modo cargador o red, K2 sigue uniendo N-LOAD con N-GRID, y Q2 impide que RL_TN haga una doble unión con CFE aunque el AUX se equivoque, se cuelgue o el cable esté pelado. Referencias del esquemático KiCad: K_L2 = K4, K2 = K2, K_L3 = K1, K3 = K3, RL_TN = K5; todos Rayex L90S.
+   **Actualización 2026-11-09:** RL_TN pasa a canal propio para que el firmware decida la unión N–PE según el escenario. **Q2** (BC547 en seguidor de emisor: colector ← J15-7 por 1 kΩ, base ← AISLAR por 10 kΩ, emisor → I3 con 10 kΩ + 10 nF a GND) deja pasar TN **solo si AISLAR está activo**. En modo cargador o red, K2 sigue uniendo N-LOAD con N-GRID, y Q2 impide que RL_TN haga una doble unión con la de la red eléctrica aunque el AUX se equivoque, se cuelgue o el cable esté pelado. Referencias del esquemático KiCad: K_L2 = K4, K2 = K2, K_L3 = K1, K3 = K3, RL_TN = K5; todos Rayex L90S.
 
 3. **Tres estados; K2 + K3 a la vez no se usa:**
 
 | Modo | AISLAR | TRAFO | Casa en | Transformador |
 | --- | --- | --- | --- | --- |
-| **Red** (Nano apagado, en reset, cable suelto) | 0 | 0 | Red | Aislado |
+| **Red** (microcontrolador apagado, en reset, cable suelto) | 0 | 0 | Red | Aislado |
 | **Inversor CASA** (fuente principal) | 1 | 0 | Transformador, **N unido a PE** por RL_TN (TN = 1) | Alimenta la casa |
 | **Inversor CARGA** (UPS de cargas críticas) | 1 | 0 | Transformador, **sin unión N–PE** (TN = 0 y SW_TN en CARGA) | Alimenta las cargas críticas |
 | **Cargador** | 0 | 1 | Red | Conectado a la red (a través del nodo de la carga) |
 
 4. **Candado por hardware (un BC547, Q_A):** la orden AISLAR jala a 0 V la entrada del canal TRAFO (base con 10 kΩ desde la orden cruda; 1 kΩ en serie en el canal TRAFO). Si llegan las dos órdenes, solo queda AISLAR = inversor.
 5. **Caída automática a la red:** en la tarjeta de control, D5 → 1 kΩ → J15-3, con un **1N4148 hacia EN_HW** (cátodo a EN_HW). Si el inversor se detiene por cualquier causa (SENSOR_OK, AUX_KILL, switch, reset), K2 se suelta solo y la casa cae a la red, sin esperar al firmware.
-6. **~~Autoprueba contra relé soldado (PC817 → PRES_CARGA)~~ — eliminada el 2026-11-09:** J15-7 y AUX D10 pasan a la orden TN. **Consecuencia aceptada:** un contacto soldado (K_L2 o K2) ya no se detecta automáticamente. Caso a vigilar: K_L2 soldado en NC, con red presente e inversor con unión → la casa queda con L de CFE y N del inversor unido a PE, y la corriente regresa por la tierra (sin paralelo red–inversor, porque K_L3 y el NO de K_L2 siguen abiertos). **Mitigaciones:** prueba manual periódica (con orden INV: 0 V entre L-GRID y L-LOAD; LED + multímetro), alarma de firmware si el LCD dice INV con carga y el inversor no entrega corriente (SCT), y **huella del PC817 sin poblar (DNP)** para recuperar la verificación si se necesita.
+6. **~~Autoprueba contra relé soldado (PC817 → PRES_CARGA)~~ — eliminada el 2026-11-09:** J15-7 y AUX D10 pasan a la orden TN. **Consecuencia aceptada:** un contacto soldado (K_L2 o K2) ya no se detecta automáticamente. Caso a vigilar: K_L2 soldado en NC, con red presente e inversor con unión → la casa queda con L de la red eléctrica y N del inversor unido a PE, y la corriente regresa por la tierra (sin paralelo red–inversor, porque K_L3 y el NO de K_L2 siguen abiertos). **Mitigaciones:** prueba manual periódica (con orden INV: 0 V entre L-GRID y L-LOAD; LED + multímetro), alarma de firmware si el LCD dice INV con carga y el inversor no entrega corriente (SCT), y **huella del PC817 sin poblar (DNP)** para recuperar la verificación si se necesita.
 7. **Relés:** **Rayex L90S** para K2, K_L2, K3 y K_L3 (NO 30 A / NC 20 A a 240 VAC, 2500 VAC bobina–contacto, bobina de 12 V con 160 Ω / 0.9 W) [24], con **39 Ω ½ W** en serie desde 15 V. RL_TN: también L90S con 39 Ω (en el esquemático KiCad, K5). ULN2003 con **COM (pin 9) a 15 V**: sus diodos internos son el flyback de las bobinas.
    **Actualización 2026-11-11 (tarjeta V0.1, [`hardware/transferencia_reles/`](../hardware/transferencia_reles/README.md)):** la auditoría térmica mostró que la 39 Ω en huella DIN0204 (¼ W) trabajaba al **93 %** (0.233 W, cuerpo ~120 °C con 40 °C de ambiente). **Decisión: relés de 30 A tipo T90 con bobina de 15 V** (p. ej. Picker PTRH-1C-15S, 375 Ω, cierre ≤ 10.25 V) y un **puente** en el lugar de cada 39 Ω: ~37 mA y ~0.52 W por bobina, sin calor en serie. Las huellas (DIN0207, ½ W) se conservan para usar el L90S de 12 V con 39 Ω ≥ ½ W si es lo que se consigue. Antes de fabricar hay que comparar los pines del relé de 15 V contra la huella del L90S.
 8. **Protecciones de potencia:** fusible lento de **10–12 A** entre K_L3 y el transformador (solo el camino del cargador); **breaker de 20 A** hacia la carga; **MOV 14D241K** en J_LOAD. Sin capacitores en paralelo con los contactos.
 8b. **Capacitor del filtro de salida en la entrada del transformador:** **C_F 4.7 µF MKP X2, ≥ 310 VAC**, entre L-INV y N-INV, **antes de los relés** (siempre del lado del transformador). Con los ~2 mH del secundario (dispersión + inductor E65 N87) forma el filtro LC de f₀ ≈ 1.64 kHz que quita la portadora de 24 kHz ([compensación adaptativa del tiempo muerto](compensacion_adaptativa_tiempo_muerto.md)). **Actualización 2026-11-09:** el inductor **L_F (E65 N87) va en serie con el NEUTRO del transformador, antes de C_F**, igual que el OutBack FX (estudio de referencia): N-TRAFO → L_F → N-INV. Es eléctricamente equivalente a ponerlo en el vivo (la corriente diferencial es la misma), deja el vivo corto y directo, y el bobinado queda en la pata de bajo voltaje respecto a tierra. Va **fuera de la tarjeta**, en el chasis, por peso y calor, con fastons. Condiciones: entrehierro para no saturar con el pico de arranque (~18 A) y alambre que nunca se abra (el neutro no se interrumpe); la unión N–PE (RL_TN) queda del lado de N-INV, después del inductor. Su valor se fija restando la dispersión medida a los ~2 mH. **R_D + C_D:** huella opcional sin poblar; se pobla solo si el banco muestra oscilación de ~1.6 kHz en vacío.
-8c. **Filtro EMI de la red (2026-11-10, tomado del OutBack FX):** **CX_RED 0.1 µF X2 (275–310 VAC)** entre L-GRID y N-GRID, junto a J2/J1, con **descarga 2 × 470 kΩ ½ W** en paralelo (τ ≈ 0.1 s, para que los bornes no queden cargados al desconectar la red), y **CY_RED 0.1 µF Y2** entre **N-GRID y PE**. N-GRID siempre está referido a la unión de CFE (casi 0 V respecto a PE): CY_RED deja pasar una corriente despreciable a 60 Hz (26.5 kΩ) y desvía el ruido de alta frecuencia; en modo inversor K2 lo separa de la salida, así que tampoco afecta al modo CARGA flotante. **Prohibido:** un capacitor Y en un vivo (0.1 µF a 127 V = ~4.8 mA de fuga permanente) o entre N-INV y PE (en modo CARGA "amarraría" la salida flotante a tierra). El capacitor a tierra debe ser clase **Y2** (falla abierto); nunca un X2 ni un MKP común. Referencia: el FX usa CX vivo–neutro y CY neutro–chasis, y ningún capacitor vivo–chasis ([estudio](referencia_outback_fx.md), M12).
+8c. **Filtro EMI de la red (2026-11-10, tomado del OutBack FX):** **CX_RED 0.1 µF X2 (275–310 VAC)** entre L-GRID y N-GRID, junto a J2/J1, con **descarga 2 × 470 kΩ ½ W** en paralelo (τ ≈ 0.1 s, para que los bornes no queden cargados al desconectar la red), y **CY_RED 0.1 µF Y2** entre **N-GRID y PE**. N-GRID siempre está referido a la unión de la acometida de la red eléctrica (casi 0 V respecto a PE): CY_RED deja pasar una corriente despreciable a 60 Hz (26.5 kΩ) y desvía el ruido de alta frecuencia; en modo inversor K2 lo separa de la salida, así que tampoco afecta al modo CARGA flotante. **Prohibido:** un capacitor Y en un vivo (0.1 µF a 127 V = ~4.8 mA de fuga permanente) o entre N-INV y PE (en modo CARGA "amarraría" la salida flotante a tierra). El capacitor a tierra debe ser clase **Y2** (falla abierto); nunca un X2 ni un MKP común. Referencia: el FX usa CX vivo–neutro y CY neutro–chasis, y ningún capacitor vivo–chasis ([estudio](referencia_outback_fx.md), M12).
    - **Polipropileno (MKP) clase X2, no poliéster (MKT):** el poliéster tiene más pérdidas y se calienta con el rizo de 24 kHz; la clase X2 está hecha para ir entre fase y neutro de la red.
    - **R_B 2 × 100 kΩ ½ W en paralelo:** descarga C_F a menos de 60 V en ~1 s (τ = 200 kΩ × 4.7 µF ≈ 0.94 s) después de apagar; disipa ~0.08 W.
    - **R_D 22 Ω 5 W + C_D 4.7 µF X2, sin poblar:** red de amortiguamiento para la etapa 3 (pico de los armónicos 27° y 29°).
@@ -1062,7 +1062,7 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 | K2 soldado en NC | Al pedir inversor el NO no puede cerrar; Q_A impide cerrar K3 → el neutro de la casa sigue en la red y no hay paralelo. **Sin PC817 no se detecta solo**: prueba manual periódica |
 | K2 soldado en NO | La casa queda en el transformador; la red no entra. Sin paralelo |
 | K3 soldado cerrado | En inversor, K2 sigue aislando la red. En modo red, el transformador queda en la red con el puente apagado: el pico del secundario (~180 V / 4.16 ≈ 43 V) es menor que la batería, los diodos del puente no conducen |
-| Bobinas sin energía (Nano, cable, 15 V) | Todo a la red |
+| Bobinas sin energía (microcontrolador, cable, 15 V) | Todo a la red |
 | RL_TN cerrado sin orden (Q2 en corto C–E y TN = 1 en modo cargador) | Doble unión mientras carga: requiere **dos** fallas (Q2 dañado **y** orden TN errónea) |
 | RL_TN no cierra (bobina, contacto, Q2 o SW_TN) en modo CASA | Salida sin unión N–PE (queda como en modo CARGA): una falla a chasis no dispara. Se detectará con el monitor de aislamiento de la V2 (DC-015); mientras tanto, prueba de continuidad N–PE en el arranque del sitio |
 

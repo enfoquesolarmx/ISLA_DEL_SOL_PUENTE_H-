@@ -170,7 +170,7 @@ La NOM-001-SEDE-2012 [R2] (misma numeración que el NEC):
 
 | Caso | ¿Hay red en la entrada AC? | ¿Unión N–PE en el inversor o su tablero? |
 | --- | --- | --- |
-| **1. Respaldo** de una casa con CFE | Sí, y la unión está en la acometida | **NO.** Sería doble unión (250-24(a)(5)) |
+| **1. Respaldo** de una casa con red eléctrica pública | Sí, y la unión está en la acometida | **NO.** Sería doble unión (250-24(a)(5)) |
 | **2. Inversor principal de toda la casa, con la red conectada** a la entrada AC | Sí | **NO.** Es igual al caso 1, aunque el inversor alimente todo |
 | **3. Inversor principal en sitio aislado** | No | **SÍ, una sola vez**, en el tablero de cargas, con **electrodo** (250-50 / 250-52) |
 | **4. Sitio aislado con planta** en la entrada AC | La planta hace de red | Unión en el tablero (caso 3) y **quitar la unión de la planta** si la trae |
@@ -206,7 +206,7 @@ El FX deja al instalador decidir **cómo** se usa el equipo. En la V1 esa decisi
 
 | Opción del menú | Uso | Prioridad | Sin red | Carga desde la red |
 | --- | --- | --- | --- | --- |
-| **1. DERIVADOR TIPO UPS** de un circuito de red | Respaldo de uno o varios circuitos de una casa con CFE | **RED primero.** El inversor entra solo cuando la red falla o sale de rango, y regresa a la red cuando vuelve estable (con tiempo de confirmación) | **Es una falla:** alarma "SIN RED" y registro del evento | Sí, normal: mantiene la batería llena |
+| **1. DERIVADOR TIPO UPS** de un circuito de red | Respaldo de uno o varios circuitos de una casa con red eléctrica pública | **RED primero.** El inversor entra solo cuando la red falla o sale de rango, y regresa a la red cuando vuelve estable (con tiempo de confirmación) | **Es una falla:** alarma "SIN RED" y registro del evento | Sí, normal: mantiene la batería llena |
 | **2. FUENTE PRINCIPAL** de energía | Sitio aislado, o casa donde la batería y el sol son la fuente principal | **INVERSOR primero.** La red o la planta en la entrada AC solo se usan como respaldo (batería baja) y para cargar | **Es lo normal:** sin alarma | Solo cuando la batería baja del umbral configurado, o por orden del usuario |
 
 **Reglas del menú:**
@@ -223,7 +223,7 @@ El FX deja al instalador decidir **cómo** se usa el equipo. En la V1 esa decisi
 | **INVERSOR CASA** | Fuente principal (opción 2) | **Sí**, la hace RL_TN | CASA |
 | **INVERSOR CARGA** | Derivador tipo UPS de cargas críticas (opción 1) | **No**, la salida queda flotante y la PE pasa directa | CARGA |
 
-- **Actualización 2026-11-09:** la orden de unión sale del **AUX (D10 → J15-7)** según el escenario, y **Q2** (compuerta AND por hardware) solo la deja pasar si el canal INVERSOR está activo. Así ni un error de menú ni uno de firmware pueden hacer una doble unión con CFE.
+- **Actualización 2026-11-09:** la orden de unión sale del **AUX (D10 → J15-7)** según el escenario, y **Q2** (compuerta AND por hardware) solo la deja pasar si el canal INVERSOR está activo. Así ni un error de menú ni uno de firmware pueden hacer una doble unión con la de la red eléctrica.
 - El selector físico **SW_TN** (polo A en la bobina de RL_TN, polo B como MODO_TN hacia D4) queda como **decisión pendiente**: sin él, en modo inversor la unión depende solo del firmware del AUX.
 - El valor de fábrica es CARGA/UPS (sin unión).
 
@@ -246,7 +246,7 @@ El FX deja al instalador decidir **cómo** se usa el equipo. En la V1 esa decisi
 
 - **Un relé 3PDT con clasificación HP** (tipo Deltrol 375P) en el HOT, con **neutro sólido**.
 - **Puente J_TN** (faston con seguro), **abierto de fábrica**, con serigrafía:
-  > **J_TN: CERRAR SOLO SI NO HAY RED NI PLANTA UNIDA EN LA ENTRADA AC. SI HAY CFE CONECTADA (AUNQUE SEA RESPALDO): ABIERTO. NOM 250-24 / 250-30.**
+  > **J_TN: CERRAR SOLO SI NO HAY RED NI PLANTA UNIDA EN LA ENTRADA AC. SI HAY RED ELÉCTRICA CONECTADA (AUNQUE SEA RESPALDO): ABIERTO. NOM 250-24 / 250-30.**
 - **Requisitos de firmware:** sincronía de fase antes de cerrar el relé y detección de pérdida de red con apertura del relé antes de seguir invirtiendo (anti-isla).
 - **Manual de instalación** con los 4 casos de la sección 7, dibujados.
 - **Advertencia en la documentación:** *"Esta versión exige que el instalador tenga conocimientos de puesta a tierra."*
