@@ -159,7 +159,7 @@ def build(out, dpi):
             '  Sensor ausente / cable roto        5 V (R26)  conduce  0      0 0 0 0          [X]  no arranca\n'
             '  Sensor sin alimentación            5 V        conduce  0      0 0 0 0          [X]  no arranca\n'
             '  Switch OFF o cable del SW suelto   --         --       0(R24) 0 0 0 0          [X]  apagado\n'
-            '  Nano en reset / cargando programa  --         --       0(R24) 0 0 0 0          [X]  apagado (D12 flota)\n'
+            '  MCU en reset / cargando programa   --         --       0(R24) 0 0 0 0          [X]  apagado (D12 flota)\n'
             '  AUX_KILL = 0 (enclavado, AUX)      --         --       0      0 0 0 0          [X]  apagado hasta ENTER\n'
             '  J_RIESGO puesto                    0 V        apagado  1      = PWM            [!]  opera SIN protección OC',
             loc='right', fontsize=FS, halign='left', valign='top')
