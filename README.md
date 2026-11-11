@@ -106,6 +106,13 @@ ISLA_DEL_SOL_PUENTE_H-/
     │       ├── README.md                           ← auditoría de corriente y temperatura
     │       ├── auditoria_cobre.py · termica_componentes.py · sensibilidad.py
     │       └── resultados/                         ← figuras (.png) y resúmenes (.json)
+    ├── transferencia_reles/
+    │   ├── README.md                               ← tarjeta de transferencia de carga V0.1
+    │   ├── RELAY_TRANSFER_INV_RED.kicad_pro / .kicad_sch / .kicad_pcb
+    │   ├── RELAY_TRANSFER_INV_RED.kicad_dru        ← reglas de separación (5 mm / 3 mm) para el DRC
+    │   ├── 3d/                                     ← modelo 3D aproximado del relé (STEP) y su script
+    │   ├── img/                                    ← esquemático, capas y vistas 3D
+    │   └── auditoria/                              ← auditoría térmica a 10 A (script, mapas, informe)
     └── sensores/
         └── sensor-dc-ina-comparador/
             ├── README.md
@@ -115,7 +122,7 @@ ISLA_DEL_SOL_PUENTE_H-/
             └── img/                                ← esquemático, PCB y evidencia del proceso
 ```
 
-Próximamente: `hardware/sensores/` (sensor AC del primario), la tarjeta de control, la tarjeta de transferencia (diseño en DC-019) y `firmware/`.
+Próximamente: `hardware/sensores/` (sensor AC del primario), la tarjeta de control y `firmware/`.
 
 ### Documentos de sistema (`docs/`)
 
@@ -148,6 +155,12 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | --- | --- | --- | --- |
 | **Puente H SPWM 48 V** (REV C) | [README](hardware/puente_h/README.md) · [Auditoría](hardware/puente_h/auditoria/README.md) | ✓ Esquemático (3 hojas) y PCB | 4 × IRF100P219 con disipador SK 129; pierna A a 24 kHz y B a 60 Hz; sockets universales J10/J9 con llave; banco Rubycon + cerámicos con plano partido y lazo doblado (~4 nH); shunts con Kelvin; transformador compatible 24–28 V / 120 V; salida protegida al buck (R14 + T1A, buck ≥ 80 V); **cobre de 1 oz como condición de trinchera**, con **auditoría de corriente y temperatura** (MOSFET, Rubycon y cobre) y refuerzo opcional con alambre 12 AWG; ensamble, validación, BOM y pendientes |
 
+### Tarjeta de transferencia de carga (`hardware/transferencia_reles/`)
+
+| Tarjeta | Documento | Archivos KiCad | Qué incluye |
+| --- | --- | --- | --- |
+| **Transferencia de carga** **V0.1** | [README](hardware/transferencia_reles/README.md) · [Auditoría](hardware/transferencia_reles/auditoria/README.md) | ✓ Esquemático y PCB (esquemático = PCB verificado pin por pin) | 5 relés SPDT de 30 A (fase y neutro): **red / inversor / cargador** sin que una falla de un relé ponga las dos fuentes en paralelo; **falla segura a la red**; candados por hardware Q1 (inversor bloquea cargador) y Q2 (unión N–PE solo con inversor); **unión N–PE automática según el modo del SETUP** (CASA / UPS); filtro C_F, CX/CY de la red y resistencias de descarga; **separaciones de 5 mm / 3 mm verificadas** y ranuras de aislamiento; **auditoría térmica a 10 A** (cobre de 1 oz suficiente; relés de 15 V sin resistencia en serie); ensamble, pruebas con multímetro y BOM |
+
 ### Módulos de sensado (`hardware/sensores/`)
 
 | Módulo | Documento | Archivos KiCad | Qué incluye |
@@ -164,8 +177,9 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 5. **[Módulo TLP250](hardware/gate-drivers/tlp250-trinchera/README.md):** cómo resolver lo mismo con partes de tienda local, y los errores típicos al diseñar un tótem.
 6. **[Módulo IR2110](hardware/gate-drivers/ir2110-trinchera/README.md):** el driver legacy clásico con tierras separadas y tótem para muchos MOSFET.
 7. **[Tarjeta del puente H](hardware/puente_h/README.md)** y su **[auditoría](hardware/puente_h/auditoria/README.md):** cómo se juntan los módulos, el banco de capacitores, el layout de potencia y cómo comprobar antes de fabricar que el cobre y los componentes aguantan.
-8. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md) (V0.2):** cómo medir la corriente del bus, limitarla para que arranquen los motores y cortar las compuertas por hardware antes que el fusible, con la salida fail-safe SENSOR_OK.
-9. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
+8. **[Tarjeta de transferencia de carga](hardware/transferencia_reles/README.md) (V0.1):** cómo la casa pasa entre la red y el inversor sin que nunca tenga las dos fuentes, cómo se conecta el cargador y cuándo se une el neutro a tierra.
+9. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md) (V0.2):** cómo medir la corriente del bus, limitarla para que arranquen los motores y cortar las compuertas por hardware antes que el fusible, con la salida fail-safe SENSOR_OK.
+10. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
 
 ## Herramientas
 

@@ -1,0 +1,8 @@
+(version 1)
+# Potencia = L-*, N-*, TIERRA, contactos NC de relés y puntos medios de los divisores R18/R19 y R20/R21
+(rule "Potencia a logica 5 mm"
+  (condition "(A.NetName == 'L-*' || A.NetName == 'N-*' || A.NetName == 'TIERRA' || A.NetName == 'unconnected-(K*' || A.NetName == 'Net-(R18-Pad2)' || A.NetName == 'Net-(R20-Pad2)') && !(B.NetName == 'L-*' || B.NetName == 'N-*' || B.NetName == 'TIERRA' || B.NetName == 'unconnected-(K*' || B.NetName == 'Net-(R18-Pad2)' || B.NetName == 'Net-(R20-Pad2)')")
+  (constraint clearance (min 5mm)))
+(rule "Potencia entre redes 3 mm"
+  (condition "(A.NetName == 'L-*' || A.NetName == 'N-*' || A.NetName == 'TIERRA' || A.NetName == 'unconnected-(K*' || A.NetName == 'Net-(R18-Pad2)' || A.NetName == 'Net-(R20-Pad2)') && (B.NetName == 'L-*' || B.NetName == 'N-*' || B.NetName == 'TIERRA' || B.NetName == 'unconnected-(K*' || B.NetName == 'Net-(R18-Pad2)' || B.NetName == 'Net-(R20-Pad2)') && A.NetName != B.NetName")
+  (constraint clearance (min 3mm)))
