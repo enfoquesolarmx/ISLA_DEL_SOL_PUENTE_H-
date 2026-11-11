@@ -1,0 +1,28 @@
+  más caliente total: F.Cu (73.7, 133.5) junto a K4.12 [L-GRID] · solo cobre: F.Cu (91.3, 134.3) junto a C7.1 [L-GRID]
+
+== RED → CARGA (ningún relé energizado; K4 y K2 por NC)
+  P_cobre 0.33 W · Tcu 8.3 °C · Ttot 21.6 °C · contactos 1.00 W · bobinas 0.00 W
+   L-GRID: J2 → K4 NC                     149 mW    14.9 mV  Jmax 2.6 A/mm
+   L-LOAD: K4 COM → J2                     39 mW     3.9 mV  Jmax 0.8 A/mm
+   N-GRID: J1 → K2 NC                      86 mW     8.6 mV  Jmax 1.1 A/mm
+   N-LOAD: K2 COM → J1                     51 mW     5.1 mV  Jmax 1.1 A/mm
+  más caliente total: F.Cu (66.9, 133.9) junto a K4.14 [L-INV] · solo cobre: B.Cu (63.3, 142.3) junto a J8.1 [L-INV]
+
+== INVERSOR → CARGA (AISLAR: K4 y K2 por NO, K5 unión N–PE)
+  P_cobre 0.17 W · Tcu 4.1 °C · Ttot 26.8 °C · contactos 1.00 W · bobinas 1.56 W
+   L-INV: Faston J7 → puente J3            13 mW     1.3 mV  Jmax 0.7 A/mm
+   L-INV: puente J8 → K4 NO                36 mW     3.6 mV  Jmax 1.2 A/mm
+   L-LOAD: K4 COM → J2                     39 mW     3.9 mV  Jmax 0.8 A/mm
+   N-INV: Faston J4 → K2 NO                30 mW     3.0 mV  Jmax 1.1 A/mm
+   N-LOAD: K2 COM → J1                     51 mW     5.1 mV  Jmax 1.1 A/mm
+  más caliente total: F.Cu (67.3, 104.3) junto a K1.14 [L-LOAD] · solo cobre: F.Cu (91.3, 134.3) junto a C7.1 [L-GRID]
+
+== CARGADOR (TRAFO: red → inversor por K4/K2 NC + K1/K3 NO)
+  P_cobre 0.36 W · Tcu 8.3 °C · Ttot 28.1 °C · contactos 2.00 W · bobinas 1.04 W
+   L-GRID: J2 → K4 NC                     149 mW    14.9 mV  Jmax 2.6 A/mm
+   L-LOAD: K4 COM → K1 NO                  37 mW     3.7 mV  Jmax 1.4 A/mm
+   L-INV: K1 COM → Faston J7               17 mW     1.7 mV  Jmax 0.7 A/mm
+   N-GRID: J1 → K2 NC                      86 mW     8.6 mV  Jmax 1.1 A/mm
+   N-LOAD: K2 COM → K3 NO                  31 mW     3.1 mV  Jmax 1.1 A/mm
+   N-INV: K3 COM → puente J5               28 mW     2.8 mV  Jmax 1.3 A/mm
+   N-INV: puente J6 → Faston J4            13 mW     1.3 mV  Jmax 0.6 A/mm
