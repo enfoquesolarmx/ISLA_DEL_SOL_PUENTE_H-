@@ -11013,7 +11013,7 @@
 			)
 		)
 		(property "Value" "2.2Ω ½W"
-			(at -3.3 -0.1 0)
+			(at -4.4 0.2 0)
 			(layer "F.SilkS")
 			(uuid "e401dc89-e624-4216-9f04-dfd973abb0c0")
 			(effects
@@ -34543,7 +34543,7 @@
 		)
 	)
 	(gr_text "HO_B\n\n"
-		(at 193.95 99.95 0)
+		(at 193.8 99.95 0)
 		(layer "F.SilkS")
 		(uuid "72c9ce49-9f76-4ae9-a843-ee8e6b76b76f")
 		(effects

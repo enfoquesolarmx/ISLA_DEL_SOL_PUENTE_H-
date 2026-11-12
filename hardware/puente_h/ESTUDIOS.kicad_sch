@@ -12,12 +12,22 @@
 		(comment 1 "Láminas de referencia: no tienen conexiones eléctricas")
 	)
 	(lib_symbols)
+	(text "Láminas de estudio del puente H (REV C, 2026-10-31): 1) red de compuerta R1/R2/R3/D; 2) y 3) comparación de MOSFET (IRF100P219 elegido para el prototipo)."
+		(exclude_from_sim no)
+		(at 15 160 0)
+		(effects
+			(font
+				(size 2 2)
+			)
+			(justify left top)
+		)
+		(uuid "606a6b53-72bd-4855-ae54-d6613a1627ae")
+	)
 	(image
 		(at 70 100)
 		(scale 0.45)
 		(uuid "561d9ea7-b2e3-4065-aefc-e625ab77db73")
-		(data
-			"iVBORw0KGgoAAAANSUhEUgAADGAAAAlyCAIAAAC8ZpTrAAAACXBIWXMAAC4jAAAuIwF4pT92AAEA"
+		(data "iVBORw0KGgoAAAANSUhEUgAADGAAAAlyCAIAAAC8ZpTrAAAACXBIWXMAAC4jAAAuIwF4pT92AAEA"
 			"AElEQVR4XuzdZ1gUSds/7BqyIkFBFFTMCqiYFbMo5oR516wYwUVdc07r6pozKoo5ZxAjJgyYwIAJ"
 			"EyJKBskgad4D6vnPO/dMz9DdExjwd37Yw4Xp6urq6qpm+uqrBEKhkAAAAAAAAAAAAAAAAAAAAAAA"
 			"AJREWiXxoAAAAAAAAAAAAAAAAAAAAAAAAPIhQAoAAAAAAAAAAAAAAAAAAAAAAEosBEgBAAAAAAAA"
@@ -14150,8 +14160,7 @@
 		(at 340 100)
 		(scale 0.45)
 		(uuid "5661f854-0f98-4cdc-81ad-9d417ed683b7")
-		(data
-			"iVBORw0KGgoAAAANSUhEUgAADGAAAAlyCAIAAAC8ZpTrAAAACXBIWXMAAC4jAAAuIwF4pT92AAEA"
+		(data "iVBORw0KGgoAAAANSUhEUgAADGAAAAlyCAIAAAC8ZpTrAAAACXBIWXMAAC4jAAAuIwF4pT92AAEA"
 			"AElEQVR4Xuzdd3gUVfv4/0lPSAVCr9IJvQcJvUoLKE0pUkTpiKIISK9SBEUNXUCadAKR3kF6b9Jb"
 			"CCEkIZX05HeR+fz2u8/O7GZ2spuE5f3647ked2dOmzNnR+fOfazS0tIEAAAAAAAAAAAAAAAAALBE"
 			"1pbYKQAAAAAAAAAAAAAAAAB4iwApAAAAAAAAAAAAAAAAABaLACkAAAAAAAAAAAAAAAAAFosAKQAA"
@@ -26958,8 +26967,7 @@
 		(at 205 100)
 		(scale 0.45)
 		(uuid "84bca57b-2717-43b9-a9c7-0388b8a101d4")
-		(data
-			"iVBORw0KGgoAAAANSUhEUgAADGAAAAlyCAIAAAC8ZpTrAAAACXBIWXMAAC4jAAAuIwF4pT92AAEA"
+		(data "iVBORw0KGgoAAAANSUhEUgAADGAAAAlyCAIAAAC8ZpTrAAAACXBIWXMAAC4jAAAuIwF4pT92AAEA"
 			"AElEQVR4Xuzdd1gTWfs//hM6IkVBFFDsDVTsYlsFG6ICVlw7Vuy6a1272NaydrGLa+8uiqIi2LE3"
 			"VARUOtK7gLT8LpnnN998MpMwmSTU9+uP53o2mTlzzpQzI3PnvgVCoZAAAAAAAAAAAAAAAAAAAAAA"
 			"AABURCoVcVAAAAAAAAAAAAAAAAAAAAAAAAC/IEAKAAAAAAAAAAAAAAAAAAAAAAAqLARIAQAAAAAA"
@@ -39736,17 +39744,6 @@
 			"AAAAAAAAAAChJSAFAAAAAAAAAACEloAUAAAAAAAAAAAQWgJSAAAAAAAAAABAaAlIAQAAAAAAAAAA"
 			"ofV/1Cv7ZtMRJ7YAAAAASUVORK5CYII="
 		)
-	)
-	(text "Láminas de estudio del puente H (REV C, 2026-10-31): 1) red de compuerta R1/R2/R3/D; 2) y 3) comparación de MOSFET (IRF100P219 elegido para el prototipo)."
-		(exclude_from_sim no)
-		(at 15 160 0)
-		(effects
-			(font
-				(size 2 2)
-			)
-			(justify left top)
-		)
-		(uuid "606a6b53-72bd-4855-ae54-d6613a1627ae")
 	)
 	(sheet_instances
 		(path "/"

@@ -44464,7 +44464,7 @@
 			)
 		)
 		(property "Value" "820µF 100V Rubycon ZLH"
-			(at 21.59 49.9109 0)
+			(at 25.908 57.15 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -44594,7 +44594,7 @@
 		(dnp no)
 		(uuid "5b9814ab-60e7-4264-abeb-2c0171c1a203")
 		(property "Reference" "C2"
-			(at 21.59 24.5109 0)
+			(at 23.114 24.638 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -44603,7 +44603,7 @@
 			)
 		)
 		(property "Value" "820µF 100V Rubycon ZLH"
-			(at 21.59 27.0509 0)
+			(at 21.59 38.862 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -44663,7 +44663,7 @@
 		(dnp no)
 		(uuid "5dea3f2c-e072-4938-ad04-a19b07f281eb")
 		(property "Reference" "C4"
-			(at 39.37 24.5109 0)
+			(at 44.196 24.638 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -44672,7 +44672,7 @@
 			)
 		)
 		(property "Value" "820µF 100V Rubycon ZLH"
-			(at 39.37 27.0509 0)
+			(at 40.894 38.862 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -44741,7 +44741,7 @@
 			)
 		)
 		(property "Value" "820µF 100V Rubycon ZLH"
-			(at 39.37 49.9109 0)
+			(at 44.704 56.896 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -45289,7 +45289,6 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "eb166417-e42b-4d96-917d-a7b3763386df")
 		(property "Reference" "C5"
 			(at 102.87 64.7699 0)
