@@ -246,7 +246,19 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
 
 - **La diferencia de 0.02 Hz** (60.040 contra 60.060) viene de la tolerancia del cristal del Nano y del reloj del analizador, ~330 ppm. Está dentro de lo esperado para un cristal de 16 MHz de clon. En modo red, el PLL la corrige.
 - **Los caracteres raros al inicio del Monitor Serie** son normales: el Nano se reinicia al abrir el puerto y el bootloader envía bytes antes de `Serial.begin()`.
-- **El hueco de la pierna B varía entre cruces: 41.751, 42.000 y 42.188 µs** en tres mediciones. No es un valor fijo por transición. La pierna B la mueve el programa dentro de la interrupción, y la interrupción no siempre entra en el mismo ciclo:
+- **Captura de 2 M muestras (125 ms, ~7.5 ciclos):**
+
+  | Medición | Valor |
+  | --- | --- |
+  | Frecuencia de salida, ciclo por ciclo | 60.038–60.043 Hz |
+  | LB en alto, ciclo por ciclo | 49.7469–49.7512 % (predicho 49.75 %) |
+  | Pierna B, HB ↓ → LB ↑ (otro cruce) | **40.437 µs** |
+  | Pierna B, LB ↓ → HB ↑ (otro cruce) | **41.500 µs** |
+  | **Rango de la pierna B en 5 cruces medidos** | **40.437–42.188 µs** (1.75 µs = 28 ciclos de CPU) |
+
+  El valor más bajo, 40.4 µs, sigue siendo ~40 veces lo que necesita un gate driver.
+
+- **El hueco de la pierna B varía entre cruces: de 40.437 a 42.188 µs** en cinco mediciones. No es un valor fijo por transición. La pierna B la mueve el programa dentro de la interrupción, y la interrupción no siempre entra en el mismo ciclo:
   - el CPU termina la instrucción en curso (1–4 ciclos);
   - si en ese momento corre otra interrupción (Timer0 de `millis()`, puerto serie), espera a que termine (hasta ~5 µs);
   - las lecturas atómicas de `loop()` apagan las interrupciones unos ciclos.
@@ -261,6 +273,9 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
 ![Zoom: 42.000 µs](img/banco_paso2_pierna_b_hb_a_lb_zoom.png)
 ![Pierna B: LB baja, HB sube 42.188 µs después](img/banco_paso2_pierna_b_lb_a_hb_zoom.png)
 ![Pierna B, otro cruce: 41.751 µs](img/banco_paso2_pierna_b_hb_a_lb_otro_cruce.png)
+![2 M muestras: 7.5 ciclos estables a 60.04 Hz](img/banco_paso2_2M_vista_general.png)
+![2 M muestras: HB baja, LB sube 40.437 µs después](img/banco_paso2_2M_hb_a_lb_40437ns.png)
+![2 M muestras: LB baja, HB sube 41.500 µs después](img/banco_paso2_2M_lb_a_hb_41500ns.png)
 
 ### 7.1 Con analizador lógico (genérico de 24 MHz y 8 canales)
 
@@ -315,4 +330,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | **Soporte de 50 Hz y 60 Hz** (`FRECUENCIA_LINEA_HZ`): portadora fija de 24 kHz, 480 muestras a 50 Hz con su propia tabla de cuarto de onda (120). `spwm_preparar(dt, frecuencia)` rechaza valores inválidos y queda en 60 Hz. Decisión: la frecuencia se elige solo en el código, no desde el SETUP. Advertencias de transformador y voltaje en la sección 5. Prueba en la PC: todo correcto en las dos frecuencias. ISR de 169–180 ciclos. Compila: 5.7 KB de flash, 233 B de RAM |
 | 2026-11-12 | **Techo absoluto de modulación del 95 %** (`M_TECHO_PORCIENTO`). Amplitud máxima = la menor entre el techo y el límite físico del DT en uso: 316 (500 ns) / 313 (1 µs). `spwm_amplitud_max()`. Prueba en la PC: todo correcto |
 | 2026-11-12 | `pruebas/analiza_captura.py`: valida la SPWM real con un analizador lógico de 24 MHz (`.sr` de PulseView, CSV de PulseView o de Saleae). Probado con capturas sintéticas; detecta un solo flanco sin tiempo muerto. Sección 7.1 |
-| 2026-11-12 | **Primera prueba real en un Nano: validada.** Pierna A, pierna B (41.75–42.19 µs) y frecuencia. Analizador lógico a 16 MHz: pierna B a 16.656 ms (60.040 Hz), LB 49.7476 % (predicho 49.75 %), tiempo muerto de la pierna A = 1000 ns, 600–601 ciclos en 10 s. Capturas en `img/`. Sección 7.0 |
+| 2026-11-12 | **Primera prueba real en un Nano: validada.** Pierna A, pierna B (40.44–42.19 µs en 5 cruces) y frecuencia (60.04 Hz estable en 7.5 ciclos). Analizador lógico a 16 MHz: pierna B a 16.656 ms (60.040 Hz), LB 49.7476 % (predicho 49.75 %), tiempo muerto de la pierna A = 1000 ns, 600–601 ciclos en 10 s. Capturas en `img/`. Sección 7.0 |
