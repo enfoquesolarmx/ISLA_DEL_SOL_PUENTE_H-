@@ -6,7 +6,29 @@
 
 **Licencia:** MIT ([LICENSE.md](../../LICENSE.md))
 
-**Estado:** paso 2, SPWM híbrida en el ATmega328P para **60 Hz o 50 Hz**, verificada en la PC y **validada en un Nano real con analizador lógico** a 60 Hz y a 50 Hz, DT 1 µs (secciones 7.0 y 7.0b). **Prueba de banco sin potencia:** D12 (EN_HW) queda en 0 y las señales no pasan de la compuerta AND a los gate drivers.
+**Estado:** ✅ **ETAPA BASE COMPLETADA (2026-11-12): generación de la SPWM híbrida validada en hardware real a 50 Hz y 60 Hz.** Etiqueta git `critico-etapa-base`. Prueba de banco **sin potencia**: D12 (EN_HW) queda en 0 y las señales no pasan de la compuerta AND a los gate drivers.
+
+### Etapa base: qué quedó validado
+
+| Qué | Cómo se validó |
+| --- | --- |
+| Portadora de 24.02 kHz (TOP 333) sincronizada con la línea | Reporte de arranque y analizador lógico |
+| Salida de **60 Hz** (400 muestras) | 60.04 Hz, LB 49.75 %, 600–601 ciclos en 10 s (sección 7.0) |
+| Salida de **50 Hz** (480 muestras) | 50.033 Hz, LB 49.79 %, 501 ciclos en 10 s (sección 7.0b) |
+| Tiempo muerto de la pierna A hecho por el timer | **1000 ns** exactos, a 60 y a 50 Hz |
+| Pierna B con un periodo de tiempo muerto en el cruce | **40.4–42.2 µs**, nunca encimadas |
+| Secuencia del cruce por cero y pulso solitario de HA | Explicada y reproducida por el modelo de la PC |
+| LUT de cuarto de onda, techo del 95 %, pulso mínimo, amplitud por ciclo | Prueba en la PC (`pruebas/prueba_spwm.cpp`): todo correcto |
+
+### Siguientes etapas
+
+1. **Lectura de P9 (A7)** y validación del tiempo muerto de 500 ns en banco.
+2. **Arranque suave y lazo de voltaje** (`ac_fb_inversor`).
+3. **ADC disparado por la portadora:** batería, corriente y temperatura.
+4. **Protecciones** y secuencia de permiso D12 ([corte por hardware](../../docs/corte_por_hardware.md)).
+5. **PLL con la red** (TOP fraccionario) y transferencia (`ac_fb_grid`).
+6. **Enlace I2C** con el AUX.
+7. **ATmega4809** (Nano Every).
 
 ---
 
@@ -364,3 +386,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | **Primera prueba real en un Nano: validada.** Pierna A, pierna B (40.44–42.19 µs en 5 cruces) y frecuencia (60.04 Hz estable en 7.5 ciclos). Analizador lógico a 16 MHz: pierna B a 16.656 ms (60.040 Hz), LB 49.7476 % (predicho 49.75 %), tiempo muerto de la pierna A = 1000 ns, 600–601 ciclos en 10 s. Capturas en `img/`. Sección 7.0 |
 | 2026-11-12 | **Pulso solitario de HA** en la muestra 1 del semiciclo − (~20 µs), encontrado en banco: el chip fija el nivel de la salida en BOTTOM al cambiar OCR1A de 0. Es seguro (HA + HB = 0 V, LA apagada). El modelo de la PC se corrigió con esa regla y lo reproduce; todas las verificaciones pasan. Nota en `spwm_328p.cpp` |
 | 2026-11-12 | **Prueba real a 50 Hz: validada.** 19.987 ms (50.033 Hz), LB 49.79 %, tiempo muerto de la pierna A 1000 ns, pierna B 41.8–42 µs, 501 ciclos en 10 s. Sección 7.0b |
+| 2026-11-12 | ✅ **ETAPA BASE COMPLETADA:** generación de la SPWM híbrida validada en hardware real a 50 y 60 Hz. Etiqueta `critico-etapa-base` |
