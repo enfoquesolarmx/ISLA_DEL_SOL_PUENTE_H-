@@ -231,7 +231,7 @@ Resultado actual: **todo correcto** en las dos frecuencias. DT mínimo de 8 / 16
 
 ### 7.0 Resultado de la primera prueba real (2026-11-12)
 
-Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico genérico a 16 MHz con PulseView. **Pierna A y frecuencia validadas; falta medir el tiempo muerto de la pierna B.**
+Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico genérico a 16 MHz con PulseView. **Validado:** pierna A, pierna B y frecuencia.
 
 | Medición | Predicho (prueba en la PC) | Medido en el Nano | |
 | --- | --- | --- | --- |
@@ -241,11 +241,12 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
 | Fracción de LB en alto | 199 / 400 = 49.75 % | **49.7476 %** | ✅ |
 | Tiempo muerto de la pierna A (HA ↓ → LA ↑) | 16 cuentas = 1000 ns | **1000 ns** | ✅ |
 | Tiempo muerto de la pierna B, HB ↓ → LB ↑ (fin del semiciclo −) | 41.625 µs (1 periodo de portadora) | **42.000 µs** con zoom (672 muestras a 16 MHz). Son 0.375 µs más que un periodo: unos 6 ciclos de CPU de diferencia entre la rama que apaga (`muestra == última`, se evalúa primero) y la que enciende (`muestra == 0`, va después) | ✅ |
-| Tiempo muerto de la pierna B, LB ↓ → HB ↑ (fin del semiciclo +) | 41.625 µs | **Pendiente de medir** | ⏳ |
+| Tiempo muerto de la pierna B, LB ↓ → HB ↑ (fin del semiciclo +) | Un poco más que 42 µs (~42.1–42.3): apaga LB por el `if` y enciende HB por el `else` | **42.188 µs** (675 muestras a 16 MHz) | ✅ |
 | Pierna A alrededor del cruce | Apagada en las muestras 199 y 0 (~2 periodos); antes del cruce, HA ancho y LA angosto; después, al revés | Igual en la captura | ✅ |
 
 - **La diferencia de 0.02 Hz** (60.040 contra 60.060) viene de la tolerancia del cristal del Nano y del reloj del analizador, ~330 ppm. Está dentro de lo esperado para un cristal de 16 MHz de clon. En modo red, el PLL la corrige.
 - **Los caracteres raros al inicio del Monitor Serie** son normales: el Nano se reinicia al abrir el puerto y el bootloader envía bytes antes de `Serial.begin()`.
+- **Los dos huecos de la pierna B difieren 0.188 µs** (3 ciclos de CPU). Es la diferencia de camino dentro de la interrupción, tal como se predijo antes de medir. El margen sigue siendo de ~42 µs contra ~1 µs que necesita un gate driver.
 - **Pendiente:** correr `analiza_captura.py` sobre el `.sr` completo, con D12 en el canal 4 y 24 MHz si el analizador lo permite. Así quedan verificados el pulso más angosto, la forma senoidal y la amplitud real.
 
 ![Monitor Serie](img/banco_paso2_monitor_serie.png)
@@ -253,6 +254,7 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
 ![Tiempo muerto de 1 µs](img/banco_paso2_tiempo_muerto_1us.png)
 ![Pierna B: HB baja, LB sube 42 µs después](img/banco_paso2_pierna_b_hb_a_lb.png)
 ![Zoom: 42.000 µs](img/banco_paso2_pierna_b_hb_a_lb_zoom.png)
+![Pierna B: LB baja, HB sube 42.188 µs después](img/banco_paso2_pierna_b_lb_a_hb_zoom.png)
 
 ### 7.1 Con analizador lógico (genérico de 24 MHz y 8 canales)
 
@@ -307,4 +309,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | **Soporte de 50 Hz y 60 Hz** (`FRECUENCIA_LINEA_HZ`): portadora fija de 24 kHz, 480 muestras a 50 Hz con su propia tabla de cuarto de onda (120). `spwm_preparar(dt, frecuencia)` rechaza valores inválidos y queda en 60 Hz. Decisión: la frecuencia se elige solo en el código, no desde el SETUP. Advertencias de transformador y voltaje en la sección 5. Prueba en la PC: todo correcto en las dos frecuencias. ISR de 169–180 ciclos. Compila: 5.7 KB de flash, 233 B de RAM |
 | 2026-11-12 | **Techo absoluto de modulación del 95 %** (`M_TECHO_PORCIENTO`). Amplitud máxima = la menor entre el techo y el límite físico del DT en uso: 316 (500 ns) / 313 (1 µs). `spwm_amplitud_max()`. Prueba en la PC: todo correcto |
 | 2026-11-12 | `pruebas/analiza_captura.py`: valida la SPWM real con un analizador lógico de 24 MHz (`.sr` de PulseView, CSV de PulseView o de Saleae). Probado con capturas sintéticas; detecta un solo flanco sin tiempo muerto. Sección 7.1 |
-| 2026-11-12 | **Primera prueba real en un Nano:** pierna A y frecuencia validadas (tiempo muerto de la pierna B pendiente). Analizador lógico a 16 MHz: pierna B a 16.656 ms (60.040 Hz), LB 49.7476 % (predicho 49.75 %), tiempo muerto de la pierna A = 1000 ns, 600–601 ciclos en 10 s. Capturas en `img/`. Sección 7.0 |
+| 2026-11-12 | **Primera prueba real en un Nano: validada.** Pierna A, pierna B (42.000 / 42.188 µs) y frecuencia. Analizador lógico a 16 MHz: pierna B a 16.656 ms (60.040 Hz), LB 49.7476 % (predicho 49.75 %), tiempo muerto de la pierna A = 1000 ns, 600–601 ciclos en 10 s. Capturas en `img/`. Sección 7.0 |
