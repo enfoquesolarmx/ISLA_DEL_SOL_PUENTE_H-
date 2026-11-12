@@ -290,7 +290,7 @@ def build(out, dpi):
             '  INV. CARGA  1          0         0       NO (trafo)    abiertos    abierto            TRANSFORMADOR     alimenta cargas críticas (UPS)\n'
             '  CARGADOR    0          1         x       NC (red)      cerrados    abierto (Q2)       RED               conectado a la red (cargando)\n'
             '  D5 y D6     1          1         —       NO (trafo)    BLOQUEADOS por Q_A             = INVERSOR (seguro)\n'
-            '  TN sin INV  0          —         1       —             —           BLOQUEADO por Q2   sin doble unión con CFE\n'
+            '  TN sin INV  0          —         1       —             —           BLOQUEADO por Q2   sin doble unión con la red\n'
             '\n'
             'SECUENCIA A INVERSOR:  EN_HW = 0 → D6 = 0 → pausa 50 ms → D5 = 1 → pausa 50 ms → AUX: D10 según el escenario (CASA = 1, CARGA = 0) → EN_HW = 1 → SPWM.\n'
             'SALIDA DE INVERSOR:  EN_HW = 0 → AUX: D10 = 0 → D5 = 0.   Si se pierde el I2C, el AUX suelta D10.\n'
@@ -313,7 +313,7 @@ def build(out, dpi):
             '  • C_F 4.7 µF MKP X2 (polipropileno, ≥ 310 VAC) entre L-INV y N-INV, ANTES de los relés: forma el LC con los ~2 mH del secundario (f₀ ≈ 1.64 kHz).\n'
             '    No poliéster (MKT): calienta con el rizo de 24 kHz.  R_B 2 × 100 kΩ ½ W descarga C_F a < 60 V en ~1 s.  R_D + C_D: huella opcional, poblar solo si el banco muestra oscilación.\n'
             '  • Filtro EMI de la red (como el OutBack FX): CX_RED 0.1 µF X2 entre L-GRID y N-GRID con descarga 2 × 470 kΩ ½ W (τ ≈ 0.1 s), y CY_RED 0.1 µF Y2 entre N-GRID y PE.\n'
-            '    N-GRID siempre está referido a la unión de CFE (casi 0 V a PE): CY_RED no fuga, y en modo inversor K2 lo separa de la salida.  Nunca un capacitor Y en un vivo ni en N-INV.\n'
+            '    N-GRID siempre está referido a la unión de la red eléctrica (casi 0 V a PE): CY_RED no fuga, y en modo inversor K2 lo separa de la salida.  Nunca un capacitor Y en un vivo ni en N-INV.\n'
             '  • L_F (E65 N87) en serie con el NEUTRO del trafo, ANTES de C_F (como el OutBack FX): L_F + dispersión ≈ 2 mH.  Fuera de la tarjeta (peso y calor), con fastons N-TRAFO → L_F → N-INV.\n'
             '    Lleva toda la corriente de carga y de falla: entrehierro para no saturar con el pico de arranque (~18 A) y alambre que nunca se abra (el neutro no se interrumpe).',
             loc='right', fontsize=FS - 1, halign='left', valign='top')

@@ -164,7 +164,7 @@ Las referencias corresponden al esquemático de KiCad de la tarjeta de control (
 | J_RIESGO | jumper 2 pines, **rojo** | Riesgo autorizado: pone SENSOR_OK a GND a la fuerza → **opera sin protección de sobrecorriente** | Físico, visible, no depende del firmware | Puesto por error: el equipo opera **sin protección**. Por eso es rojo y lleva serigrafía |
 | R16 | 10 kΩ | Resistencia de base de Q1 (Q_EN) | Con R26: (5 − 0.7) / 20 kΩ ≈ **0.21 mA** de base → Q1 hunde 5 mA con ganancia forzada de ~24 | Abierta: Q1 no corta por sensor |
 | Q1 (Q_EN) | BC547 (TO-92, 1 = C, 2 = B, 3 = E) | **Ejecuta el corte**: cuando SENSOR_OK sube, jala EN_HW a ~0.1 V | hFE mínimo de 110 contra ~24 necesario: satura con margen de 4× | Abierto: no corta por sensor. Por eso existe la prueba 4 en banco |
-| R24 | 10 kΩ a GND | **Pull-down de EN_HW.** Con el Nano en reset, el switch abierto o su cable suelto, EN_HW = 0 | Débil frente a D12 (cae solo ~0.45 V por R25); fuerte frente a fugas y ruido | **Obligatoria.** Sin ella, EN_HW flota en reset y con el cable del switch suelto |
+| R24 | 10 kΩ a GND | **Pull-down de EN_HW.** Con el microcontrolador en reset, el switch abierto o su cable suelto, EN_HW = 0 | Débil frente a D12 (cae solo ~0.45 V por R25); fuerte frente a fugas y ruido | **Obligatoria.** Sin ella, EN_HW flota en reset y con el cable del switch suelto |
 | SW on/off | interruptor de panel, por cable | El operador autoriza. **En serie** con D12 | En serie (no a GND): si el cable se suelta, EN_HW cae por R24 → apagado. "Si se suelta, ya no prende" | — |
 | R25 | 1 kΩ | Limita la corriente de D12 cuando Q1 o D9 jalan EN_HW a 0 | 5 V / 1 kΩ = 5 mA: muy por debajo de los 40 mA máximos del pin | **Obligatoria.** Sin ella, D12 en 1 contra Q1 saturado sería un corto del pin |
 | D9 (D_K) | 1N4148, **cátodo hacia AUX_KILL** | Candado del AUX: si D7 del AUX = 0, jala EN_HW a ~0.8 V | Diodo: el AUX puede **apagar**, pero nunca **encender** (D7 en 1 no conduce) | Al revés: el AUX nunca podría enclavar el apagado |
@@ -185,7 +185,7 @@ Lo que **debe** pasar. Si en banco algo no coincide, hay una falla (ver sección
 | Sensor ausente o cable roto | 5 V (por R26) | conduce | ~0.1 V | 0 0 0 0 | **No arranca** |
 | Sensor sin alimentación (sin 15 V) | 5 V | conduce | ~0.1 V | 0 0 0 0 | **No arranca** |
 | SW en OFF o su cable suelto | — | — | 0 V (R24) | 0 0 0 0 | Apagado |
-| Nano CRÍTICO en reset o programándose | — | — | 0 V (R24) | 0 0 0 0 | Apagado (D12 flota) |
+| Microcontrolador CRÍTICO en reset o programándose | — | — | 0 V (R24) | 0 0 0 0 | Apagado (D12 flota) |
 | AUX_KILL = 0 (apagado enclavado) | — | — | ~0.8 V | 0 0 0 0 | Apagado hasta ENTER |
 | **J_RIESGO puesto** (con o sin sensor) | 0 V | apagado | ~4.55 V | = PWM | **Opera SIN protección de sobrecorriente** |
 
@@ -291,7 +291,7 @@ Regla de trinchera: **"que necesite el cable siempre para encender; si se suelta
 
 ### 7.6 Sin pull-downs en las entradas PWM
 
-No hacen falta: con el Nano en reset, R24 deja EN_HW en 0 y las 4 salidas quedan en 0 sin importar lo que haya en las entradas PWM. Además, los módulos de gate driver traen su propio pull-down de entrada. **Nunca se unen las entradas PWM entre sí:** sería conducción cruzada en el puente H.
+No hacen falta: con el microcontrolador en reset, R24 deja EN_HW en 0 y las 4 salidas quedan en 0 sin importar lo que haya en las entradas PWM. Además, los módulos de gate driver traen su propio pull-down de entrada. **Nunca se unen las entradas PWM entre sí:** sería conducción cruzada en el puente H.
 
 ### 7.7 Por qué el 74HC08 va en zócalo
 
@@ -506,7 +506,7 @@ Lo que se sabe que se puede discutir. Se deja escrito a propósito:
 5. Microchip, *ATmega328P*, hoja de datos: interrupciones externas INT0/INT1, interrupciones por cambio de pin (PCINT0 en PB0), corriente máxima por pin de E/S (40 mA absoluto), watchdog.
 6. Toshiba, *TLP250 Photocoupler for gate drive*, hoja de datos: t<sub>pLH</sub> y t<sub>pHL</sub> típ. 0.15 µs / máx. 0.5 µs (I<sub>F</sub> = 8 mA). <https://toshiba.semicon-storage.com/info/docget.jsp?did=16821> (copia consultada: <https://akizukidenshi.com/goodsaffix/TLP250.pdf>)
 7. IPC-2221, *Generic Standard on Printed Board Design*: ancho de pistas y separación entre conductores.
-8. [Decisiones críticas de diseño](decisiones_criticas.md): DC-010 (reparto entre los dos ATmega), DC-012 (alimentación de los Nano por +5V), DC-014 (esta decisión).
+8. [Decisiones críticas de diseño](decisiones_criticas.md): DC-010 (reparto entre los dos ATmega), DC-012 (alimentación de los Arduino Nano por +5V), DC-014 (esta decisión).
 9. [Sensado de corriente DC y AC](sensado_corriente.md): protección por hardware y objetivo de tiempo de corte.
 
 ---
