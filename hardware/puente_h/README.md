@@ -38,9 +38,9 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 | Archivo | Contenido |
 | --- | --- |
 | `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pro` | Proyecto de KiCad 9 (ábrelo para cargar todo) |
-| `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_sch` | Esquemático principal (hoja raíz, KiCad 9) |
-| `CAPASITORES.kicad_sch` | Hoja jerárquica: banco de capacitores del bus |
-| `untitled.kicad_sch` | Hoja jerárquica: disipadores |
+| `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_sch` | Esquemático principal (hoja raíz A3 por bloques A–I, KiCad 9) |
+| `CAPACITORES.kicad_sch` | Hoja jerárquica: banco de capacitores del bus (antes `CAPASITORES.kicad_sch`) |
+| `DISIPADORES.kicad_sch` | Hoja jerárquica: disipadores (antes `untitled.kicad_sch`) |
 | `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pcb` | Layout |
 | `Heatsink_Fischer_SK129-STS_50.8mm.step` | Modelo 3D del disipador Fischer SK 129 50.8 STS (hecho con las coordenadas de la huella oficial de KiCad) |
 | `Disipador_V8511Y_equiv.step` | Modelo 3D aproximado de un disipador equivalente (versión anterior, ya no se usa en el layout) |
@@ -50,6 +50,24 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 ---
 
 ## 3. Cómo está organizada
+
+![Esquemático del puente H por bloques](img/esquematico_puente_h.png)
+
+*Hoja raíz (KiCad 9, A3) por bloques, pensada para quien arma y repara:*
+
+| Bloque | Contenido |
+| --- | --- |
+| **A** | Entrada de batería (Faston J5/J6 = BAT+, J1/J2 = BAT−) |
+| **B** | Shunts R16/R28/R17 con sus Kelvin NT5/NT6 y el sensor J3 |
+| **C** | Pierna A (VS1, 24 kHz): Q1/Q2 con su red de compuerta, Kelvin y bornes J24/J27 |
+| **D** | Pierna B (VS2, 60 Hz): Q3/Q4, igual que la A, con bornes J23/J22 |
+| **E** | Sockets J10 (A) y J9 (B) de los gate drivers |
+| **F** | Alimentación **15V_GA** (J7, LED D6) y **15V_GB** (J4, LED D5) |
+| **G** | Salida J8 al buck, con R14 |
+| **H** | Hojas jerárquicas CAPACITORES y DISIPADORES |
+| **I** | Notas al día y guía rápida de trinchera |
+
+*Cada bloque lleva su nota: qué hace, qué medir y qué pasa si algo va mal.*
 
 ```
  BATERÍA 48 V
@@ -94,9 +112,9 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 | J23, J22 | Borne M3 con vías | **VS2** | Dos cables en paralelo a la otra terminal |
 | J10 | Socket 1 × 9, 2.54 mm | Gate driver de la pierna A | Pinout en la tabla siguiente |
 | J9 | Socket 1 × 9, 2.54 mm | Gate driver de la pierna B | Mismo pinout |
-| J7 | JST EH 2 pines | 15V_GA + GND | Alimentación del gate driver A (LED D6) |
-| J4 | JST EH 2 pines | 15V + GND | Alimentación del gate driver B y del sensor (LED D5) |
-| J3 | Header 1 × 6, 2.54 mm | 1 GND · 2 IN+ · 3 IN− · 4 GND · 5 **llave** · 6 15V | Módulo SENSOR_DC_INA_COMPARADOR (sensado Kelvin del shunt) |
+| J7 | JST EH 2 pines | **15V_GA** + GND | Alimentación del gate driver A (J10) **solamente** (LED D6) |
+| J4 | JST EH 2 pines | **15V_GB** + GND | Alimentación del gate driver B (J9) y del sensor J3 (LED D5) |
+| J3 | Header 1 × 6, 2.54 mm | 1 GND · 2 IN+ · 3 IN− · 4 GND · 5 **llave** · 6 15V_GB | Módulo SENSOR_DC_INA_COMPARADOR (sensado Kelvin del shunt) |
 | J8 | JST EH 2 pines | 48 V protegido + GND | Al buck de 15 V de la tarjeta de control, a través de R14 (sección 10) |
 
 **Pinout de J10 y J9** (igual al J5 de todos los módulos gate driver; ver `docs/identificacion_dt_pin9.md`):
@@ -109,7 +127,7 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 | 4 | GND_KELVIN_A | GND_KELVIN_B | Retorno Kelvin del MOSFET bajo |
 | 5 | LO_A | LO_B | Gate del MOSFET bajo |
 | 6 | GND | GND | Tierra de potencia |
-| 7 | 15V_GA | 15V | Alimentación del módulo |
+| 7 | 15V_GA | 15V_GB | Alimentación del módulo (cada pierna con su propio 15 V) |
 | 8 | **Llave** (posición tapada) | **Llave** | Poka-yoke: el módulo solo entra en una posición |
 | 9 | NC | NC | Reservado |
 
@@ -333,11 +351,11 @@ La auditoría completa está en [`auditoria/README.md`](auditoria/README.md). Re
 
 | Ref. | Cant. | Valor / parte | Huella | Notas |
 | --- | --- | --- | --- | --- |
-| Q1–Q4 | 4 | Infineon IRF100P219 | TO-247-3 vertical | — |
+| Q1–Q4 | 4 | Infineon IRF100P219 (canal N) | TO-247-3 vertical | Pines 1 G · 2 D · 3 S |
 | HS5–HS8 | 4 | Fischer SK 129 50.8 STS | Heatsink_Fischer_SK129-STS_42x25mm | Soldado a la net de su MOSFET |
 | C1–C4 | 4 | Rubycon 100ZLH820MEFC18X40 | CP_Radial_D18.0mm_P7.50mm | No reducir la cantidad |
-| C5–C8 | 4 | 10 µF X7R, ≥ 100 V | 1210 | B.Cu, entre los pines del Rubycon |
-| C11–C14 | 4 | 4.7 µF X7R, ≥ 100 V | 1210 | F.Cu, sobre la frontera de planos |
+| C5–C8 | 4 | 10 µF X7R, 100 V | 1210 | B.Cu, entre los pines del Rubycon |
+| C11–C14 | 4 | 4.7 µF X7R, 100 V | 1210 | F.Cu, sobre la frontera de planos |
 | C9 | 1 | 1 µF / 250 V MKP | C_Rect_L26.5mm_W7.0mm_P22.50mm | — |
 | C10 | 1 | 1 µF / 250 V MKS | Ídem | — |
 | R16, R28 (R17) | 2 (3) | Littelfuse SSA2512LR001FWR, 1 mΩ 6 W | SSA2512_Littelfuse_Kelvin | R16 siempre montada |
@@ -388,6 +406,7 @@ La auditoría completa está en [`auditoria/README.md`](auditoria/README.md). Re
 | 2026-11-05 | Auditoría con MOSFET y Rubycon; sensibilidad y validación del método | Todo dentro de sus límites, incluso en el caso pesimista |
 | 2026-11-05 | Ventanas del MOSFET bajo con cuello en la pata central: Q2 a 2.50 mm del gate y 2.85 mm de GND; Q4 a 2.84 / 3.12 mm. Las del MOSFET alto quedan a 1.98–1.99 mm del pin de 48 V. Serigrafía HO_A / LO_A corregida | Verificado con la geometría exacta; sin pistas con net distinta a su pad ni referencias duplicadas: **lista para fabricar** |
 | 2026-11-05 | Nets de compuerta unificadas: `HO_A` / `LO_A` (pierna A) y `HO_B` / `LO_B` (pierna B), de J10/J9 hasta las redes de gate | Ninguna pista queda con net distinta a la del pad que toca |
+| 2026-11-12 | **Hoja raíz rehecha en A3 por bloques A–I** (antes casi todo quedaba fuera de la hoja A4); MOSFET con símbolo de **canal N** (antes `IRF4905`, canal P; los pines 1 G · 2 D · 3 S no cambian); D1–D4 con símbolo de diodo rápido (antes Schottky SS14); red **15V → 15V_GB**, pareja de 15V_GA como en la tarjeta de control; hojas renombradas a **CAPACITORES** y **DISIPADORES**; valores con voltaje y dieléctrico (cerámicos 100 V X7R, Rubycon 100 V ZLH); notas al día (tiempo muerto por P9, 33 A RMS, bootstrap en los módulos); J3-5 y J9/J10-3, 8, 9 marcados sin conexión; se quitaron los buses de adorno | Conexiones idénticas a la versión anterior (comparadas pin por pin). PCB sincronizado: red 15V_GB, nombres de hoja y valores; sin mover huellas ni pistas; la serigrafía no cambia |
 
 ---
 

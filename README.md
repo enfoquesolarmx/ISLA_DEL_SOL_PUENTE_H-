@@ -99,8 +99,8 @@ ISLA_DEL_SOL_PUENTE_H-/
     ├── puente_h/
     │   ├── README.md                               ← tarjeta de potencia
     │   ├── PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pro / .kicad_sch / .kicad_pcb
-    │   ├── CAPASITORES.kicad_sch                   ← hoja: banco de capacitores
-    │   ├── untitled.kicad_sch                      ← hoja: disipadores
+    │   ├── CAPACITORES.kicad_sch                   ← hoja: banco de capacitores
+    │   ├── DISIPADORES.kicad_sch                   ← hoja: disipadores
     │   ├── Heatsink_Fischer_SK129-STS_50.8mm.step  ← modelo 3D del disipador
     │   ├── Disipador_V8511Y_equiv.step             ← modelo 3D aproximado (versión anterior)
     │   ├── SSA2512_Littelfuse_Kelvin.kicad_mod     ← huella del shunt
@@ -166,7 +166,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 
 | Tarjeta | Documento | Archivos KiCad | Qué incluye |
 | --- | --- | --- | --- |
-| **Puente H SPWM 48 V** (REV C) | [README](hardware/puente_h/README.md) · [Auditoría](hardware/puente_h/auditoria/README.md) | ✓ Esquemático (3 hojas) y PCB | 4 × IRF100P219 con disipador SK 129; pierna A a 24 kHz y B a 60 Hz; sockets universales J10/J9 con llave; banco Rubycon + cerámicos con plano partido y lazo doblado (~4 nH); shunts con Kelvin; transformador compatible 24–28 V / 120 V; salida protegida al buck (R14 + T1A, buck ≥ 80 V); **cobre de 1 oz como condición de trinchera**, con **auditoría de corriente y temperatura** (MOSFET, Rubycon y cobre) y refuerzo opcional con alambre 12 AWG; ensamble, validación, BOM y pendientes |
+| **Puente H SPWM 48 V** (REV C) | [README](hardware/puente_h/README.md) · [Auditoría](hardware/puente_h/auditoria/README.md) | ✓ Esquemático (3 hojas; raíz A3 por bloques con guía de trinchera) y PCB | 4 × IRF100P219 con disipador SK 129; pierna A a 24 kHz y B a 60 Hz; sockets universales J10/J9 con llave; banco Rubycon + cerámicos con plano partido y lazo doblado (~4 nH); shunts con Kelvin; transformador compatible 24–28 V / 120 V; salida protegida al buck (R14 + T1A, buck ≥ 80 V); **cobre de 1 oz como condición de trinchera**, con **auditoría de corriente y temperatura** (MOSFET, Rubycon y cobre) y refuerzo opcional con alambre 12 AWG; ensamble, validación, BOM y pendientes |
 
 ### Tarjeta de control (`hardware/control/`)
 

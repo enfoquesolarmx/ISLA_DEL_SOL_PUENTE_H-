@@ -44463,7 +44463,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "820UF"
+		(property "Value" "820µF 100V Rubycon ZLH"
 			(at 21.59 49.9109 0)
 			(effects
 				(font
@@ -44533,7 +44533,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "10UF_XR7"
+		(property "Value" "10µF 100V X7R"
 			(at 102.87 91.4399 0)
 			(effects
 				(font
@@ -44602,7 +44602,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "820UF"
+		(property "Value" "820µF 100V Rubycon ZLH"
 			(at 21.59 27.0509 0)
 			(effects
 				(font
@@ -44671,7 +44671,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "820UF"
+		(property "Value" "820µF 100V Rubycon ZLH"
 			(at 39.37 27.0509 0)
 			(effects
 				(font
@@ -44740,7 +44740,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "820UF"
+		(property "Value" "820µF 100V Rubycon ZLH"
 			(at 39.37 49.9109 0)
 			(effects
 				(font
@@ -44810,7 +44810,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "4.7UF_XR7"
+		(property "Value" "4.7µF 100V X7R"
 			(at 62.23 83.8199 0)
 			(effects
 				(font
@@ -44880,7 +44880,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "4.7UF_XR7"
+		(property "Value" "4.7µF 100V X7R"
 			(at 44.45 83.8199 0)
 			(effects
 				(font
@@ -44950,7 +44950,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "10UF_XR7"
+		(property "Value" "10µF 100V X7R"
 			(at 120.65 91.4399 0)
 			(effects
 				(font
@@ -45090,7 +45090,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "10UF_XR7"
+		(property "Value" "10µF 100V X7R"
 			(at 120.65 67.3099 0)
 			(effects
 				(font
@@ -45160,7 +45160,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "4.7UF_XR7"
+		(property "Value" "4.7µF 100V X7R"
 			(at 44.45 107.9499 0)
 			(effects
 				(font
@@ -45230,7 +45230,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "4.7UF_XR7"
+		(property "Value" "4.7µF 100V X7R"
 			(at 62.23 107.9499 0)
 			(effects
 				(font
@@ -45300,7 +45300,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "10UF_XR7"
+		(property "Value" "10µF 100V X7R"
 			(at 102.87 67.3099 0)
 			(effects
 				(font

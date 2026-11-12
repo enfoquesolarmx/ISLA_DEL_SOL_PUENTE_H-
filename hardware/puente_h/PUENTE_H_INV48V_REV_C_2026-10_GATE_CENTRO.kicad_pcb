@@ -102,7 +102,7 @@
 	(net 22 "GND_IN")
 	(net 23 "VS2_k")
 	(net 24 "15V_GA")
-	(net 25 "15V")
+	(net 25 "15V_GB")
 	(net 26 "unconnected-(J9-Pin_9-Pad9)")
 	(net 27 "Net-(D5-K)")
 	(net 28 "Net-(D6-K)")
@@ -131,7 +131,7 @@
 				)
 			)
 		)
-		(property "Value" "INPUT_INA"
+		(property "Value" "SENSOR_DC (llave en 5)"
 			(at 0 15.08 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -394,7 +394,7 @@
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net 25 "15V")
+			(net 25 "15V_GB")
 			(pinfunction "Pin_6")
 			(pintype "passive")
 			(uuid "0f803ebf-ba27-4946-825c-d5835f7fcc04")
@@ -792,7 +792,7 @@
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net 25 "15V")
+			(net 25 "15V_GB")
 			(pinfunction "Pin_7")
 			(pintype "passive")
 			(uuid "d5ac3499-3520-454d-8e90-fc10d309827c")
@@ -850,7 +850,7 @@
 				)
 			)
 		)
-		(property "Value" "820UF"
+		(property "Value" "820µF 100V Rubycon ZLH"
 			(at 3.75 10.25 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -888,8 +888,8 @@
 		)
 		(property ki_fp_filters "CP_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/7bb2f5b0-8a47-4f65-b28c-34d884baa270")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr through_hole)
 		(fp_line
 			(start 3.83 -9.08)
@@ -4026,7 +4026,7 @@
 				)
 			)
 		)
-		(property "Value" "FAS"
+		(property "Value" "BAT− (GND_IN)"
 			(at 0 1 90)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -4472,7 +4472,7 @@
 			(size 1.25 1.75)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(roundrect_rratio 0.2)
-			(net 25 "15V")
+			(net 25 "15V_GB")
 			(pinfunction "A")
 			(pintype "passive")
 			(uuid "0e05aa9a-879d-44c0-b5ad-1a93f7fed8eb")
@@ -4845,8 +4845,8 @@
 		)
 		(property ki_fp_filters "C_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/174fda12-f966-4f7e-be6a-10f5428510a7")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr through_hole)
 		(fp_line
 			(start 24.62 -3.62)
@@ -4972,7 +4972,7 @@
 				)
 			)
 		)
-		(property "Value" "820UF"
+		(property "Value" "820µF 100V Rubycon ZLH"
 			(at -8.9 -0.75 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -5010,8 +5010,8 @@
 		)
 		(property ki_fp_filters "CP_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/5dea3f2c-e072-4938-ad04-a19b07f281eb")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr through_hole)
 		(fp_line
 			(start 3.83 -9.08)
@@ -8395,7 +8395,7 @@
 				)
 			)
 		)
-		(property "Value" "1mΩ 6W"
+		(property "Value" "1mΩ 6W (Kelvin, siempre)"
 			(at 0 2.9 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -8609,7 +8609,7 @@
 		(property ki_fp_filters "Heatsink_*")
 		(path "/cfc34b60-ba6d-4c84-8f16-b06184006647/26d02487-867e-4b45-a105-8bb6e6c1abec")
 		(sheetname "/DISIPADORES/")
-		(sheetfile "untitled.kicad_sch")
+		(sheetfile "DISIPADORES.kicad_sch")
 		(attr through_hole)
 		(fp_line
 			(start -20.89 -11.57)
@@ -10428,7 +10428,7 @@
 				)
 			)
 		)
-		(property "Value" "4.7UF_XR7"
+		(property "Value" "4.7µF 100V X7R"
 			(at 0 2.3 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -10466,8 +10466,8 @@
 		)
 		(property ki_fp_filters "C_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/a5ba8d45-f984-4a98-9fe4-86e07c1c35b3")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr smd)
 		(fp_line
 			(start -0.711252 -1.36)
@@ -10630,7 +10630,7 @@
 				)
 			)
 		)
-		(property "Value" "FAS"
+		(property "Value" "BAT+ (48V)"
 			(at 0 1 90)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -11012,7 +11012,7 @@
 				)
 			)
 		)
-		(property "Value" "2.2Ω"
+		(property "Value" "2.2Ω ½W"
 			(at -3.3 -0.1 0)
 			(layer "F.SilkS")
 			(uuid "e401dc89-e624-4216-9f04-dfd973abb0c0")
@@ -11434,7 +11434,7 @@
 				)
 			)
 		)
-		(property "Value" "4.7UF_XR7"
+		(property "Value" "4.7µF 100V X7R"
 			(at 0 2.3 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -11472,8 +11472,8 @@
 		)
 		(property ki_fp_filters "C_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/a1c60b4f-e773-4f7e-9e4c-f4752d7b11cf")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr smd)
 		(fp_line
 			(start -0.711252 -1.36)
@@ -11634,7 +11634,7 @@
 				)
 			)
 		)
-		(property "Value" "15V-GND"
+		(property "Value" "15V_GA"
 			(at 1.25 3.8 90)
 			(layer "F.SilkS")
 			(uuid "61fc9007-3344-425d-ae83-a39a18dd83f9")
@@ -12223,7 +12223,7 @@
 				)
 			)
 		)
-		(property "Value" "4.7UF_XR7"
+		(property "Value" "4.7µF 100V X7R"
 			(at 0 2.3 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -12261,8 +12261,8 @@
 		)
 		(property ki_fp_filters "C_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/96e5d958-bf2c-42c7-8ebb-7a10a5fa9511")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr smd)
 		(fp_line
 			(start -0.711252 -1.36)
@@ -12424,7 +12424,7 @@
 				)
 			)
 		)
-		(property "Value" "FAS"
+		(property "Value" "BAT− (GND_IN)"
 			(at 0 1 90)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -12572,7 +12572,7 @@
 				)
 			)
 		)
-		(property "Value" "820UF"
+		(property "Value" "820µF 100V Rubycon ZLH"
 			(at 3.75 10.25 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -12610,8 +12610,8 @@
 		)
 		(property ki_fp_filters "CP_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/300a897d-f755-48cb-b73b-454fbe2c3c4e")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr through_hole)
 		(fp_line
 			(start 3.83 -9.08)
@@ -16173,7 +16173,7 @@
 		(property ki_fp_filters "Heatsink_*")
 		(path "/cfc34b60-ba6d-4c84-8f16-b06184006647/3ca290e3-2af7-4bf7-804f-680bd8e335c3")
 		(sheetname "/DISIPADORES/")
-		(sheetfile "untitled.kicad_sch")
+		(sheetfile "DISIPADORES.kicad_sch")
 		(attr through_hole)
 		(fp_line
 			(start -20.89 -11.57)
@@ -17992,7 +17992,7 @@
 				)
 			)
 		)
-		(property "Value" "4.7UF_XR7"
+		(property "Value" "4.7µF 100V X7R"
 			(at 0 2.3 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -18030,8 +18030,8 @@
 		)
 		(property ki_fp_filters "C_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/7ee083ad-1f00-4bc8-8c76-0882ba06ef12")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr smd)
 		(fp_line
 			(start -0.711252 -1.36)
@@ -18233,7 +18233,7 @@
 		(property ki_fp_filters "Heatsink_*")
 		(path "/cfc34b60-ba6d-4c84-8f16-b06184006647/deebc98c-94a4-4ce7-96ff-bb3562fc982c")
 		(sheetname "/DISIPADORES/")
-		(sheetfile "untitled.kicad_sch")
+		(sheetfile "DISIPADORES.kicad_sch")
 		(attr through_hole)
 		(fp_line
 			(start -20.89 -11.57)
@@ -20829,7 +20829,7 @@
 				)
 			)
 		)
-		(property "Value" "FAS"
+		(property "Value" "BAT+ (48V)"
 			(at 0 1 90)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -21263,7 +21263,7 @@
 				)
 			)
 		)
-		(property "Value" "48V-GND"
+		(property "Value" "48V → BUCK (≥80 V)"
 			(at 1.25 3.4 0)
 			(layer "F.Fab")
 			(uuid "c7037559-c669-4be5-9a6f-da8a448c2276")
@@ -21655,8 +21655,8 @@
 		)
 		(property ki_fp_filters "C_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/9b47d7b3-0e76-4063-b6c5-4992497b63bf")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr through_hole)
 		(fp_line
 			(start 24.62 -3.62)
@@ -21782,7 +21782,7 @@
 				)
 			)
 		)
-		(property "Value" "820UF"
+		(property "Value" "820µF 100V Rubycon ZLH"
 			(at 3.75 10.25 90)
 			(layer "F.Fab")
 			(uuid "2aefb760-7bb7-4aa0-af14-fbf3ae9263b6")
@@ -21819,8 +21819,8 @@
 		)
 		(property ki_fp_filters "CP_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/5b9814ab-60e7-4264-abeb-2c0171c1a203")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr through_hole)
 		(fp_line
 			(start 3.83 -9.08)
@@ -25008,7 +25008,7 @@
 		(property ki_fp_filters "Heatsink_*")
 		(path "/cfc34b60-ba6d-4c84-8f16-b06184006647/dfc4c834-cbea-4939-bf3f-51f2b35d1fbb")
 		(sheetname "/DISIPADORES/")
-		(sheetfile "untitled.kicad_sch")
+		(sheetfile "DISIPADORES.kicad_sch")
 		(attr through_hole)
 		(fp_line
 			(start -20.89 -11.57)
@@ -26826,7 +26826,7 @@
 				)
 			)
 		)
-		(property "Value" "15V-GND"
+		(property "Value" "15V_GB"
 			(at 1.2 3.7 90)
 			(layer "F.SilkS")
 			(uuid "7931b853-eb7a-4ae3-b4ea-2a15844e9dd9")
@@ -27135,7 +27135,7 @@
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
 			(roundrect_rratio 0.147059)
-			(net 25 "15V")
+			(net 25 "15V_GB")
 			(pinfunction "Pin_1")
 			(pintype "passive")
 			(clearance 0.3)
@@ -27385,7 +27385,7 @@
 				)
 			)
 		)
-		(property "Value" "NetTie_2"
+		(property "Value" "Kelvin"
 			(at 0 1.2 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -27479,7 +27479,7 @@
 				)
 			)
 		)
-		(property "Value" "1mΩ 6W"
+		(property "Value" "1mΩ 6W (opcional)"
 			(at 0 2.9 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -27865,7 +27865,7 @@
 				)
 			)
 		)
-		(property "Value" "NetTie_2"
+		(property "Value" "Kelvin"
 			(at 0 1.2 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -27960,7 +27960,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "10UF_XR7"
+		(property "Value" "10µF 100V X7R"
 			(at 0 -2.3 90)
 			(layer "B.Fab")
 			(hide yes)
@@ -28001,8 +28001,8 @@
 		)
 		(property ki_fp_filters "C_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/eb166417-e42b-4d96-917d-a7b3763386df")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr smd)
 		(fp_line
 			(start -0.711252 -1.36)
@@ -28370,7 +28370,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "10UF_XR7"
+		(property "Value" "10µF 100V X7R"
 			(at 0 -2.3 90)
 			(layer "B.Fab")
 			(hide yes)
@@ -28411,8 +28411,8 @@
 		)
 		(property ki_fp_filters "C_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/9a8622ea-8126-440d-a979-0b23b5accfe2")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr smd)
 		(fp_line
 			(start -0.711252 -1.36)
@@ -29262,7 +29262,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "NetTie_2"
+		(property "Value" "Kelvin"
 			(at 0 -1.2 90)
 			(layer "B.Fab")
 			(hide yes)
@@ -29564,7 +29564,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "NetTie_2"
+		(property "Value" "Kelvin"
 			(at 0 -1.2 0)
 			(layer "B.Fab")
 			(hide yes)
@@ -29867,7 +29867,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "10UF_XR7"
+		(property "Value" "10µF 100V X7R"
 			(at 0 -2.3 90)
 			(layer "B.Fab")
 			(hide yes)
@@ -29908,8 +29908,8 @@
 		)
 		(property ki_fp_filters "C_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/4ecac285-4b54-4f09-896d-224730bc5f03")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr smd)
 		(fp_line
 			(start -0.711252 -1.36)
@@ -30543,7 +30543,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "10UF_XR7"
+		(property "Value" "10µF 100V X7R"
 			(at 0 -2.3 90)
 			(layer "B.Fab")
 			(hide yes)
@@ -30584,8 +30584,8 @@
 		)
 		(property ki_fp_filters "C_*")
 		(path "/a86f0f91-f630-483b-9592-5e6dcf3c3b82/9ba7efc4-593b-406f-9d84-175ed869f353")
-		(sheetname "/CAPASITORES/")
-		(sheetfile "CAPASITORES.kicad_sch")
+		(sheetname "/CAPACITORES/")
+		(sheetfile "CAPACITORES.kicad_sch")
 		(attr smd)
 		(fp_line
 			(start -0.711252 -1.36)
@@ -32251,7 +32251,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "NetTie_2"
+		(property "Value" "Kelvin"
 			(at 0 -1.2 0)
 			(layer "B.Fab")
 			(hide yes)
@@ -32349,7 +32349,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "NetTie_2"
+		(property "Value" "Kelvin"
 			(at 0 -1.2 90)
 			(layer "B.Fab")
 			(hide yes)
