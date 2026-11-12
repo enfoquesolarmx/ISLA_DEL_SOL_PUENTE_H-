@@ -6,7 +6,7 @@
 
 **Licencia:** MIT ([LICENSE.md](../../LICENSE.md))
 
-**Estado:** paso 1, variables de la portadora. **Todavía no genera PWM.**
+**Estado:** paso 2, SPWM híbrida en el ATmega328P, verificada en la PC. **Prueba de banco sin potencia:** D12 (EN_HW) queda en 0 y las señales no pasan de la compuerta AND a los gate drivers.
 
 ---
 
@@ -26,9 +26,13 @@ Cada archivo hace una sola cosa y empieza con un bloque que dice qué hace, qué
 
 | Archivo | Qué hace | Estado |
 | --- | --- | --- |
-| `ISLA_CRITICO.ino` | `setup()` y `loop()`: solo llama a los módulos | ✅ Paso 1: salidas seguras + reporte |
+| `ISLA_CRITICO.ino` | `setup()` y `loop()`: solo llama a los módulos | ✅ Paso 2: reporte + SPWM con rampa de banco (D12 = 0) |
 | `config_portadora.h` | Portadora, muestras, TOP y tiempo muerto en cuentas. Solo constantes, sin registros | ✅ |
-| `spwm.h` + `spwm_328p.cpp` / `spwm_4809.cpp` | Timer de la pierna A, tabla seno, ISR, pierna B en el cruce por cero, arranque suave | Pendiente |
+| `config_spwm.h` | Pulso mínimo y amplitud máxima | ✅ Valores iniciales, por validar en banco |
+| `tabla_seno.h` | Cuarto de onda, 100 muestras Q16 en flash. **Generado** por `herramientas/genera_tabla_seno.py` | ✅ |
+| `spwm.h` + `spwm_328p.cpp` | SPWM híbrida: Timer1, ISR de portadora, pierna B en el cruce por cero, apagado | ✅ 328P |
+| `spwm_4809.cpp` | La misma SPWM con TCA0 | Pendiente: hoy da error al compilar, a propósito |
+| Arranque suave | Rampa de amplitud con el lazo de voltaje | Pendiente (va con `ac_fb_inversor`) |
 | `dt_p9.h/.cpp` | Lectura de P9 al encender y vigilancia ([identificación por P9](../../docs/identificacion_dt_pin9.md)) | Pendiente |
 | `adc_bateria.h/.cpp` | Voltaje y corriente de batería | Pendiente |
 | `ac_fb_inversor.h/.cpp` | Retroalimentación del voltaje de salida y lazo | Pendiente |
@@ -60,6 +64,8 @@ Las constantes se calculan al compilar a partir de `F_CPU`. El reporte de arranq
 | Tiempo muerto 1 µs (P9 abierto) | **16 cuentas** | **20 cuentas** | Redondeo hacia arriba |
 | Comparador alto máximo | 317 | 396 | TOP − tiempo muerto legacy |
 | Tiempo muerto / periodo | 1.2 % / 2.4 % | 1.2 % / 2.4 % | Igual que en modulación SPWM |
+| Pulso mínimo | 8 cuentas (500 ns) | 10 cuentas (500 ns) | `config_spwm.h` |
+| Amplitud máxima | **313** cuentas (m = 0.939) | 391 cuentas (m = 0.939) | TOP − DT legacy − pulso mínimo / 2 |
 
 ### 3.1 Por qué estos números
 
@@ -80,14 +86,121 @@ El firmware **no compila** si pasa algo de esto:
 - Tiempo muerto legacy menor o igual al moderno, o cualquiera de los dos por debajo de su valor en ns.
 - Tiempo muerto mayor que el 10 % del semiperiodo.
 
-## 4. Prueba de banco del paso 1
+## 4. SPWM híbrida (`spwm_328p.cpp`)
 
-**Sin etapa de potencia. Solo el Nano por USB.**
+### 4.1 Qué hace cada pierna
 
-1. Carga el sketch y abre el Monitor Serie a 115200 baudios. Compara el reporte con la sección 3.
-2. Con el multímetro o el osciloscopio, verifica que **D9, D10, D11 y D3 estén en 0 V** desde el encendido. No debe aparecer ningún pulso en el arranque: el firmware fija el nivel antes de configurar el pin como salida.
+| Semiciclo | Pierna B (60 Hz, por la ISR) | Pierna A (24 kHz, por el Timer1) | Salida |
+| --- | --- | --- | --- |
+| **+** | **LB** (D3) encendido | **HA** lleva el pulso de potencia; LA es su complemento | +Vbus × d / TOP |
+| **−** | **HB** (D11) encendido | **LA** lleva el pulso de potencia; HA es su complemento | −Vbus × d / TOP |
 
-## 5. Bitácora
+d = amplitud × |sen θ| (en cuentas). El timer y sus salidas son **los mismos en los dos semiciclos**: solo cambia qué lado de la pierna A lleva el pulso.
+
+| Semiciclo | OCR1A (HA) | OCR1B (LA) |
+| --- | --- | --- |
+| + | d | d + DT |
+| − | TOP − d − DT | TOP − d |
+
+### 4.2 El tiempo muerto lo hace el timer, no el programa
+
+```
+TCNT1   TOP ..........    /\          /\
+                         /  \        /  \
+        OCR1B (LA) ---- /----\------/----\----
+        OCR1A (HA) --- /------\----/------\---
+        BOTTOM ...... /        \  /        \  /
+                                \/          \/
+HA: alta mientras TCNT1 < OCR1A (no invertida, centrada en BOTTOM)
+LA: alta mientras TCNT1 > OCR1B (invertida,    centrada en TOP)
+```
+
+Entre OCR1A y OCR1B hay DT cuentas: en la subida de la rampa, HA se apaga y DT cuentas después prende LA; en la bajada es al revés. **El hueco lo garantiza el hardware en cada flanco**, aunque el programa se atrase o se cuelgue. OCR1A y OCR1B tienen doble búfer: la ISR escribe en BOTTOM los valores del periodo **siguiente**, y tiene 666 ciclos para hacerlo.
+
+### 4.3 Cruce por cero
+
+| Muestra del semiciclo | Pierna A | Pierna B |
+| --- | --- | --- |
+| 1 … 198 | Patrón del semiciclo | Fija |
+| **199** | Apagada (OCR1A = 0, OCR1B = TOP) | **Se apaga** el interruptor que sale |
+| **0** | Apagada | **Se enciende** el interruptor que entra |
+
+- **Tiempo muerto de la pierna B: un periodo completo, 41.6 µs.** Nunca coinciden HB y LB.
+- En las muestras 0 y 199 el seno vale 0.8 %, así que el pulso sería menor que el mínimo y no se generaría de todos modos. No se pierde onda.
+- **La amplitud solo cambia al inicio de un ciclo** (semiciclo +). Los dos semiciclos de cada ciclo salen iguales y **no aparece CD en el transformador**, aunque el lazo cambie la amplitud a cada rato.
+
+### 4.4 Límites del ciclo de trabajo (`config_spwm.h`)
+
+- **Pulso mínimo de 500 ns.** Un pulso más angosto no se genera: el MOSFET no alcanza a encender completo y se calienta sin entregar energía. El pulso centrado en BOTTOM se arma con dos mitades de periodos vecinos y puede quedar con una sola, por eso el umbral es el ancho **completo** (8 cuentas).
+- **Amplitud máxima de 313 cuentas (m = 0.939).** Siempre deja un pulso del lado complementario. **Ese pulso recarga el capacitor de bootstrap** del lado alto en cada periodo: sin él, el lado alto se quedaría sin voltaje de compuerta.
+
+### 4.5 Presupuesto de CPU (medido en simulador, simavr)
+
+| Medición | Ciclos | % de 666 |
+| --- | --- | --- |
+| ISR, mediana | 159 | 24 % |
+| ISR, peor caso | 170 | 26 % |
+| Con latencia de entrada y `reti` | ~180 | **~27 %** |
+
+Más de lo que estimó [DC-017](../../docs/decisiones_criticas.md) (80–120 ciclos): casi todo es la multiplicación de 32 bits y los registros que guarda. Sobra margen para el Timer0 de `millis()` y el puerto serie dentro del periodo. **Pendiente:** medir en banco y, si hace falta espacio para el ADC, optimizar la multiplicación.
+
+## 5. Prueba en la PC (`pruebas/`)
+
+`pruebas/prueba_spwm.cpp` compila **el mismo `spwm_328p.cpp` que va al Nano**, con los registros simulados (`pruebas/avr_simulado/`). Recorre cada periodo cuenta por cuenta con la regla del comparador de la hoja de datos del ATmega328P (modo 8). Verifica:
+
+1. HA y LA nunca encendidos juntos; HB y LB tampoco.
+2. Tiempo muerto de la pierna A ≥ DT pedido, en cada flanco.
+3. Tiempo muerto de la pierna B ≥ 1 periodo.
+4. Ningún pulso de la pierna A menor que el pulso mínimo.
+5. Sin CD por ciclo.
+6. Fundamental de la salida igual a la amplitud pedida (error < 1 %).
+7. Apagado: D12 = 0, las 4 salidas en bajo y el timer detenido.
+
+Se prueba con DT de 500 ns, de 1 µs y con un valor inválido (debe caer en 1 µs), con amplitudes de 0 a 400 (se recorta a 313).
+
+```
+cd firmware/critico
+g++ -std=gnu++11 -O2 -D__AVR_ATmega328P__ -DF_CPU=16000000UL \
+    -Ipruebas/avr_simulado -IISLA_CRITICO \
+    pruebas/prueba_spwm.cpp ISLA_CRITICO/spwm_328p.cpp -o prueba_spwm
+./prueba_spwm
+```
+
+Resultado actual: **todo correcto**. DT mínimo de 8 / 16 cuentas exactas, pierna B 666 cuentas, CD < 0.0001, error de la fundamental −0.24 % a amplitud máxima. Ese error viene de los pulsos que se quitan cerca del cruce por cero.
+
+> **Correr esta prueba cada vez que alguien toque `spwm_328p.cpp` o `config_spwm.h`.** Ya encontró un error: con el umbral a la mitad salían pulsos de 250 ns.
+
+## 6. Prueba de banco del paso 2
+
+**Sin etapa de potencia. Solo el Nano por USB, o la tarjeta de control sin módulos ni puente.**
+
+1. Carga el sketch. El Monitor Serie a 115200 debe mostrar los valores de la sección 3 y **"DT en uso: 16"**: todavía no se lee P9 y se usa el seguro.
+2. Cada 10 s debe imprimir **"Ciclos en 10 s: 600"** o 601 (60.06 Hz).
+3. Con osciloscopio de 2 canales, en los pines del Nano:
+   - **D9 y D10 a la vez:** pulsos de 24.02 kHz, nunca altos juntos. Con zoom en un flanco, **el hueco entre los dos debe ser ≥ 1 µs**.
+   - **D11 y D3 a la vez:** ondas cuadradas de 60.06 Hz, opuestas, con **~41.6 µs** en que los dos están en bajo en cada cambio.
+   - **D9 con disparo en D3:** el ancho de los pulsos de D9 crece y baja como seno durante el semiciclo en que D3 está alto. En el otro semiciclo, D10 hace lo mismo.
+4. **D12 debe estar en 0 V todo el tiempo.** Si la tarjeta de control está armada, en la salida de la compuerta AND (74HC08) no debe haber ningún pulso.
+
+> Si cualquiera de estos puntos falla, **no conectes la etapa de potencia**.
+
+## 7. Qué se tomó del borrador antiguo y qué cambió
+
+El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó **solo como referencia de estudio**. Todo el código de esta carpeta está escrito desde cero (MIT).
+
+| Tema | Borrador | Isla del Sol | Por qué |
+| --- | --- | --- | --- |
+| Timer y modo | Timer1, modo 8, TOP 333 | Igual | Mismo chip y portadora: el resultado es el mismo |
+| Tiempo muerto | Lo hace el timer (OCR1B = OCR1A + TM, OC1B invertida). **TM fijo al compilar** (`TIEMPO_MUERTO_SEL`, según la red de compuerta montada) | Mismo método de hardware. **DT elegido al encender por P9** (8 o 16 cuentas); valor inválido → 16 | Un solo firmware para todos los módulos: el técnico cambia el módulo, no el código |
+| Bordes del semiciclo | Valores especiales (0/0 = lado bajo fijo, TOP/TOP = lado alto fijo) y una bandera de "medio pulso pendiente" entre periodos | **Nunca** se usa un lado fijo encendido: siempre d con su DT, o la pierna A apagada (0/TOP) | Al pasar de un periodo con un lado fijo encendido al siguiente, los dos flancos pueden caer en la misma cuenta (DT = 0); así no hace falta la bandera. Probado cuenta por cuenta |
+| Cruce por cero | Pierna B con ~42.75 µs de tiempo muerto | Igual idea: 2 periodos con la pierna A apagada, pierna B a 1 periodo | Coincide; aquí se verifica en la prueba de la PC |
+| Tabla seno | Medio ciclo en **RAM**, calculada al arrancar | **Cuarto de onda en flash**, muestreada al centro del periodo | 0 B de RAM; espejo exacto |
+| Amplitud | Se aplica por ciclo | Igual: solo al inicio del semiciclo + | Sin CD en el transformador |
+| Pulso mínimo y amplitud máxima | Límite fijo del comparador | Pulso mínimo de 500 ns + amplitud que **siempre** deja pulso de bootstrap | Corregido con la prueba: el pulso de borde puede quedar con una sola mitad |
+| Permiso del puente | No existía (el borrador no tiene la compuerta AND) | **D12 = 0 primero** al apagar; el SPWM nunca lo sube | Corte por hardware ([corte por hardware](../../docs/corte_por_hardware.md)) |
+| Todo en un archivo | 4400 líneas con `#if` | Un archivo por módulo | Lo pediste así: cada archivo se entiende solo |
+
+## 8. Bitácora
 
 | Fecha | Cambio |
 | --- | --- |

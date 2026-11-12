@@ -136,9 +136,14 @@ ISLA_DEL_SOL_PUENTE_H-/
 └── firmware/
     └── critico/                                ← micro CRÍTICO (A1): SPWM, sensado, protecciones
         ├── README.md
-        └── ISLA_CRITICO/                       ← sketch de Arduino, un archivo por módulo
-            ├── ISLA_CRITICO.ino
-            └── config_portadora.h
+        ├── ISLA_CRITICO/                       ← sketch de Arduino, un archivo por módulo
+        │   ├── ISLA_CRITICO.ino
+        │   ├── config_portadora.h / config_spwm.h
+        │   ├── tabla_seno.h                    ← generado (cuarto de onda en flash)
+        │   ├── spwm.h / spwm_328p.cpp          ← SPWM híbrida
+        │   └── spwm_4809.cpp                   ← pendiente
+        ├── herramientas/genera_tabla_seno.py
+        └── pruebas/prueba_spwm.cpp             ← prueba en la PC del mismo spwm_328p.cpp
 ```
 
 Próximamente: `hardware/sensores/` (sensor AC del primario).
@@ -232,7 +237,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | [Tarjeta de transferencia de carga](hardware/transferencia_reles/README.md) (5 relés, DC-019) | **V0.1** (2026-11-11): esquemático y PCB terminados, separaciones de 5 mm / 3 mm verificadas, auditoría térmica a 10 A. Pendiente: comparar los pines del relé de 15 V con la huella, fabricar y validar en banco |
 | [Tarjeta de control SPWM](hardware/control/README.md) | **V0.1** (2026-11-11): esquemático y PCB terminados, DRC sin errores, glosario de módulos. Pendiente: prueba de banco de la caída automática, firmware y validación |
 | [Panel frontal LCD + botonera](hardware/panel/README.md) | **V0.2** (2026-11-11): LCD 16×2 o 20×4, módulo I2C directo a zócalo, esquemático y PCB. Pendiente: medir el módulo I2C real para ubicar J2, firmware de pantallas y SETUP |
-| [Firmware del CRÍTICO](firmware/critico/README.md) | **Paso 1** (2026-11-12): variables de la portadora (24 kHz = 400 × 60 Hz, TOP 333 / 416, tiempo muerto 8/16 o 10/20 cuentas por P9) para 328P y 4809; salidas seguras y reporte de arranque. Pendiente: timer y ISR del SPWM |
+| [Firmware del CRÍTICO](firmware/critico/README.md) | **Paso 2** (2026-11-12): SPWM híbrida en ATmega328P (24.02 kHz, 400 muestras, DT por timer 8/16 cuentas, cruce por cero con 1 periodo de tiempo muerto en la pierna B), verificada en la PC cuenta por cuenta. Prueba de banco sin potencia (D12 = 0). Pendiente: P9, arranque suave, lazo, 4809 |
 | Validación en banco | Pendiente |
 
 ## Misión actual: SPWM con cargador básico de trinchera

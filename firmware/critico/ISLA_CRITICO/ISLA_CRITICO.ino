@@ -5,33 +5,31 @@
  *  Archivo principal: sólo llama a los módulos. La lógica vive en cada
  *  archivo .h / .cpp de esta carpeta (ver README.md).
  *
- *  ESTADO: paso 1 - variables de la portadora (config_portadora.h).
- *    Todavía NO genera PWM. Al encender:
- *      1) pone las 4 salidas hacia los gate drivers en bajo (puente apagado);
- *      2) imprime por el puerto serie los valores calculados de la portadora
- *         para comprobarlos contra la tabla del README antes de seguir.
+ *  ESTADO: paso 2 - SPWM híbrida, PRUEBA DE BANCO SIN POTENCIA.
+ *    Al encender:
+ *      1) puente apagado: D9, D10, D11, D3 en bajo y D12 (EN_HW) = 0;
+ *      2) reporte por el puerto serie de los valores de la portadora;
+ *      3) arranca la SPWM con tiempo muerto de 1 µs (el seguro: todavía no se
+ *         lee P9) y sube la amplitud en rampa hasta el máximo en ~1 s;
+ *      4) cada 10 s imprime los ciclos de 60 Hz generados (deben ser ~600.6).
+ *
+ *    D12 SE QUEDA EN 0 TODO EL TIEMPO: las señales se ven en los pines del Nano
+ *    pero la compuerta AND (74HC08) de la tarjeta de control no las deja pasar
+ *    a los gate drivers. Esta versión NO puede mover el puente H.
  *
  *  Licencia: MIT (ver LICENSE.md del repositorio).
  * =============================================================================
  */
 #include "config_portadora.h"
+#include "config_spwm.h"
+#include "spwm.h"
 
-// Salidas hacia los módulos gate driver (tarjeta de control, CRÍTICO).
-// Mientras no exista spwm.cpp se fuerzan en bajo: puente H apagado.
-constexpr uint8_t PIN_HA = 9;    // pierna A, lado alto (24 kHz)
-constexpr uint8_t PIN_LA = 10;   // pierna A, lado bajo (24 kHz)
-constexpr uint8_t PIN_HB = 11;   // pierna B, lado alto (60 Hz)
-constexpr uint8_t PIN_LB = 3;    // pierna B, lado bajo (60 Hz)
+// Rampa de prueba de banco: cuentas que sube la amplitud en cada ciclo de 60 Hz.
+// 313 cuentas / 5 por ciclo = 63 ciclos ≈ 1 s. NO es el arranque suave final
+// (ése irá con el lazo de voltaje en ac_fb_inversor).
+constexpr uint8_t RAMPA_BANCO_CUENTAS_POR_CICLO = 5;
 
-static void salidasSeguras() {
-  // Primero el nivel, luego la dirección: el pin nunca sale en alto.
-  digitalWrite(PIN_HA, LOW); pinMode(PIN_HA, OUTPUT);
-  digitalWrite(PIN_LA, LOW); pinMode(PIN_LA, OUTPUT);
-  digitalWrite(PIN_HB, LOW); pinMode(PIN_HB, OUTPUT);
-  digitalWrite(PIN_LB, LOW); pinMode(PIN_LB, OUTPUT);
-}
-
-// Imprime un valor en centésimas o milésimas como decimal, sin usar float.
+// Imprime un valor en décimas, centésimas o milésimas sin usar float.
 static void imprimirFijo(uint32_t v, uint16_t div) {
   Serial.print(v / div);
   Serial.print('.');
@@ -40,7 +38,7 @@ static void imprimirFijo(uint32_t v, uint16_t div) {
 }
 
 static void reportePortadora() {
-  Serial.println(F("=== Isla del Sol - CRITICO - portadora SPWM ==="));
+  Serial.println(F("=== Isla del Sol - CRITICO - SPWM hibrida (banco) ==="));
 #if ISLA_CHIP_328P
   Serial.println(F("Chip: ATmega328P (Timer1 phase-correct)"));
 #else
@@ -56,14 +54,40 @@ static void reportePortadora() {
   Serial.print(F("ns por cuenta:           ")); imprimirFijo(NS_X10_POR_CUENTA, 10); Serial.println();
   Serial.print(F("DT 500 ns (cuentas):     ")); Serial.println(DT_MODERNO_CUENTAS);
   Serial.print(F("DT 1 us   (cuentas):     ")); Serial.println(DT_LEGACY_CUENTAS);
-  Serial.print(F("Comparador alto max:     ")); Serial.println(COMPARADOR_ALTO_MAX);
+  Serial.print(F("Pulso minimo (cuentas):  ")); Serial.println(PULSO_MIN_CUENTAS);
+  Serial.print(F("Amplitud max (cuentas):  ")); Serial.println(AMPLITUD_MAX_CUENTAS);
+  Serial.print(F("Indice m maximo:         ")); imprimirFijo(M_MAX_MILESIMAS, 1000); Serial.println();
+  Serial.print(F("DT en uso (cuentas):     ")); Serial.println(spwm_dt_cuentas());
+  Serial.println(F("D12 (EN_HW) = 0: puente bloqueado, prueba sin potencia"));
 }
 
 void setup() {
-  salidasSeguras();          // 1) Puente apagado antes que nada
-  Serial.begin(115200);      // 2) Reporte de arranque (Monitor Serie a 115200)
+  spwm_preparar(DT_LEGACY_CUENTAS);   // 1) Puente apagado y D12 = 0 antes que nada
+  Serial.begin(115200);               // 2) Reporte (Monitor Serie a 115200)
   reportePortadora();
+  spwm_arrancar();                    // 3) SPWM con amplitud 0
 }
 
 void loop() {
+  // Rampa de banco: sube la amplitud una vez por ciclo de 60 Hz.
+  static uint16_t cicloAnterior = 0;
+  static uint16_t amplitud = 0;
+  const uint16_t c = spwm_ciclos();
+  if (c != cicloAnterior) {
+    cicloAnterior = c;
+    if (amplitud < AMPLITUD_MAX_CUENTAS) {
+      amplitud += RAMPA_BANCO_CUENTAS_POR_CICLO;
+      spwm_fijar_amplitud(amplitud);   // se recorta solo al máximo
+    }
+  }
+
+  // Verificación de frecuencia: ciclos en ventanas de 10 s (debe dar ~600.6).
+  static uint32_t t0 = millis();
+  static uint16_t c0 = 0;
+  if (millis() - t0 >= 10000UL) {
+    t0 += 10000UL;
+    Serial.print(F("Ciclos en 10 s: "));
+    Serial.println((uint16_t)(c - c0));
+    c0 = c;
+  }
 }
