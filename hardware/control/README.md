@@ -425,7 +425,7 @@ Dos canales iguales:
 - [ ] Firmware: limitar el PWM del ventilador de 12 V a ~80 %.
 - [ ] Prueba de banco de la caída automática con AUX_KILL (módulo 16).
 - [ ] Firmware: tratar el NTC desconectado como "sensor ausente" (módulo 11).
-- [ ] Render 3D en perspectiva e inferior (opcional).
+- [ ] Render 3D en perspectiva (opcional).
 - [x] DC-019 actualizado: asignación real de J15 (D4 / D5 / D6 del CRÍTICO) y caída automática con R39 + D11.
 
 ## Referencias
