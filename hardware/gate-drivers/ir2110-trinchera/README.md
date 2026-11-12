@@ -2,7 +2,7 @@
 
 **Proyecto:** Puente H — prototipo SPWM "Isla del Sol" (inversor 48 V → 127 V / 60 Hz, 1000 W; modo cargador 1 kVA)
 **Módulo:** gate driver de **medio puente H** (una rama: MOSFET alto + MOSFET bajo), legacy / trinchera, con tótem por canal
-**Intercambiable con:** IRS2186, UCC21520ADWR y TLP250 de trinchera (misma interfaz J2/J5, mismo firmware)
+**Intercambiable con:** IRS2186, UCC21520DW y TLP250 de trinchera (misma interfaz J2/J5, mismo firmware)
 **Versión de placa:** V.0.1.NOV.26.J.G
 **Estado:** diseño terminado; DRC con 0 errores y 0 elementos sin conectar; esquemático por bloques con guía de trinchera (2026-11-12). Pendiente: fabricación y validación en banco
 **Fecha:** 2026-11-04 (esquemático por bloques: 2026-11-12)

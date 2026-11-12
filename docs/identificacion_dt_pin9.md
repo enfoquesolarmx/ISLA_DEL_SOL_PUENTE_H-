@@ -13,7 +13,7 @@ Cada módulo gate driver indica por **la terminal P9 de su conector de entrada J
 
 | P9 del módulo (J1) | Lectura del MCU | Tiempo muerto | Módulos |
 | --- | --- | --- | --- |
-| Conectado a GND | 0 | **500 ns** | IRS2186, UCC21520ADWR |
+| Conectado a GND | 0 | **500 ns** | IRS2186, UCC21520DW |
 | Abierto (sin conectar) | 1 | **1 µs** | TLP250H |
 | Falla (sin módulo, cable suelto, pista rota, soldadura mala) | 1 | **1 µs** | — (valor seguro) |
 
@@ -34,7 +34,7 @@ Con esto hay **un solo firmware** para los tres módulos, y el técnico de campo
 
 | Generación | Ejemplos | Pin 9 | DT | Uso |
 | --- | --- | --- | --- | --- |
-| Moderna | IRS2186, UCC21520ADWR | GND | 500 ns | Producción, mejor calidad de onda |
+| Moderna | IRS2186, UCC21520DW | GND | 500 ns | Producción, mejor calidad de onda |
 | Legacy / trinchera | TLP250H; a futuro otros optoacopladores DIP (TLP350, HCPL-3120) | Abierto | 1 µs | Servicio y reparación en campo con lo disponible |
 
 > **Regla para quien modifique el código fuente:** nunca invertir la lógica (pin abierto = 500 ns). Se rompería el soporte legacy: cualquier módulo de trinchera, o cualquier falla en el pin, llevaría a conducción cruzada. Si en el futuro se agrega otro driver legacy con retardos peores que el TLP250 (> 790 ns en el peor caso), se debe ampliar la identificación (ver sección 7) en lugar de reducir el margen de 1 µs.
@@ -46,7 +46,7 @@ El proyecto tiene tres módulos de gate driver intercambiables (mismo conector d
 | Módulo | Tecnología | Por qué existe | DT mínimo seguro |
 | --- | --- | --- | --- |
 | IRS2186 | Driver de bootstrap, SOIC-8 | Opción principal, bajo costo | ~390 ns → se usa **500 ns** |
-| UCC21520ADWR | Driver aislado, SOIC-16 ancho | Mejor desempeño; interbloqueo y DT de respaldo en hardware | ~390 ns → se usa **500 ns** |
+| UCC21520DW | Driver aislado, SOIC-16 ancho | Mejor desempeño; interbloqueo y DT de respaldo en hardware | ~390 ns → se usa **500 ns** |
 | TLP250H | Optoacoplador DIP-8, THT en zócalo | **Módulo de servicio** para zonas donde no se consiguen componentes SMD; reparable a mano | ~790 ns → se usa **1 µs** |
 
 ### 2.3 Por qué el TLP250 necesita 1 µs
@@ -195,7 +195,7 @@ El pin 9 y la llave de la posición 8 son **poka-yoke** (a prueba de errores, co
 | Módulo | Cambio en layout | Serigrafía sugerida |
 | --- | --- | --- |
 | IRS2186 | J1-P9 → GND ✓ (2026-11-03). En este módulo GND de J1 = COM = tierra de potencia (no aislado) | "OPERACION DT IRS2186=500NS" (pendiente) |
-| UCC21520ADWR | J1-P9 → GND de entrada (pendiente; hoy el ID está en J2-9) | "OPERACION DT UCC21520=500NS" |
+| UCC21520DW | J4-5 (P9) → GND de entrada ✓ | "OPERACION DT UCC21520=500NS" |
 | TLP250H | **J1-P9 sin pista** y sin relleno de GND alrededor ✓ (V.0.1) | **"OPERACION DT TLP250=1US"** ✓ |
 
 La serigrafía dice **qué hace** el módulo, no solo cómo se llama: si en banco el equipo reporta un modo distinto al impreso, el técnico sabe que hay un problema en P9.
@@ -234,9 +234,9 @@ El conector es un header de 9 posiciones a 2.54 mm. La posición 8 no lleva señ
 5. **Rellenar zonas (B) y correr el DRC:** confirmar que J2-6 sigue unido a su plano (excepto en el TLP250, donde queda sin uso) y que J2-7 conserva su clearance.
 6. **Recomendado para soldadura a mano:** *Pad connections → Thermal reliefs* en los pads unidos a planos, para evitar soldaduras frías. En los módulos de 500 ns, una soldadura fría en J1-P9 manda el módulo a 1 µs (falla segura).
 
-> **Obligatorio:** aplicar la misma llave en **los tres módulos** (IRS2186, UCC21520ADWR, TLP250H) y en **los dos conectores** de la tarjeta del puente H (rama A y rama B), para que sigan siendo intercambiables.
+> **Obligatorio:** aplicar la misma llave en **los tres módulos** (IRS2186, UCC21520DW, TLP250H) y en **los dos conectores** de la tarjeta del puente H (rama A y rama B), para que sigan siendo intercambiables.
 
-**Estado:** UCC21520ADWR con pad 8 eliminado (2026-11-02). **TLP250 V.0.1: sin pad 8 y con "X" en la serigrafía ✓ (2026-11-03).** Pendientes: módulo IRS2186 y tapón en la tarjeta del puente H.
+**Estado:** UCC21520DW con pad 8 eliminado (2026-11-02). **TLP250 V.0.1: sin pad 8 y con "X" en la serigrafía ✓ (2026-11-03).** Pendientes: módulo IRS2186 y tapón en la tarjeta del puente H.
 
 ---
 
@@ -398,9 +398,9 @@ En ATmega328, convertir a cuentas enteras: `d_comp_cuentas = dt_cuentas` (aplica
 | --- | --- | --- | --- |
 | 2026-11-02 | Definición del pin 9 como identificación del tiempo muerto | Documento creado | Confirmar INA_OUT en el módulo IRS2186; agregar pull-up en tarjeta de potencia; pista a GND en módulos IRS y UCC |
 | 2026-11-02 | Se documenta el propósito del pin 9: soporte legacy para trincheras (sección 2.1) | Regla de diseño fijada: pin abierto = modo legacy 1 µs | — |
-| 2026-11-02 | Módulo UCC21520ADWR: J2-9 conectado a la zona GND (mismo net que J2-6); J2-8 aislado con clearance hacia J2-7 (15V) | Módulo UCC declara 500 ns ✓ | Mismo cambio en módulo IRS2186 (confirmar INA_OUT); pull-up 10 k + serie en tarjeta de potencia |
+| 2026-11-02 | Módulo UCC21520DW: J2-9 conectado a la zona GND (mismo net que J2-6); J2-8 aislado con clearance hacia J2-7 (15V) | Módulo UCC declara 500 ns ✓ | Mismo cambio en módulo IRS2186 (confirmar INA_OUT); pull-up 10 k + serie en tarjeta de potencia |
 | 2026-11-02 | Se agrega la sección 2.6: costo de la modalidad (de 4 a 5 terminales, ~1 USD) contra el costo de una ida de reparación | Argumento económico documentado | — |
-| 2026-11-02 | Llave mecánica en posición 8 (sin pin/pad en módulo, tapón en tarjeta) y sección 2.7 poka-yoke | Pad 8 eliminado en módulo UCC21520ADWR | Keepout en posición 8, serigrafía, aplicar en IRS2186 y TLP250H, tapón en tarjeta del puente H |
+| 2026-11-02 | Llave mecánica en posición 8 (sin pin/pad en módulo, tapón en tarjeta) y sección 2.7 poka-yoke | Pad 8 eliminado en módulo UCC21520DW | Keepout en posición 8, serigrafía, aplicar en IRS2186 y TLP250H, tapón en tarjeta del puente H |
 | 2026-11-03 | P9 se ubica en **J1-5** (conector hacia la tarjeta de control); pull-up en la tarjeta de control; J5-9 queda reservado | Implementado en módulo TLP250 V.0.1.NOV.26.J.G: P9 abierto, "X" en J5-8, serigrafía "OPERACION DT TLP250=1US" y "TRENZAR H Y L CON GND" | Llevar P9 a J1 en módulos IRS2186 y UCC21520; pull-up 10 k + serie en tarjeta de control |
 | 2026-11-03 | Módulo IRS2186: P9 en J1-5 unido a GND; J5 sin pad 8 con "X"; J5-9 a GND (reservado) | Módulo IRS declara 500 ns ✓; duda de INA_OUT resuelta | Falta llevar P9 a J1 en el módulo UCC21520 |
 | 2026-11-05 | Nivel lógico de J1 fijado en **5 V** (ATmega328P + 74HC08); pull-up de P9 a 5 V | Un solo valor por módulo (TLP250 con 330 Ω); 3.3 V queda para una etapa posterior con 74HCT08 | — |

@@ -23,7 +23,7 @@ La compensación de tiempo muerto corrige en el firmware el error de voltaje que
 | Bus DC | 48 V (batería) |
 | Conmutación | 24 kHz; rama A 24 kHz y rama B 60 Hz (inversor, híbrida); ambas 24 kHz (cargador, unipolar) |
 | MOSFET | IRF100P219 (100 V) |
-| Módulos de gate driver | IRS2186 (DT 500 ns), UCC21520ADWR (DT 500 ns + respaldo R_DT), TLP250H (DT 1 µs) |
+| Módulos de gate driver | IRS2186 (DT 500 ns), UCC21520DW (DT 500 ns + respaldo R_DT), TLP250H (DT 1 µs) |
 | Filtro de salida | L total ≈ 2 mH en secundario (dispersión + inductor de ferrita E65 N87) + 4.7 µF MKP X2 |
 | Transformador | 1 : 4.16 (48 V → 127 V) |
 | Feedback de voltaje | Transformador 120 → 12 V + divisor de voltaje (ya existe) |
