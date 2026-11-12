@@ -107,7 +107,7 @@
 				)
 			)
 		)
-		(property "Value" "2.2 1W"
+		(property "Value" "2.2Ω 1W"
 			(at 0.1025 -2.65 0)
 			(layer "F.SilkS")
 			(uuid "6141e264-17c2-40c4-8a42-8f56709df065")
@@ -560,7 +560,7 @@
 				)
 			)
 		)
-		(property "Value" "18V"
+		(property "Value" "1SMA5931BT3G 18V"
 			(at 3.05 -2.64 90)
 			(layer "F.Fab")
 			(uuid "b3f956d8-178a-45f9-a90e-14627460f7d9")
@@ -824,7 +824,7 @@
 				)
 			)
 		)
-		(property "Value" "IRS2186"
+		(property "Value" "IRS2186S"
 			(at 0 3.4 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -1410,7 +1410,7 @@
 				)
 			)
 		)
-		(property "Value" "10uf"
+		(property "Value" "10µF 50V X7R"
 			(at 0 1.85 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -1611,7 +1611,7 @@
 				)
 			)
 		)
-		(property "Value" "10UF"
+		(property "Value" "10µF 25V X7R"
 			(at 0 1.85 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -1812,7 +1812,7 @@
 				)
 			)
 		)
-		(property "Value" "GATE_DRIVER_A"
+		(property "Value" "SALIDA AL PUENTE H"
 			(at 3 10.16 180)
 			(layer "F.Fab")
 			(hide yes)
@@ -2133,7 +2133,7 @@
 				)
 			)
 		)
-		(property "Value" "SPWM"
+		(property "Value" "ENTRADA H·GND·L·GND·P9"
 			(at 8.15 13.27 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -2648,7 +2648,7 @@
 				)
 			)
 		)
-		(property "Value" "10uf"
+		(property "Value" "10µF 50V X7R"
 			(at 0 1.85 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -2849,7 +2849,7 @@
 				)
 			)
 		)
-		(property "Value" "47/100uf"
+		(property "Value" "47–100µF 25V"
 			(at 1.75 5.25 180)
 			(layer "F.Fab")
 			(hide yes)
@@ -4777,7 +4777,7 @@
 				)
 			)
 		)
-		(property "Value" "1UF"
+		(property "Value" "1µF 25V X7R"
 			(at 3.825 0.04 0)
 			(layer "F.SilkS")
 			(uuid "b635fa5c-e01d-4be4-bdb4-65aa385d1c2d")
@@ -4978,7 +4978,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "NetTie_2"
+		(property "Value" "GND_K–GND"
 			(at 0 -1.2 0)
 			(layer "B.Fab")
 			(hide yes)
