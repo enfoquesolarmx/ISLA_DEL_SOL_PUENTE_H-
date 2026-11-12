@@ -44,13 +44,14 @@
  *    El timer y las salidas son LOS MISMOS en los dos semiciclos: sólo cambia
  *    qué lado de la pierna A lleva el pulso de potencia.
  *
- *  CRUCE POR CERO (cambio de la pierna B), muestras del semiciclo 0 .. 199:
- *    periodo 199: pierna A apagada (OCR1A = 0, OCR1B = TOP) y se APAGA el
+ *  CRUCE POR CERO (cambio de la pierna B), muestras del semiciclo 0 .. S-1
+ *  (S = 200 a 60 Hz, 240 a 50 Hz):
+ *    periodo S-1: pierna A apagada (OCR1A = 0, OCR1B = TOP) y se APAGA el
  *                 interruptor de la pierna B que sale.
  *    periodo 0:   pierna A apagada y se ENCIENDE el interruptor que entra.
  *    periodo 1..: pierna A con el patrón del nuevo semiciclo.
  *    Tiempo muerto de la pierna B = 1 periodo completo (41.6 µs).
- *    En las muestras 0 y 199 el seno vale 0.8 %: a esa amplitud el pulso sería
+ *    En las muestras 0 y S-1 el seno vale 0.8 % (60 Hz) o 0.65 % (50 Hz): a esa amplitud el pulso sería
  *    menor que PULSO_MIN y no se generaría de todos modos. No se pierde onda.
  *
  *  Licencia: MIT (ver LICENSE.md del repositorio). Escrito desde cero.
@@ -74,10 +75,6 @@
 #define BIT_EN   PB4   // D12, EN_HW
 #define BIT_LB   PD3   // D3
 
-// ============================ CONSTANTES =====================================
-constexpr uint8_t ULTIMA_MUESTRA = MUESTRAS_SEMICICLO - 1;   // 199
-static_assert(MUESTRAS_SEMICICLO <= 255, "El índice de muestra es de 8 bits");
-
 // ============================ ESTADO =========================================
 // Compartido con loop(): volatile; los de 16 bits se leen/escriben atómicos.
 static volatile uint16_t amplitudPedida = 0;   // la escribe loop(), la toma la ISR
@@ -85,16 +82,27 @@ static volatile uint16_t ciclosSalida   = 0;   // ciclos de 60 Hz completados
 static volatile bool     corriendo      = false;
 
 // Sólo de la ISR (y de spwm_arrancar con el timer detenido).
-static uint8_t  muestra   = ULTIMA_MUESTRA;   // muestra del periodo que ACABA de empezar
+static uint8_t  muestra   = 0;                // muestra del periodo que ACABA de empezar
 static uint8_t  semiciclo = 1;                // 0 = positivo, 1 = negativo
 static uint16_t amplitud  = 0;                // amplitud vigente durante el ciclo completo
 static uint8_t  dtCuentas = DT_LEGACY_CUENTAS;
+
+// Frecuencia de línea (sólo cambia con la SPWM detenida, en spwm_preparar).
+//                         60 Hz   50 Hz
+//   muestrasSemiciclo      200     240
+//   ultimaMuestra          199     239
+//   muestrasCuarto         100     120
+static uint8_t         frecuenciaHz      = LINEA_60_HZ;
+static uint8_t         muestrasSemiciclo = MUESTRAS_SEMICICLO_60;
+static uint8_t         ultimaMuestra     = MUESTRAS_SEMICICLO_60 - 1;
+static uint8_t         muestrasCuarto    = MUESTRAS_CUARTO_60;
+static const uint16_t *tablaSeno         = TABLA_SENO_60_Q16;   // en flash
 
 // ============================ INTERRUPCIÓN DE PORTADORA ======================
 ISR(TIMER1_OVF_vect) {
   // ---- 1) Periodo que acaba de empezar: pierna B ---------------------------
   // La pierna A ya está apagada en estos dos periodos (se programó antes).
-  if (muestra == ULTIMA_MUESTRA) {
+  if (muestra == ultimaMuestra) {
     if (semiciclo == 0) PORTD &= ~_BV(BIT_LB);    // sale LB (termina el semiciclo +)
     else                PORTB &= ~_BV(BIT_HB);    // sale HB (termina el semiciclo -)
   } else if (muestra == 0) {
@@ -105,7 +113,7 @@ ISR(TIMER1_OVF_vect) {
   // ---- 2) Siguiente periodo: ¿qué muestra y qué semiciclo? -----------------
   uint8_t sig = muestra + 1;
   uint8_t sem = semiciclo;
-  if (sig == MUESTRAS_SEMICICLO) {
+  if (sig == muestrasSemiciclo) {
     sig = 0;
     sem ^= 1;
     if (sem == 0) {                // empieza un ciclo nuevo (semiciclo positivo):
@@ -115,13 +123,14 @@ ISR(TIMER1_OVF_vect) {
   }
 
   // ---- 3) Comparadores del siguiente periodo -------------------------------
-  if (sig == 0 || sig == ULTIMA_MUESTRA) {
+  if (sig == 0 || sig == ultimaMuestra) {
     OCR1A = 0;                     // HA siempre baja
     OCR1B = TOP_CUENTAS;           // LA siempre baja
   } else {
-    // Cuarto de onda en espejo: 0..99 tal cual, 100..198 al revés.
-    const uint8_t q = (sig < MUESTRAS_CUARTO) ? sig : (uint8_t)(ULTIMA_MUESTRA - sig);
-    uint16_t d = (uint16_t)(((uint32_t)pgm_read_word(&TABLA_SENO_Q16[q]) * amplitud) >> 16);
+    // Cuarto de onda en espejo: 0..C-1 tal cual, C..S-1 al revés
+    // (60 Hz: C = 100, S = 200;  50 Hz: C = 120, S = 240).
+    const uint8_t q = (sig < muestrasCuarto) ? sig : (uint8_t)(ultimaMuestra - sig);
+    uint16_t d = (uint16_t)(((uint32_t)pgm_read_word(&tablaSeno[q]) * amplitud) >> 16);
     if (d < PULSO_MIN_CUENTAS) d = 0;          // pulso demasiado angosto: no se genera
     if (sem == 0) {                            // semiciclo +: HA lleva la potencia
       OCR1A = d;
@@ -153,10 +162,25 @@ void spwm_detener() {
   corriendo = false;
 }
 
-void spwm_preparar(uint8_t dt_cuentas) {
+bool spwm_preparar(uint8_t dt_cuentas, uint8_t frecuencia_hz) {
   spwm_detener();
   // Sólo se aceptan los dos valores de P9; cualquier otro -> el seguro (1 µs).
   dtCuentas = (dt_cuentas == DT_MODERNO_CUENTAS) ? DT_MODERNO_CUENTAS : DT_LEGACY_CUENTAS;
+  // Frecuencia de línea: 50 Hz sólo si se pide explícitamente; si no, 60 Hz.
+  const bool valida = (frecuencia_hz == LINEA_60_HZ || frecuencia_hz == LINEA_50_HZ);
+  if (frecuencia_hz == LINEA_50_HZ) {
+    frecuenciaHz      = LINEA_50_HZ;
+    muestrasSemiciclo = MUESTRAS_SEMICICLO_50;
+    muestrasCuarto    = MUESTRAS_CUARTO_50;
+    tablaSeno         = TABLA_SENO_50_Q16;
+  } else {
+    frecuenciaHz      = LINEA_60_HZ;
+    muestrasSemiciclo = MUESTRAS_SEMICICLO_60;
+    muestrasCuarto    = MUESTRAS_CUARTO_60;
+    tablaSeno         = TABLA_SENO_60_Q16;
+  }
+  ultimaMuestra = muestrasSemiciclo - 1;
+  return valida;
 }
 
 void spwm_arrancar() {
@@ -171,7 +195,7 @@ void spwm_arrancar() {
 
     // Estado inicial: "última muestra del semiciclo negativo". La primera
     // interrupción hace el cruce por cero normal hacia el semiciclo positivo.
-    muestra        = ULTIMA_MUESTRA;
+    muestra        = ultimaMuestra;
     semiciclo      = 1;
     amplitud       = 0;
     amplitudPedida = 0;
@@ -199,5 +223,7 @@ uint16_t spwm_ciclos() {
 
 bool spwm_activo()       { return corriendo; }
 uint8_t spwm_dt_cuentas() { return dtCuentas; }
+uint8_t spwm_frecuencia_hz() { return frecuenciaHz; }
+uint16_t spwm_muestras_ciclo() { return 2u * muestrasSemiciclo; }
 
 #endif  // ISLA_CHIP_328P

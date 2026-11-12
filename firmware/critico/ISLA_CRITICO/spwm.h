@@ -8,11 +8,15 @@
  *    (docs/modulacion_spwm.md):
  *      - Pierna A (Q1/Q2, D9 = HA, D10 = LA): par complementario a 24 kHz con
  *        tiempo muerto, ancho de pulso = amplitud × |sen θ|.
- *      - Pierna B (Q3/Q4, D11 = HB, D3 = LB): un interruptor fijo por semiciclo;
+ *      - Pierna B (Q3/Q4, D11 = HB, D3 = LB): un interruptor fijo por semiciclo
+ *        (a la frecuencia de línea, 60 o 50 Hz);
  *        define la polaridad.
  *
  *          semiciclo +  :  LB encendido,  HA modula,  LA complementario
  *          semiciclo -  :  HB encendido,  LA modula,  HA complementario
+ *
+ *    Frecuencia de línea de 60 Hz o 50 Hz, elegida al preparar (portadora
+ *    fija de 24 kHz; 400 o 480 periodos por ciclo).
  *
  *  QUIÉN ES DUEÑO DE QUÉ
  *    Implementación por chip (DC-018):
@@ -36,9 +40,13 @@
 #include "config_spwm.h"
 
 // Prepara el timer y deja el puente apagado (pierna A y B en bajo, D12 = 0).
-//   dt_cuentas: tiempo muerto pedido por P9 (DT_MODERNO_CUENTAS o
-//   DT_LEGACY_CUENTAS). Cualquier otro valor se toma como LEGACY (seguro).
-void spwm_preparar(uint8_t dt_cuentas);
+//   dt_cuentas:   tiempo muerto pedido por P9 (DT_MODERNO_CUENTAS o
+//                 DT_LEGACY_CUENTAS). Cualquier otro valor -> LEGACY (seguro).
+//   frecuencia_hz: LINEA_60_HZ o LINEA_50_HZ. La portadora sigue en 24 kHz;
+//                 sólo cambian las muestras (400 / 480) y la tabla.
+//                 Cualquier otro valor -> 60 Hz y spwm_preparar devuelve false.
+// La frecuencia sólo se puede cambiar con la SPWM detenida (aquí se detiene).
+bool spwm_preparar(uint8_t dt_cuentas, uint8_t frecuencia_hz);
 
 // Arranca la modulación con amplitud 0. El primer periodo útil es el inicio
 // de un semiciclo positivo. La amplitud se sube después con spwm_fijar_amplitud().
@@ -54,7 +62,7 @@ void spwm_detener();
 // no aparece componente de CD en el transformador.
 void spwm_fijar_amplitud(uint16_t cuentas);
 
-// Ciclos completos de 60 Hz generados desde el arranque (cuenta circular).
+// Ciclos completos de línea (60 o 50 Hz) generados desde el arranque (cuenta circular).
 uint16_t spwm_ciclos();
 
 // true mientras la modulación está corriendo.
@@ -62,3 +70,7 @@ bool spwm_activo();
 
 // Tiempo muerto en uso, en cuentas.
 uint8_t spwm_dt_cuentas();
+
+// Frecuencia de línea en uso (60 o 50) y muestras por ciclo (400 o 480).
+uint8_t  spwm_frecuencia_hz();
+uint16_t spwm_muestras_ciclo();

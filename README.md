@@ -237,7 +237,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | [Tarjeta de transferencia de carga](hardware/transferencia_reles/README.md) (5 relés, DC-019) | **V0.1** (2026-11-11): esquemático y PCB terminados, separaciones de 5 mm / 3 mm verificadas, auditoría térmica a 10 A. Pendiente: comparar los pines del relé de 15 V con la huella, fabricar y validar en banco |
 | [Tarjeta de control SPWM](hardware/control/README.md) | **V0.1** (2026-11-11): esquemático y PCB terminados, DRC sin errores, glosario de módulos. Pendiente: prueba de banco de la caída automática, firmware y validación |
 | [Panel frontal LCD + botonera](hardware/panel/README.md) | **V0.2** (2026-11-11): LCD 16×2 o 20×4, módulo I2C directo a zócalo, esquemático y PCB. Pendiente: medir el módulo I2C real para ubicar J2, firmware de pantallas y SETUP |
-| [Firmware del CRÍTICO](firmware/critico/README.md) | **Paso 2** (2026-11-12): SPWM híbrida en ATmega328P (24.02 kHz, 400 muestras, DT por timer 8/16 cuentas, cruce por cero con 1 periodo de tiempo muerto en la pierna B), verificada en la PC cuenta por cuenta. Prueba de banco sin potencia (D12 = 0). Pendiente: P9, arranque suave, lazo, 4809 |
+| [Firmware del CRÍTICO](firmware/critico/README.md) | **Paso 2** (2026-11-12): SPWM híbrida en ATmega328P para **60 o 50 Hz** (24.02 kHz fija, 400 / 480 muestras, DT por timer 8/16 cuentas, cruce por cero con 1 periodo de tiempo muerto en la pierna B), verificada en la PC cuenta por cuenta. Prueba de banco sin potencia (D12 = 0). Pendiente: P9, arranque suave, lazo, 4809 |
 | Validación en banco | Pendiente |
 
 ## Misión actual: SPWM con cargador básico de trinchera
