@@ -56,13 +56,51 @@ static_assert(RELOJ_HZ == RELOJ_ESPERADO_HZ,
 // ======================== PARÁMETROS DE DISEÑO ===============================
 // Únicos valores que se eligen a mano. Todo lo demás se deriva.
 
-// Frecuencia de la red y de la salida del inversor (México: 60 Hz).
-constexpr uint16_t F_LINEA_HZ = 60;
+// ---------------- FRECUENCIA DE LÍNEA: 60 Hz o 50 Hz -------------------------
+//   60 Hz: México, Centroamérica, Colombia, Venezuela, Ecuador, Perú,
+//          Brasil (la mayor parte), Estados Unidos, Canadá...
+//   50 Hz: casi toda África, Europa, Medio Oriente, Argentina, Chile,
+//          Uruguay, Paraguay, Bolivia, gran parte de Asia...
+//   (Confirme siempre con la placa de la red o del generador del lugar.)
+//
+// El mismo firmware trae las DOS frecuencias. AQUÍ, Y SÓLO AQUÍ, se elige la
+// que usa el equipo; el valor se pasa a spwm_preparar() al encender.
+// DECISIÓN DEL PROYECTO: NO se elige desde el menú SETUP del panel. Pasar de
+// 60 a 50 Hz obliga a cambiar el transformador (ver abajo): quien hace ese
+// cambio de hardware cambia esta línea y vuelve a cargar el firmware. Así
+// nadie cambia la frecuencia por accidente desde los botones.
+// Con red presente, ac_fb_grid (pendiente) medirá la frecuencia de la red y
+// NO sincronizará si no coincide con la elegida aquí.
+//
+// ⚠ CAMBIAR A 50 Hz NO BASTA CON EL FIRMWARE. Antes, revisar el hardware:
+//   - TRANSFORMADOR: a 50 Hz el núcleo trabaja con 20 % MÁS FLUJO que a 60 Hz
+//     (flujo ∝ V / f). Un transformador de 60 Hz puede saturarse y calentarse:
+//     debe estar especificado para 50 Hz (o "50/60 Hz").
+//   - VOLTAJE: casi todas las redes de 50 Hz son de 220–240 V, no de 127 V.
+//     El transformador de 48 V -> 127 V NO sirve: hace falta otra relación de
+//     vueltas (y relés, capacitores y fusibles de salida para 250 V).
+//   Ver README.md, sección "Frecuencia de línea: 50 o 60 Hz".
+constexpr uint8_t LINEA_60_HZ = 60;
+constexpr uint8_t LINEA_50_HZ = 50;
+constexpr uint8_t FRECUENCIA_LINEA_HZ = LINEA_60_HZ;   // <-- 60 o 50
 
-// Portadora objetivo. Sincronizada con la línea: 24 kHz = 400 × 60 Hz
-// (docs/modulacion_spwm.md, sección 4.3). Así cada ciclo de 60 Hz tiene
-// exactamente 400 periodos de portadora y el cruce por cero cae siempre en
-// el mismo punto: sin subarmónicos por deriva.
+static_assert(FRECUENCIA_LINEA_HZ == LINEA_60_HZ || FRECUENCIA_LINEA_HZ == LINEA_50_HZ,
+  "FRECUENCIA_LINEA_HZ sólo puede ser 60 o 50");
+
+// ---------------- PORTADORA: 24 kHz FIJOS EN LAS DOS FRECUENCIAS -------------
+// Sincronizada con la línea: múltiplo exacto de 60 y de 50 Hz
+//   60 Hz: 24 000 / 60 = 400 periodos por ciclo
+//   50 Hz: 24 000 / 50 = 480 periodos por ciclo
+// (docs/modulacion_spwm.md, sección 4.3). Cada ciclo tiene un número exacto de
+// periodos y el cruce por cero cae siempre en el mismo punto: sin subarmónicos.
+//
+// POR QUÉ NO SE BAJA LA PORTADORA A 20 kHz EN 50 Hz (400 muestras, 50.000 Hz
+// exactos): con 24 kHz fijos NO cambian el TOP, el tiempo muerto en cuentas,
+// el pulso mínimo, la amplitud máxima, el rizo del filtro de salida, las
+// pérdidas de conmutación ni el ruido. Sólo cambian el número de muestras y
+// la tabla. A 20 kHz el rizo del filtro sube 20 % y el zumbido queda en el
+// borde de lo audible. El precio: la salida queda en 50.05 Hz (+0.1 %), igual
+// que la de 60 Hz queda en 60.06 Hz.
 constexpr uint32_t FSW_OBJETIVO_HZ = 24000UL;
 
 // Tiempos muertos que puede pedir el módulo gate driver por P9.
@@ -71,14 +109,63 @@ constexpr uint16_t DT_MODERNO_NS = 500;    // P9 = GND
 constexpr uint16_t DT_LEGACY_NS  = 1000;   // P9 abierto o falla (valor seguro)
 
 // ======================== MUESTRAS DE LA TABLA SENO ==========================
-constexpr uint16_t MUESTRAS_CICLO     = FSW_OBJETIVO_HZ / F_LINEA_HZ;   // 400
-constexpr uint16_t MUESTRAS_SEMICICLO = MUESTRAS_CICLO / 2;             // 200
-constexpr uint16_t MUESTRAS_CUARTO    = MUESTRAS_CICLO / 4;             // 100 (tabla en flash)
+// Una muestra por periodo de portadora:
+//                        60 Hz      50 Hz
+//   por ciclo             400        480
+//   por semiciclo         200        240
+//   por cuarto de onda    100        120   <- lo que se guarda en flash
+//
+// POR QUÉ SÓLO SE GUARDA UN CUARTO DE ONDA
+//   La senoidal es simétrica. Con el tramo de 0° a 90° se arma el ciclo entero
+//   (S = muestras por semiciclo, 200 a 60 Hz o 240 a 50 Hz):
+//
+//     muestra k del semiciclo (0..S-1)     se lee de la tabla
+//     ---------------------------------    ------------------------------
+//     0 .. S/2-1   (0° a 90°,   subida)    tabla[k]          tal cual
+//     S/2 .. S-1   (90° a 180°, bajada)    tabla[S-1 - k]    en espejo
+//     segundo semiciclo (180° a 360°)      los mismos valores; la polaridad
+//                                          la pone la PIERNA B, no la tabla
+//
+//   En la modulación híbrida la pierna A sólo necesita la MAGNITUD |sen θ|:
+//   el signo lo da la pierna B al cambiar de lado en el cruce por cero.
+//   Por eso nunca se guardan valores negativos.
+//
+//   Lo que cuesta cada opción a 60 Hz (2 bytes por muestra):
+//     tabla completa  400 muestras = 800 B
+//     semiciclo       200 muestras = 400 B
+//     cuarto de onda  100 muestras = 200 B   <- la elegida
+//   Las dos tablas (60 y 50 Hz) juntas ocupan 440 B de flash.
+//   El espejo cuesta 1 comparación + 1 resta en la ISR: unos 3-4 ciclos de
+//   los 666 que hay por periodo (~0.5 %). Se ahorra flash casi gratis.
+//
+//   Las tablas van en FLASH (PROGMEM), no en RAM. El 328P tiene sólo 2 KB de
+//   RAM: una tabla completa calculada en RAM al arrancar se comería el 40 %.
+//
+// DETALLE QUE NO SE DEBE CAMBIAR: MUESTRA EN EL CENTRO DEL PERIODO
+//   Cada muestra se toma a la mitad de su periodo de portadora:
+//       tabla[k] = sen( (k + 0.5) × 180° / S )      <- correcto
+//   y NO en el borde:
+//       tabla[k] = sen(  k        × 180° / S )      <- mal
+//   Tomada al centro, la muestra k y la S-1 - k valen exactamente lo mismo y el
+//   espejo sale perfecto. En el borde, el pico de 90° queda en una sola muestra
+//   sin pareja: el espejo se corre una muestra, la onda sale un poco asimétrica
+//   y aparece componente par (distorsión que se puede evitar sin costo).
+//
+//   Por eso las muestras por ciclo deben ser múltiplo de 4 (ver static_assert
+//   abajo): 400 y 480 se parten en cuatro cuartos exactos (100 y 120).
+constexpr uint16_t MUESTRAS_CICLO_60     = FSW_OBJETIVO_HZ / LINEA_60_HZ;   // 400
+constexpr uint16_t MUESTRAS_SEMICICLO_60 = MUESTRAS_CICLO_60 / 2;           // 200
+constexpr uint16_t MUESTRAS_CUARTO_60    = MUESTRAS_CICLO_60 / 4;           // 100
+constexpr uint16_t MUESTRAS_CICLO_50     = FSW_OBJETIVO_HZ / LINEA_50_HZ;   // 480
+constexpr uint16_t MUESTRAS_SEMICICLO_50 = MUESTRAS_CICLO_50 / 2;           // 240
+constexpr uint16_t MUESTRAS_CUARTO_50    = MUESTRAS_CICLO_50 / 4;           // 120
 
-static_assert(FSW_OBJETIVO_HZ % F_LINEA_HZ == 0,
-  "La portadora debe ser múltiplo entero de la frecuencia de línea");
-static_assert(MUESTRAS_CICLO % 4 == 0,
+static_assert(FSW_OBJETIVO_HZ % LINEA_60_HZ == 0 && FSW_OBJETIVO_HZ % LINEA_50_HZ == 0,
+  "La portadora debe ser múltiplo entero de 60 Hz y de 50 Hz");
+static_assert(MUESTRAS_CICLO_60 % 4 == 0 && MUESTRAS_CICLO_50 % 4 == 0,
   "Las muestras por ciclo deben ser múltiplo de 4 (tabla de un cuarto de onda)");
+static_assert(MUESTRAS_SEMICICLO_50 <= 255 && MUESTRAS_SEMICICLO_60 <= 255,
+  "El índice de muestra de la ISR es de 8 bits");
 
 // ======================== TOP DEL TIMER ======================================
 // Modo de doble pendiente (phase-correct en el 328P, dual-slope en el 4809):
@@ -101,23 +188,32 @@ constexpr uint16_t CICLOS_CPU_PERIODO = (uint16_t)(2UL * TOP_CUENTAS);
 //   FSW_REAL_CHZ: 328P = 2 402 402 (24 024.02 Hz); 4809 = 2 403 846 (24 038.46 Hz)
 constexpr uint32_t FSW_REAL_CHZ = (uint32_t)((RELOJ_HZ * 100ULL) / (2UL * TOP_CUENTAS));
 
-// Salida a 400 periodos por ciclo, en milésimas de Hz:
-//   328P = 60 060 (60.060 Hz, +0.10 %);  4809 = 60 096 (60.096 Hz, +0.16 %)
+// Salida en milésimas de Hz (portadora real / muestras por ciclo):
+//            60 Hz (400)              50 Hz (480)
+//   328P:    60 060 (60.060 Hz)       50 050 (50.050 Hz)     +0.10 %
+//   4809:    60 096 (60.096 Hz)       50 080 (50.080 Hz)     +0.16 %
 // En modo isla esto basta: el error queda dentro de lo que toleran cargas,
 // relojes y motores. En modo red, el PLL ajusta el TOP para seguir a la red
 // (ac_fb_grid, pendiente).
-constexpr uint32_t F_SALIDA_MHZ = (uint32_t)((RELOJ_HZ * 1000ULL) /
-                                             (2ULL * TOP_CUENTAS * MUESTRAS_CICLO));
+constexpr uint32_t F_SALIDA_60_MHZ = (uint32_t)((RELOJ_HZ * 1000ULL) /
+                                                (2ULL * TOP_CUENTAS * MUESTRAS_CICLO_60));
+constexpr uint32_t F_SALIDA_50_MHZ = (uint32_t)((RELOJ_HZ * 1000ULL) /
+                                                (2ULL * TOP_CUENTAS * MUESTRAS_CICLO_50));
 
-// Error de frecuencia en partes por millón (positivo = más rápida que 60 Hz).
+// Error de frecuencia en partes por millón (positivo = más rápida que la nominal).
+// Es el mismo en 60 y 50 Hz: sólo depende de la portadora real.
 constexpr int32_t ERROR_FRECUENCIA_PPM =
-    (int32_t)(((int64_t)F_SALIDA_MHZ - (int64_t)F_LINEA_HZ * 1000) * 1000000LL /
-              ((int64_t)F_LINEA_HZ * 1000));
+    (int32_t)(((int64_t)F_SALIDA_60_MHZ - (int64_t)LINEA_60_HZ * 1000) * 1000000LL /
+              ((int64_t)LINEA_60_HZ * 1000));
+constexpr int32_t ERROR_FRECUENCIA_50_PPM =
+    (int32_t)(((int64_t)F_SALIDA_50_MHZ - (int64_t)LINEA_50_HZ * 1000) * 1000000LL /
+              ((int64_t)LINEA_50_HZ * 1000));
 
 static_assert(FSW_REAL_CHZ >= 2000000UL && FSW_REAL_CHZ <= 2500000UL,
   "Portadora fuera de 20–25 kHz: revise RELOJ_HZ y FSW_OBJETIVO_HZ");
-static_assert(ERROR_FRECUENCIA_PPM >= -5000 && ERROR_FRECUENCIA_PPM <= 5000,
-  "La frecuencia de salida se aleja más de 0.5 % de 60 Hz");
+static_assert(ERROR_FRECUENCIA_PPM >= -5000 && ERROR_FRECUENCIA_PPM <= 5000 &&
+              ERROR_FRECUENCIA_50_PPM >= -5000 && ERROR_FRECUENCIA_50_PPM <= 5000,
+  "La frecuencia de salida se aleja más de 0.5 % de la nominal");
 
 // ======================== RESOLUCIÓN Y TIEMPO MUERTO =========================
 // Cada cuenta del comparador desplaza cada flanco un ciclo de reloj:
