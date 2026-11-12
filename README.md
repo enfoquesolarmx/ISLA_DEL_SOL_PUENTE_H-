@@ -204,6 +204,17 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | **SENSOR_DC_INA_COMPARADOR** **V0.2** | [README](hardware/sensores/sensor-dc-ina-comparador/README.md) | ✓ Esquemático y PCB V0.2 (ERC/DRC sin errores), THT para la trinchera | Medición bidireccional del bus DC con INA240A1 (I_OUT 0–3.3 V, compatible con ATmega, STM32 y ESP32). **Dos ventanas por hardware** con LM393: **disparo duro** (U3, ±105 A) y **límite de corriente** (U4, ±75 A, salida **I_LIM**). Salida **SENSOR_OK fail-safe** (Q1 BC547: 0 V = sensor bien; sin módulo, sin 15 V o con el cable roto = corte). 3 shunts Littelfuse SSA2512 de 1 mΩ (0.333 mΩ) con sensado Kelvin. Incluye cómo se llegó a la V0.2, tabla de seguridad con las fallas de una sola pieza, evidencia del proceso, BOM y validación en banco |
 
 
+### Firmware (`firmware/`)
+
+Un archivo por módulo: cada uno empieza con un bloque que dice qué hace, qué pines usa, a qué tarjeta y conector corresponde y qué timer o interrupción es suyo. Escrito desde cero, licencia MIT.
+
+| Micro | Documento | Estado | Qué incluye |
+| --- | --- | --- | --- |
+| **CRÍTICO (A1)**, ATmega328P (Nano); Nano Every (4809) pendiente | [README](firmware/critico/README.md) | **Paso 2**: SPWM híbrida verificada en la PC; prueba de banco **sin potencia** (D12 = 0) | **Portadora de 24 kHz** sincronizada con la línea (TOP 333, 24.02 kHz). **60 o 50 Hz**, elegida solo en `config_portadora.h` (400 / 480 muestras; advertencias de transformador y voltaje para 50 Hz). **LUT de seno de un cuarto de onda en flash**, muestreada al centro del periodo y generada por script. **SPWM híbrida:** pierna A a 24 kHz con tiempo muerto hecho por el **timer** en cada flanco (8 / 16 cuentas según P9), pierna B a la frecuencia de línea con un periodo de tiempo muerto en el cruce por cero. Amplitud aplicada por ciclo (sin CD en el transformador). **Techo de modulación del 95 %** o el límite físico del tiempo muerto, el menor. Pulso mínimo de 500 ns y pulso de bootstrap garantizado. **D12 = 0 primero** al apagar. **Prueba en la PC** del mismo código, cuenta por cuenta. Comparación con el borrador antiguo |
+| **AUX (A2)**, panel, LCD, enlace I2C, CAN | — | Pendiente | — |
+
+Pendiente en el CRÍTICO: lectura de P9 (A7), arranque suave y lazo de voltaje, PLL con la red (TOP fraccionario), ADC disparado por la portadora, protecciones, enlace I2C y la versión para el 4809.
+
 ### Por dónde empezar a estudiar
 
 1. **Este README:** visión general del inversor y de la interfaz universal.
@@ -217,12 +228,13 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 9. **[Tarjeta de transferencia de carga](hardware/transferencia_reles/README.md) (V0.1):** cómo la casa pasa entre la red y el inversor sin que nunca tenga las dos fuentes, cómo se conecta el cargador y cuándo se une el neutro a tierra.
 10. **[Panel frontal](hardware/panel/README.md) (V0.2):** qué datos muestra el inversor, cómo se configura el SETUP y cómo se monta la pantalla.
 11. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md) (V0.2):** cómo medir la corriente del bus, limitarla para que arranquen los motores y cortar las compuertas por hardware antes que el fusible, con la salida fail-safe SENSOR_OK.
-12. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
+12. **[Firmware del CRÍTICO](firmware/critico/README.md):** cómo se genera la SPWM híbrida en el ATmega328P, por qué una LUT de cuarto de onda, cómo el timer hace el tiempo muerto y cómo se verifica en la PC antes de tocar el banco.
+13. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
 
 ## Herramientas
 
 - **KiCad** (esquemáticos y PCB).
-- Firmware: **ATmega328P a 5 V** (ecosistema Arduino) para la misión actual; la interfaz J1 de los gate drivers es **lógica de 5 V**. STM32 o ESP32 (3.3 V) en etapas posteriores, cambiando la compuerta de corte por 74HCT08.
+- Firmware: **ATmega328P a 5 V** (ecosistema Arduino; se abre con el Arduino IDE, un archivo por módulo) para la misión actual. Pruebas del firmware en la PC con `g++`; la interfaz J1 de los gate drivers es **lógica de 5 V**. STM32 o ESP32 (3.3 V) en etapas posteriores, cambiando la compuerta de corte por 74HCT08.
 
 ## Estado
 
