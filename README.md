@@ -114,6 +114,11 @@ ISLA_DEL_SOL_PUENTE_H-/
     │   ├── README.md                               ← tarjeta de control V0.1: glosario de módulos
     │   ├── ATMEGA328P_SPWM_TARJETA.kicad_pro / .kicad_sch / .kicad_pcb
     │   └── img/                                    ← esquemático, capas y vistas 3D
+    ├── panel/
+    │   ├── README.md                               ← panel frontal V0.2: LCD 16×2 / 20×4 I2C y 4 botones
+    │   ├── PANEL_LCD_BOTONES.kicad_pro / .kicad_sch / .kicad_pcb
+    │   ├── fp-lib-table + Isla_del_Sol.pretty/     ← huellas propias (ranuras M3 del LCD)
+    │   └── img/                                    ← esquemático y vista del PCB
     ├── transferencia_reles/
     │   ├── README.md                               ← tarjeta de transferencia de carga V0.1
     │   ├── RELAY_TRANSFER_INV_RED.kicad_pro / .kicad_sch / .kicad_pcb
@@ -169,6 +174,12 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | --- | --- | --- | --- |
 | **[Tarjeta de control SPWM V0.1](hardware/control/README.md)** | [Proyecto de la tarjeta (README)](hardware/control/README.md) | ✓ Esquemático (A2, por bloques) y PCB (esquemático = PCB verificado pin por pin, DRC sin errores) | Dos ATmega328P (Arduino Nano) en zócalo: **CRÍTICO** (SPWM, sensado AC/DC, corriente con SCT-013, batería, temperatura, P9, I_LIM, relés) y **AUX** (CAN/BMS, LCD 16×2 con 4 botones, ventilador, buzzer, monitor del riel de 15 V); cascada 48 → 15 → 8 → 5 V con tablero de LEDs y test points; **corte del PWM por hardware** (74HC08, SENSOR_OK, AUX_KILL); **caída automática a la red**; **glosario de los 22 módulos con la justificación de cada componente**, ensamble y pendientes |
 
+### Panel frontal (`hardware/panel/`)
+
+| Tarjeta | Documento | Archivos KiCad | Qué incluye |
+| --- | --- | --- | --- |
+| **[Panel frontal V0.2](hardware/panel/README.md)** | [Proyecto del panel (README)](hardware/panel/README.md) | ✓ Esquemático y PCB (conectividad y separaciones verificadas) | **Para ver todos los datos y configurar el inversor:** LCD **16×2 o 20×4** en la misma placa, módulo I2C PCF8574 **directo a zócalo**, 4 botones en un solo pin analógico (2.4k / 6.8k / 15k / 39k → 1 / 2 / 3 / 4 V), cable 1:1 a J7 de la tarjeta de control; tabla de datos disponibles, propuesta de pantallas y **menú SETUP** (modo CASA / UPS); montaje, verificación antes de fabricar y BOM |
+
 ### Tarjeta de transferencia de carga (`hardware/transferencia_reles/`)
 
 | Tarjeta | Documento | Archivos KiCad | Qué incluye |
@@ -193,8 +204,9 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 7. **[Tarjeta del puente H](hardware/puente_h/README.md)** y su **[auditoría](hardware/puente_h/auditoria/README.md):** cómo se juntan los módulos, el banco de capacitores, el layout de potencia y cómo comprobar antes de fabricar que el cobre y los componentes aguantan.
 8. **[Tarjeta de control](hardware/control/README.md) (V0.1):** qué hace cada módulo y cada resistencia de la tarjeta que decide; el mejor punto de entrada para quien la arma o la repara.
 9. **[Tarjeta de transferencia de carga](hardware/transferencia_reles/README.md) (V0.1):** cómo la casa pasa entre la red y el inversor sin que nunca tenga las dos fuentes, cómo se conecta el cargador y cuándo se une el neutro a tierra.
-10. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md) (V0.2):** cómo medir la corriente del bus, limitarla para que arranquen los motores y cortar las compuertas por hardware antes que el fusible, con la salida fail-safe SENSOR_OK.
-11. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
+10. **[Panel frontal](hardware/panel/README.md) (V0.2):** qué datos muestra el inversor, cómo se configura el SETUP y cómo se monta la pantalla.
+11. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md) (V0.2):** cómo medir la corriente del bus, limitarla para que arranquen los motores y cortar las compuertas por hardware antes que el fusible, con la salida fail-safe SENSOR_OK.
+12. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
 
 ## Herramientas
 
@@ -213,6 +225,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | Módulo SENSOR_DC_INA_COMPARADOR | **V0.2** (2026-11-08): SENSOR_OK fail-safe, límite ±75 A (U4) e I_LIM; ERC/DRC sin errores. Pendiente: fabricar y validar en banco |
 | [Tarjeta de transferencia de carga](hardware/transferencia_reles/README.md) (5 relés, DC-019) | **V0.1** (2026-11-11): esquemático y PCB terminados, separaciones de 5 mm / 3 mm verificadas, auditoría térmica a 10 A. Pendiente: comparar los pines del relé de 15 V con la huella, fabricar y validar en banco |
 | [Tarjeta de control SPWM](hardware/control/README.md) | **V0.1** (2026-11-11): esquemático y PCB terminados, DRC sin errores, glosario de módulos. Pendiente: prueba de banco de la caída automática, firmware y validación |
+| [Panel frontal LCD + botonera](hardware/panel/README.md) | **V0.2** (2026-11-11): LCD 16×2 o 20×4, módulo I2C directo a zócalo, esquemático y PCB. Pendiente: medir el módulo I2C real para ubicar J2, firmware de pantallas y SETUP |
 | Firmware | Pendiente |
 | Validación en banco | Pendiente |
 
