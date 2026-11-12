@@ -4,8 +4,8 @@
 **Proyecto:** Puente H — prototipo SPWM "Isla del Sol" (inversor 48 V → 127 V / 60 Hz, 1000 W; modo cargador 1 kVA)
 **Módulo:** gate driver de **medio puente H** (una rama: MOSFET alto + MOSFET bajo) con bootstrap. Es el **módulo principal de producción**: bajo costo y 500 ns de tiempo muerto
 **Intercambiable con:** UCC21520ADWR y TLP250 de trinchera (misma interfaz J1/J5, mismo firmware)
-**Estado:** diseño terminado con P9 en J1. Pendiente: DRC final, fabricación y validación en banco
-**Fecha:** 2026-11-03
+**Estado:** diseño terminado con P9 en J1; esquemático reordenado por bloques (2026-11-12). Pendiente: DRC final, fabricación y validación en banco
+**Fecha:** 2026-11-03 (esquemático por bloques: 2026-11-12)
 **Documentos relacionados:** [`docs/identificacion_dt_pin9.md`](../../../docs/identificacion_dt_pin9.md), [`docs/compensacion_adaptativa_tiempo_muerto.md`](../../../docs/compensacion_adaptativa_tiempo_muerto.md), [módulo TLP250](../tlp250-trinchera/README.md)
 
 > Verificar los valores marcados con *(verificar)* contra el esquemático de KiCad antes de fabricar.
@@ -14,7 +14,11 @@
 | --- | --- |
 | ![Módulo IRS2186, vista 3D superior](img/irs2186_3d_superior.png) | ![Módulo IRS2186, vista 3D inferior](img/irs2186_3d_inferior.png) |
 
-*Izquierda: arriba, la bornera J1 de entrada (**P**9 · GND · L · GND · H); en medio, el IRS2186 (SOIC-8) con su desacoplo de 15 V (1 µF + 10 µF), la red de bootstrap (2.2 Ω 1 W + ES1D), el zener de 18 V (1SMA5931B1) los capacitores de bootstrap (2 × 10 µF) y el electrolítico de respaldo de 15 V; abajo, el header J5 hacia el puente H (HO · VS1 · · · Gk · LO · G · 15V · llave). Derecha: la leyenda de seguridad **"ATENCIÓN: DT 500 ns MIN — VALIDAR MOSFET Y SW"**, la versión V.0.1.NOV.26.J.G y la **X** de la llave en la posición 8 de J5.*
+![Esquemático del módulo IRS2186 por bloques](img/esquematico_irs2186.png)
+
+*Esquemático por bloques (KiCad 9, hoja A4): **A** entrada J1 con R1/R2 y P9 · **B** alimentación de 15 V · **C** IRS2186 · **D** bootstrap · **E** salida J5 y NT1 · **F** reglas de firmware y compras. Cada bloque lleva su nota de diseño.*
+
+*Izquierda: arriba, la bornera J1 de entrada (**P**9 · GND · L · GND · H); en medio, el IRS2186 (SOIC-8) con su desacoplo de 15 V (1 µF + 10 µF), la red de bootstrap (2.2 Ω 1 W + ES1D), el zener D6 de 18 V (1SMA5931BT3G), los capacitores de bootstrap (2 × 10 µF) y el electrolítico de respaldo de 15 V; abajo, el header J5 hacia el puente H (HO · VS1 · · · Gk · LO · G · 15V · llave). Derecha: la leyenda de seguridad **"ATENCIÓN: DT 500 ns MIN — VALIDAR MOSFET Y SW"**, la versión V.0.1.NOV.26.J.G y la **X** de la llave en la posición 8 de J5.*
 
 ---
 
@@ -111,7 +115,7 @@ Consecuencias y cuidados:
 | 5 | VCC | 15 V, con desacoplo a COM |
 | 6 | VS | J5-2 (VS1) |
 | 7 | HO | J5-1 |
-| 8 | VB | Nodo del bootstrap |
+| 8 | VB | VB1, nodo del bootstrap |
 
 Verificar contra la hoja de datos de la variante comprada (IRS2186S, SOIC-8).
 
@@ -125,17 +129,17 @@ Verificar contra la hoja de datos de la variante comprada (IRS2186S, SOIC-8).
 ### 3.3 Bootstrap (lado alto)
 
 ```
-15 V ── R9 2.2 Ω 1 W ── D5 (ES1D / ES1J) ──┬── VB (pin 8)
-                                           ├── 2 × 10 µF X7R 50 V 1206 ── VS1
-                                           └── Zener 18 V (1SMA5931BT3G), cátodo a VB ── VS1
+15 V ── D5 (ES1D / ES1J) ── R9 2.2 Ω 1 W ──┬── VB1 (pin 8)
+                                           ├── C2 + C9: 2 × 10 µF X7R 50 V 1206 ── VS1
+                                           └── D6 zener 18 V (1SMA5931BT3G), cátodo a VB1 ── VS1
 ```
 
 | Componente | Valor | Por qué |
 | --- | --- | --- |
-| R9 | 2.2 Ω, 1 W, **antes del diodo** | Limita el pico de recarga del bootstrap cuando VS cae a 0 V (circuito de referencia de TI; IR Design Tip DT98-2; patente US5969964, ya expirada) |
-| D5 | ES1D (200 V) o **ES1J (600 V)** | Diodo rápido. ES1D limita el bus del módulo a ~120 V; con ES1J el límite lo ponen las separaciones del PCB (≤ 150 V) |
-| C_boot | 2 × 10 µF X7R 50 V 1206 | Sostiene VB durante los **8.3 ms** de encendido continuo de la rama de 60 Hz. El X7R pierde capacidad con el voltaje DC: por eso dos |
-| Zener | 18 V (1SMA5931BT3G) | Protege VB–VS contra picos por encima del máximo del IRS2186 |
+| R9 | 2.2 Ω, 1 W, **después del diodo** (entre el cátodo de D5 y VB1) | Limita el pico de recarga del bootstrap cuando VS cae a 0 V y, en esta posición, también la corriente de recuperación inversa de D5 cuando VS sube (IR Design Tip DT98-2; TI SLUA887A; patente US5969964, ya expirada). La resistencia en serie con el diodo cumple igual antes o después de él |
+| D5 | ES1D (200 V) o **ES1J (600 V)** | Diodo **ultrarrápido** (no Schottky). ES1D limita el bus del módulo a ~120 V; con ES1J el límite lo ponen las separaciones del PCB (≤ 150 V) |
+| C2, C9 | 2 × 10 µF X7R 50 V 1206 | Sostiene VB durante los **8.3 ms** de encendido continuo de la rama de 60 Hz. El X7R pierde capacidad con el voltaje DC: por eso dos |
+| D6 | Zener 18 V (1SMA5931BT3G), cátodo a VB1 | Protege VB–VS contra picos por encima del máximo del IRS2186 |
 
 **Reglas de firmware para el bootstrap:**
 - **Precarga** de 0.5–2 ms con los lados bajos encendidos antes de arrancar el PWM.
@@ -235,6 +239,7 @@ Los MOSFET en paralelo deben ser **del mismo número de parte** (idealmente del 
 | Fecha | Qué se hizo | Resultado | Siguiente paso |
 | --- | --- | --- | --- |
 | 2026-11-03 | P9 en J1-5 unido a GND; J5 sin pad 8 con "X"; J5-9 a GND (reservado) | Módulo declara 500 ns ✓ | Serigrafía "OPERACION DT IRS2186=500NS", thermal reliefs en J1, DRC, fabricar |
+| 2026-11-12 | Esquemático reordenado por bloques A–F con notas de diseño; J2 → **J1**, zener 1SMA5931B1 → **D6**, red D5-K → **VB1**; D5 con símbolo de diodo rápido (no Schottky); valores con voltaje y dieléctrico; J5-3 y J5-8 marcados sin conexión; PWR_FLAG en 15V y GND para el ERC; README corregido: R9 va **después** de D5 | Conexiones idénticas a la versión anterior (comparadas pin por pin). Referencias y nombre de red sincronizados en el PCB | En KiCad: Actualizar PCB desde esquemático (F8) para traer los valores nuevos, ERC y DRC |
 | | | | |
 
 ---
