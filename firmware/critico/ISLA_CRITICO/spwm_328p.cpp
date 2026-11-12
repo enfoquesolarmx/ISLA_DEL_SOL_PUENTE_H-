@@ -86,6 +86,7 @@ static uint8_t  muestra   = 0;                // muestra del periodo que ACABA d
 static uint8_t  semiciclo = 1;                // 0 = positivo, 1 = negativo
 static uint16_t amplitud  = 0;                // amplitud vigente durante el ciclo completo
 static uint8_t  dtCuentas = DT_LEGACY_CUENTAS;
+static uint16_t amplitudMax = AMPLITUD_MAX_LEGACY;   // según el DT en uso
 
 // Frecuencia de línea (sólo cambia con la SPWM detenida, en spwm_preparar).
 //                         60 Hz   50 Hz
@@ -166,6 +167,8 @@ bool spwm_preparar(uint8_t dt_cuentas, uint8_t frecuencia_hz) {
   spwm_detener();
   // Sólo se aceptan los dos valores de P9; cualquier otro -> el seguro (1 µs).
   dtCuentas = (dt_cuentas == DT_MODERNO_CUENTAS) ? DT_MODERNO_CUENTAS : DT_LEGACY_CUENTAS;
+  // Techo de amplitud: 95 % o el límite físico de ese tiempo muerto, el menor.
+  amplitudMax = (dtCuentas == DT_MODERNO_CUENTAS) ? AMPLITUD_MAX_MODERNO : AMPLITUD_MAX_LEGACY;
   // Frecuencia de línea: 50 Hz sólo si se pide explícitamente; si no, 60 Hz.
   const bool valida = (frecuencia_hz == LINEA_60_HZ || frecuencia_hz == LINEA_50_HZ);
   if (frecuencia_hz == LINEA_50_HZ) {
@@ -211,7 +214,7 @@ void spwm_arrancar() {
 }
 
 void spwm_fijar_amplitud(uint16_t cuentas) {
-  if (cuentas > AMPLITUD_MAX_CUENTAS) cuentas = AMPLITUD_MAX_CUENTAS;
+  if (cuentas > amplitudMax) cuentas = amplitudMax;
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { amplitudPedida = cuentas; }
 }
 
@@ -223,6 +226,7 @@ uint16_t spwm_ciclos() {
 
 bool spwm_activo()       { return corriendo; }
 uint8_t spwm_dt_cuentas() { return dtCuentas; }
+uint16_t spwm_amplitud_max() { return amplitudMax; }
 uint8_t spwm_frecuencia_hz() { return frecuenciaHz; }
 uint16_t spwm_muestras_ciclo() { return 2u * muestrasSemiciclo; }
 

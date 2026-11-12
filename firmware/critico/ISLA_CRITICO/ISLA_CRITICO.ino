@@ -26,7 +26,7 @@
 #include "spwm.h"
 
 // Rampa de prueba de banco: cuentas que sube la amplitud en cada ciclo de línea.
-// 313 cuentas / 5 por ciclo = 63 ciclos ≈ 1 s a 60 Hz (1.3 s a 50 Hz). NO es el arranque suave final
+// 313–316 cuentas / 5 por ciclo = 63 ciclos ≈ 1 s a 60 Hz (1.3 s a 50 Hz). NO es el arranque suave final
 // (ése irá con el lazo de voltaje en ac_fb_inversor).
 constexpr uint8_t RAMPA_BANCO_CUENTAS_POR_CICLO = 5;
 
@@ -59,8 +59,10 @@ static void reportePortadora() {
   Serial.print(F("DT 500 ns (cuentas):     ")); Serial.println(DT_MODERNO_CUENTAS);
   Serial.print(F("DT 1 us   (cuentas):     ")); Serial.println(DT_LEGACY_CUENTAS);
   Serial.print(F("Pulso minimo (cuentas):  ")); Serial.println(PULSO_MIN_CUENTAS);
-  Serial.print(F("Amplitud max (cuentas):  ")); Serial.println(AMPLITUD_MAX_CUENTAS);
-  Serial.print(F("Indice m maximo:         ")); imprimirFijo(M_MAX_MILESIMAS, 1000); Serial.println();
+  Serial.print(F("Techo de modulacion:     ")); Serial.print(M_TECHO_PORCIENTO); Serial.println(F(" %"));
+  Serial.print(F("Amplitud max (cuentas):  ")); Serial.println(spwm_amplitud_max());
+  Serial.print(F("Indice m maximo:         "));
+  imprimirFijo((uint32_t)spwm_amplitud_max() * 1000UL / TOP_CUENTAS, 1000); Serial.println();
   Serial.print(F("DT en uso (cuentas):     ")); Serial.println(spwm_dt_cuentas());
   Serial.println(F("D12 (EN_HW) = 0: puente bloqueado, prueba sin potencia"));
 }
@@ -82,7 +84,7 @@ void loop() {
   const uint16_t c = spwm_ciclos();
   if (c != cicloAnterior) {
     cicloAnterior = c;
-    if (amplitud < AMPLITUD_MAX_CUENTAS) {
+    if (amplitud < spwm_amplitud_max()) {
       amplitud += RAMPA_BANCO_CUENTAS_POR_CICLO;
       spwm_fijar_amplitud(amplitud);   // se recorta solo al máximo
     }

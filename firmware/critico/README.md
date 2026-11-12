@@ -67,7 +67,9 @@ Las constantes se calculan al compilar a partir de `F_CPU`. El reporte de arranq
 | Comparador alto máximo | 317 | 396 | TOP − tiempo muerto legacy |
 | Tiempo muerto / periodo | 1.2 % / 2.4 % | 1.2 % / 2.4 % | Igual que en modulación SPWM |
 | Pulso mínimo | 8 cuentas (500 ns) | 10 cuentas (500 ns) | `config_spwm.h` |
-| Amplitud máxima | **313** cuentas (m = 0.939) | 391 cuentas (m = 0.939) | TOP − DT legacy − pulso mínimo / 2 |
+| Techo absoluto de modulación | **95 %** | **95 %** | Decisión del proyecto |
+| Amplitud máxima, DT 500 ns | **316** (m = 0.949, techo) | 395 (m = 0.950, techo) | La menor entre 95 % y TOP − DT − pulso mínimo / 2 |
+| Amplitud máxima, DT 1 µs | **313** (m = 0.939, físico) | 391 (m = 0.940, físico) | Ídem |
 
 ### 3.1 Por qué estos números
 
@@ -134,7 +136,11 @@ Entre OCR1A y OCR1B hay DT cuentas: en la subida de la rampa, HA se apaga y DT c
 ### 4.4 Límites del ciclo de trabajo (`config_spwm.h`)
 
 - **Pulso mínimo de 500 ns.** Un pulso más angosto no se genera: el MOSFET no alcanza a encender completo y se calienta sin entregar energía. El pulso centrado en BOTTOM se arma con dos mitades de periodos vecinos y puede quedar con una sola, por eso el umbral es el ancho **completo** (8 cuentas).
-- **Amplitud máxima de 313 cuentas (m = 0.939).** Siempre deja un pulso del lado complementario. **Ese pulso recarga el capacitor de bootstrap** del lado alto en cada periodo: sin él, el lado alto se quedaría sin voltaje de compuerta.
+- **Amplitud máxima: la menor entre el techo absoluto del 95 % y el límite físico del tiempo muerto en uso.**
+  - Módulos de 500 ns (IRS2186, UCC21520): 316 cuentas, m = 0.949 (manda el techo).
+  - Módulos de 1 µs (TLP250, IR2110): 313 cuentas, m = 0.939 (manda el límite físico).
+  - El límite físico deja siempre un pulso del lado complementario. **Ese pulso recarga el capacitor de bootstrap** del lado alto en cada periodo: sin él, el lado alto se quedaría sin voltaje de compuerta. Por eso un techo fijo de 95 % con un módulo de 1 µs no es seguro: dejaría un pulso de 125 ns.
+  - El techo deja margen al lazo de voltaje y al PLL, que puede bajar el TOP.
 
 ### 4.5 Presupuesto de CPU (medido en simulador, simavr)
 
@@ -195,7 +201,7 @@ constexpr uint8_t FRECUENCIA_LINEA_HZ = LINEA_60_HZ;   // <-- 60 o 50
 6. Fundamental de la salida igual a la amplitud pedida (error < 1 %).
 7. Apagado: D12 = 0, las 4 salidas en bajo y el timer detenido.
 
-Se prueba con **60 Hz y 50 Hz**, con DT de 500 ns, de 1 µs y con un valor inválido (debe caer en 1 µs), con amplitudes de 0 a 400 (se recorta a 313). Una frecuencia inválida (55 Hz) debe rechazarse y quedar en 60 Hz.
+Se prueba con **60 Hz y 50 Hz**, con DT de 500 ns, de 1 µs y con un valor inválido (debe caer en 1 µs), con amplitudes de 0 a 400 (se recorta a 316 o 313 según el DT, nunca arriba de 95 %). Una frecuencia inválida (55 Hz) debe rechazarse y quedar en 60 Hz.
 
 ```
 cd firmware/critico
@@ -245,3 +251,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | --- | --- |
 | 2026-11-12 | Paso 1: `config_portadora.h` (portadora, muestras, TOP, tiempo muerto en cuentas, protecciones al compilar) y `ISLA_CRITICO.ino` con salidas seguras y reporte. Explicación del cuarto de onda en el código y en la sección 3.1. Compila en 328P: 4.0 KB de flash, 199 B de RAM. Escrito desde cero (MIT); el borrador antiguo de 4400 líneas solo se usó como referencia de estudio |
 | 2026-11-12 | **Soporte de 50 Hz y 60 Hz** (`FRECUENCIA_LINEA_HZ`): portadora fija de 24 kHz, 480 muestras a 50 Hz con su propia tabla de cuarto de onda (120). `spwm_preparar(dt, frecuencia)` rechaza valores inválidos y queda en 60 Hz. Decisión: la frecuencia se elige solo en el código, no desde el SETUP. Advertencias de transformador y voltaje en la sección 5. Prueba en la PC: todo correcto en las dos frecuencias. ISR de 169–180 ciclos. Compila: 5.7 KB de flash, 233 B de RAM |
+| 2026-11-12 | **Techo absoluto de modulación del 95 %** (`M_TECHO_PORCIENTO`). Amplitud máxima = la menor entre el techo y el límite físico del DT en uso: 316 (500 ns) / 313 (1 µs). `spwm_amplitud_max()`. Prueba en la PC: todo correcto |

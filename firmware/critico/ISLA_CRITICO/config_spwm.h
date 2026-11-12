@@ -25,7 +25,7 @@
 //   - Del otro lado, cerca del pico, el pulso del lado bajo se hace angosto.
 //     Ese pulso es el que recarga el capacitor de bootstrap del lado alto en
 //     cada periodo: si desaparece, el lado alto se queda sin voltaje de
-//     compuerta. Por eso la amplitud se limita (ver AMPLITUD_MAX_CUENTAS).
+//     compuerta. Por eso la amplitud se limita (ver AMPLITUD MÁXIMA).
 // Valor inicial: 500 ns (igual al tiempo muerto moderno). Por validar en banco.
 //
 // OJO, doble pendiente: el pulso que está centrado en BOTTOM se arma con la
@@ -42,24 +42,41 @@ constexpr uint8_t  PULSO_MIN_CUENTAS = ISLA_NS_A_CUENTAS(PULSO_MIN_NS);   // 8 /
 // La amplitud se maneja en cuentas: es el ancho (por lado de la rampa) del
 // pulso de potencia en el pico de la senoidal. Índice de modulación
 //   m = amplitud / TOP
-// La amplitud máxima deja SIEMPRE, con el tiempo muerto más largo (1 µs),
-// un pulso del lado complementario de al menos PULSO_MIN. Ese pulso está
-// centrado en TOP (o se arma con dos mitades iguales), así que basta con
-// reservar la MITAD del pulso mínimo por lado de la rampa:
-//   328P: 333 - 16 - 8/2  = 313  -> m máx = 0.939
-//   4809: 416 - 20 - 10/2 = 391  -> m máx = 0.939
-// Se usa el tiempo muerto legacy aunque el módulo sea moderno: así el límite
-// no cambia según el gate driver instalado y el lazo de voltaje ve siempre
-// el mismo techo.
-constexpr uint16_t AMPLITUD_MAX_CUENTAS =
-    TOP_CUENTAS - DT_LEGACY_CUENTAS - PULSO_MIN_CUENTAS / 2;
+// La amplitud máxima es la MENOR de dos:
+//
+// 1) TECHO ABSOLUTO: 95 % del TOP. Decisión del proyecto: la modulación nunca
+//    pasa de m = 0.95, con ningún módulo. Deja margen para que el lazo de
+//    voltaje no trabaje pegado al límite y para el PLL (que puede bajar el TOP).
+//      328P: 333 × 95 % = 316        4809: 416 × 95 % = 395
+//
+// 2) LÍMITE FÍSICO según el tiempo muerto EN USO (P9): siempre debe quedar un
+//    pulso del lado complementario de al menos PULSO_MIN, porque ese pulso
+//    recarga el capacitor de bootstrap del lado alto en cada periodo. Está
+//    centrado en TOP (o se arma con dos mitades iguales): basta con reservar
+//    la MITAD del pulso mínimo por lado de la rampa.
+//                         328P                     4809
+//      DT 500 ns:   333 - 8  - 4 = 321       416 - 10 - 5 = 401
+//      DT 1 µs:     333 - 16 - 4 = 313       416 - 20 - 5 = 391
+//
+// Resultado (lo que usa spwm_fijar_amplitud según el módulo instalado):
+//                         328P                     4809
+//      DT 500 ns:   316  (m = 0.949, techo)  395  (m = 0.950, techo)
+//      DT 1 µs:     313  (m = 0.939, físico) 391  (m = 0.940, físico)
+constexpr uint8_t  M_TECHO_PORCIENTO = 95;
+constexpr uint16_t AMPLITUD_TECHO_CUENTAS =
+    (uint16_t)((uint32_t)TOP_CUENTAS * M_TECHO_PORCIENTO / 100);
 
-// Índice de modulación máximo en milésimas (sólo informativo, para el reporte).
-constexpr uint16_t M_MAX_MILESIMAS =
-    (uint16_t)((uint32_t)AMPLITUD_MAX_CUENTAS * 1000UL / TOP_CUENTAS);
+constexpr uint16_t AMPLITUD_FISICA_MODERNO = TOP_CUENTAS - DT_MODERNO_CUENTAS - PULSO_MIN_CUENTAS / 2;
+constexpr uint16_t AMPLITUD_FISICA_LEGACY  = TOP_CUENTAS - DT_LEGACY_CUENTAS  - PULSO_MIN_CUENTAS / 2;
+
+constexpr uint16_t AMPLITUD_MAX_MODERNO =
+    AMPLITUD_TECHO_CUENTAS < AMPLITUD_FISICA_MODERNO ? AMPLITUD_TECHO_CUENTAS : AMPLITUD_FISICA_MODERNO;
+constexpr uint16_t AMPLITUD_MAX_LEGACY =
+    AMPLITUD_TECHO_CUENTAS < AMPLITUD_FISICA_LEGACY ? AMPLITUD_TECHO_CUENTAS : AMPLITUD_FISICA_LEGACY;
 
 static_assert(PULSO_MIN_CUENTAS >= 1, "El pulso mínimo debe ser de al menos 1 cuenta");
-static_assert(AMPLITUD_MAX_CUENTAS <= COMPARADOR_ALTO_MAX,
+static_assert(M_TECHO_PORCIENTO <= 95, "El techo absoluto de modulación es 95 %");
+static_assert(AMPLITUD_MAX_LEGACY <= COMPARADOR_ALTO_MAX && AMPLITUD_MAX_MODERNO <= TOP_CUENTAS - DT_MODERNO_CUENTAS,
   "La amplitud máxima no puede pasar del comparador máximo");
-static_assert(M_MAX_MILESIMAS >= 900,
+static_assert((uint32_t)AMPLITUD_MAX_LEGACY * 1000UL / TOP_CUENTAS >= 900,
   "El índice de modulación máximo quedó abajo de 0.90: revise pulso mínimo y tiempo muerto");

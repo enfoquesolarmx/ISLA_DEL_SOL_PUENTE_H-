@@ -56,7 +56,7 @@ void spwm_arrancar();
 // timer detenido. Se puede llamar desde una interrupción.
 void spwm_detener();
 
-// Amplitud en cuentas (0 .. AMPLITUD_MAX_CUENTAS; se recorta si es mayor).
+// Amplitud en cuentas (0 .. spwm_amplitud_max(); se recorta si es mayor).
 // Se aplica al inicio del siguiente ciclo de 60 Hz, nunca a la mitad:
 // así los dos semiciclos de un ciclo tienen siempre la misma amplitud y
 // no aparece componente de CD en el transformador.
@@ -70,6 +70,11 @@ bool spwm_activo();
 
 // Tiempo muerto en uso, en cuentas.
 uint8_t spwm_dt_cuentas();
+
+// Amplitud máxima en cuentas con el tiempo muerto en uso: la menor entre el
+// techo absoluto del 95 % y el límite físico (ver config_spwm.h).
+//   328P: 316 con DT de 500 ns, 313 con DT de 1 µs.
+uint16_t spwm_amplitud_max();
 
 // Frecuencia de línea en uso (60 o 50) y muestras por ciclo (400 o 480).
 uint8_t  spwm_frecuencia_hz();

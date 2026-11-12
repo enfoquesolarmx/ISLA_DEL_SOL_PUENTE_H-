@@ -136,7 +136,9 @@ static Resultado correr(uint8_t dtPedido, uint16_t amp, int ciclos, uint8_t hz) 
     b1 += vper[ini + i] * std::cos(th);
   }
   const double fund = 2.0 * std::sqrt(a1 * a1 + b1 * b1) / N;
-  const double esperado = (double)(amp > AMPLITUD_MAX_CUENTAS ? AMPLITUD_MAX_CUENTAS : amp) / TOP;
+  const uint16_t ampMax = spwm_amplitud_max();
+  if (ampMax * 100UL > (uint32_t)TOP * M_TECHO_PORCIENTO) FALLA("amplitud máxima %u pasa del %u %%", ampMax, M_TECHO_PORCIENTO);
+  const double esperado = (double)(amp > ampMax ? ampMax : amp) / TOP;
   r.cdMax = cdMax;
   r.errFund = esperado > 0 ? (fund - esperado) / esperado : fund;
   delete[] vper;
@@ -149,12 +151,13 @@ static Resultado correr(uint8_t dtPedido, uint16_t amp, int ciclos, uint8_t hz) 
 }
 
 int main() {
-  printf("Prueba de spwm_328p.cpp - TOP %d, DT %d/%d cuentas, pulso min %d, amplitud max %d\n",
-         TOP_CUENTAS, DT_MODERNO_CUENTAS, DT_LEGACY_CUENTAS, PULSO_MIN_CUENTAS, AMPLITUD_MAX_CUENTAS);
+  printf("Prueba de spwm_328p.cpp - TOP %d, DT %d/%d cuentas, pulso min %d, amplitud max %d/%d (techo %d %%)\n",
+         TOP_CUENTAS, DT_MODERNO_CUENTAS, DT_LEGACY_CUENTAS, PULSO_MIN_CUENTAS,
+         AMPLITUD_MAX_MODERNO, AMPLITUD_MAX_LEGACY, M_TECHO_PORCIENTO);
   printf("%-5s %-8s %-6s %-9s %-9s %-10s %-10s %-9s\n",
          "Hz", "DT", "amp", "DTmin A", "DTmin B", "pulso min", "CD max", "err fund");
   const uint8_t dts[] = {DT_MODERNO_CUENTAS, DT_LEGACY_CUENTAS, 3};   // 3 = valor inválido -> legacy
-  const uint16_t amps[] = {0, 20, 100, 200, AMPLITUD_MAX_CUENTAS, 400};
+  const uint16_t amps[] = {0, 20, 100, 200, AMPLITUD_MAX_LEGACY, AMPLITUD_MAX_MODERNO, 400};
   const uint8_t hzs[] = {LINEA_60_HZ, LINEA_50_HZ};
   for (uint8_t hz : hzs)
   for (uint8_t dt : dts) {
