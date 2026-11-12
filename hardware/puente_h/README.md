@@ -41,6 +41,7 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 | `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_sch` | Esquemático principal (hoja raíz A3 por bloques A–I, KiCad 9) |
 | `CAPACITORES.kicad_sch` | Hoja jerárquica: banco de capacitores del bus (antes `CAPASITORES.kicad_sch`) |
 | `DISIPADORES.kicad_sch` | Hoja jerárquica: disipadores (antes `untitled.kicad_sch`) |
+| `ESTUDIOS.kicad_sch` | Hoja jerárquica sin conexiones: las tres láminas de estudio (red de compuerta y comparación de MOSFET), sección 6.1 |
 | `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pcb` | Layout |
 | `Heatsink_Fischer_SK129-STS_50.8mm.step` | Modelo 3D del disipador Fischer SK 129 50.8 STS (hecho con las coordenadas de la huella oficial de KiCad) |
 | `Disipador_V8511Y_equiv.step` | Modelo 3D aproximado de un disipador equivalente (versión anterior, ya no se usa en el layout) |
@@ -64,7 +65,7 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 | **E** | Sockets J10 (A) y J9 (B) de los gate drivers |
 | **F** | Alimentación **15V_GA** (J7, LED D6) y **15V_GB** (J4, LED D5) |
 | **G** | Salida J8 al buck, con R14 |
-| **H** | Hojas jerárquicas CAPACITORES y DISIPADORES |
+| **H** | Hojas jerárquicas CAPACITORES, DISIPADORES y ESTUDIOS |
 | **I** | Notas al día y guía rápida de trinchera |
 
 *Cada bloque lleva su nota: qué hace, qué medir y qué pasa si algo va mal.*
@@ -177,6 +178,24 @@ Cada MOSFET tiene la misma red, junto a sus patas, en la cara de soldadura:
 - **10 kΩ gate–source:** mantienen apagado el MOSFET si el módulo no está puesto o se desconecta.
 - **Kelvin:** el retorno de cada gate driver se toma en el source de su MOSFET, a través de un *net tie* colocado **del lado contrario al flujo de potencia**, para que la caída de la corriente de carga no se sume al voltaje de compuerta.
 - **Pares acoplados:** cada señal de gate viaja junto a su retorno Kelvin, con una separación mediana de 0.73 mm.
+
+### 6.1 Láminas de estudio (REV C, 2026-10-31)
+
+Las tres láminas con las que se eligieron la red de compuerta y el MOSFET. Antes estaban pegadas en la hoja raíz, encimadas con el circuito; ahora viven en su propia hoja, `ESTUDIOS.kicad_sch`, y aquí como imagen.
+
+![Estudio de la red de compuerta](img/estudio_red_compuerta.png)
+
+*Red de compuerta (R1, R2, R3, D): función de cada componente, ecuaciones, valores recomendados por MOSFET e inmunidad a encendido parásito por dv/dt (Miller).*
+
+![Comparación de MOSFET: datos de hoja y potencia](img/estudio_mosfet_1_datos.png)
+
+*Comparación de MOSFET, hoja 1: datos de hoja de datos, comportamiento en conmutación y potencia del puente en continua y en pico de arranque.*
+
+![Comparación de MOSFET: pros, contras y recomendación](img/estudio_mosfet_2_pros_contras.png)
+
+*Comparación de MOSFET, hoja 2: pros y contras, recomendación final (IRF100P219 para el prototipo) y fuentes.*
+
+> Las láminas son del 2026-10-31. Algunos supuestos cambiaron después: el tiempo muerto ahora lo declara cada módulo por P9 (500 ns o 1 µs) y la red de compuerta usa ES1D en lugar de SS14. Lo vigente es lo de las secciones 6 y 7 de este README.
 
 ---
 
@@ -406,7 +425,7 @@ La auditoría completa está en [`auditoria/README.md`](auditoria/README.md). Re
 | 2026-11-05 | Auditoría con MOSFET y Rubycon; sensibilidad y validación del método | Todo dentro de sus límites, incluso en el caso pesimista |
 | 2026-11-05 | Ventanas del MOSFET bajo con cuello en la pata central: Q2 a 2.50 mm del gate y 2.85 mm de GND; Q4 a 2.84 / 3.12 mm. Las del MOSFET alto quedan a 1.98–1.99 mm del pin de 48 V. Serigrafía HO_A / LO_A corregida | Verificado con la geometría exacta; sin pistas con net distinta a su pad ni referencias duplicadas: **lista para fabricar** |
 | 2026-11-05 | Nets de compuerta unificadas: `HO_A` / `LO_A` (pierna A) y `HO_B` / `LO_B` (pierna B), de J10/J9 hasta las redes de gate | Ninguna pista queda con net distinta a la del pad que toca |
-| 2026-11-12 | **Hoja raíz rehecha en A3 por bloques A–I** (antes casi todo quedaba fuera de la hoja A4); MOSFET con símbolo de **canal N** (antes `IRF4905`, canal P; los pines 1 G · 2 D · 3 S no cambian); D1–D4 con símbolo de diodo rápido (antes Schottky SS14); red **15V → 15V_GB**, pareja de 15V_GA como en la tarjeta de control; hojas renombradas a **CAPACITORES** y **DISIPADORES**; valores con voltaje y dieléctrico (cerámicos 100 V X7R, Rubycon 100 V ZLH); notas al día (tiempo muerto por P9, 33 A RMS, bootstrap en los módulos); J3-5 y J9/J10-3, 8, 9 marcados sin conexión; se quitaron los buses de adorno | Conexiones idénticas a la versión anterior (comparadas pin por pin). PCB sincronizado: red 15V_GB, nombres de hoja y valores; sin mover huellas ni pistas; la serigrafía no cambia |
+| 2026-11-12 | **Hoja raíz rehecha en A3 por bloques A–I** (antes casi todo quedaba fuera de la hoja A4); MOSFET con símbolo de **canal N** (antes `IRF4905`, canal P; los pines 1 G · 2 D · 3 S no cambian); D1–D4 con símbolo de diodo rápido (antes Schottky SS14); red **15V → 15V_GB**, pareja de 15V_GA como en la tarjeta de control; hojas renombradas a **CAPACITORES** y **DISIPADORES**; valores con voltaje y dieléctrico (cerámicos 100 V X7R, Rubycon 100 V ZLH); notas al día (tiempo muerto por P9, 33 A RMS, bootstrap en los módulos); J3-5 y J9/J10-3, 8, 9 marcados sin conexión; se quitaron los buses de adorno; las 3 láminas de estudio (imágenes de ~1 MB que generaban líneas de más de 1 MB y KiCad no abría el archivo) pasan a la hoja **ESTUDIOS** y a `img/` | Conexiones idénticas a la versión anterior (comparadas pin por pin). PCB sincronizado: red 15V_GB, nombres de hoja y valores; sin mover huellas ni pistas; la serigrafía no cambia |
 
 ---
 
