@@ -71,6 +71,44 @@ constexpr uint16_t DT_MODERNO_NS = 500;    // P9 = GND
 constexpr uint16_t DT_LEGACY_NS  = 1000;   // P9 abierto o falla (valor seguro)
 
 // ======================== MUESTRAS DE LA TABLA SENO ==========================
+// Una muestra por periodo de portadora: 400 por ciclo de 60 Hz.
+//
+// POR QUÉ SÓLO SE GUARDA UN CUARTO DE ONDA (100 muestras)
+//   La senoidal es simétrica. Con el tramo de 0° a 90° se arma el ciclo entero:
+//
+//     muestra k del semiciclo (0..199)     se lee de la tabla
+//     ---------------------------------    ------------------------------
+//     0 .. 99    (0° a 90°,   subida)      tabla[k]          tal cual
+//     100 .. 199 (90° a 180°, bajada)      tabla[199 - k]    en espejo
+//     segundo semiciclo (180° a 360°)      los mismos valores; la polaridad
+//                                          la pone la PIERNA B, no la tabla
+//
+//   En la modulación híbrida la pierna A sólo necesita la MAGNITUD |sen θ|:
+//   el signo lo da la pierna B al cambiar de lado en el cruce por cero.
+//   Por eso nunca se guardan valores negativos.
+//
+//   Lo que cuesta cada opción (2 bytes por muestra):
+//     tabla completa  400 muestras = 800 B
+//     semiciclo       200 muestras = 400 B
+//     cuarto de onda  100 muestras = 200 B   <- la elegida
+//   El espejo cuesta 1 comparación + 1 resta en la ISR: unos 3-4 ciclos de
+//   los 666 que hay por periodo (~0.5 %). Se ahorran 600 B de flash casi gratis.
+//
+//   La tabla va en FLASH (PROGMEM), no en RAM. El 328P tiene sólo 2 KB de RAM:
+//   una tabla completa calculada en RAM al arrancar se comería el 40 %.
+//
+// DETALLE QUE NO SE DEBE CAMBIAR: MUESTRA EN EL CENTRO DEL PERIODO
+//   Cada muestra se toma a la mitad de su periodo de portadora:
+//       tabla[k] = sen( (k + 0.5) × 180° / 200 )      <- correcto
+//   y NO en el borde:
+//       tabla[k] = sen(  k        × 180° / 200 )      <- mal
+//   Tomada al centro, la muestra k y la 199 - k valen exactamente lo mismo y el
+//   espejo sale perfecto. En el borde, el pico de 90° queda en una sola muestra
+//   sin pareja: el espejo se corre una muestra, la onda sale un poco asimétrica
+//   y aparece componente par (distorsión que se puede evitar sin costo).
+//
+//   Por eso MUESTRAS_CICLO debe ser múltiplo de 4 (ver static_assert abajo):
+//   400 se parte en cuatro cuartos exactos de 100.
 constexpr uint16_t MUESTRAS_CICLO     = FSW_OBJETIVO_HZ / F_LINEA_HZ;   // 400
 constexpr uint16_t MUESTRAS_SEMICICLO = MUESTRAS_CICLO / 2;             // 200
 constexpr uint16_t MUESTRAS_CUARTO    = MUESTRAS_CICLO / 4;             // 100 (tabla en flash)
