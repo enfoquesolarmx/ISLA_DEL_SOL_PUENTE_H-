@@ -229,6 +229,35 @@ Resultado actual: **todo correcto** en las dos frecuencias. DT mínimo de 8 / 16
 
 > Si cualquiera de estos puntos falla, **no conectes la etapa de potencia**.
 
+### 7.1 Con analizador lógico (genérico de 24 MHz y 8 canales)
+
+Sirve el clon de Saleae de 24 MHz con **PulseView** (sigrok, gratuito, driver `fx2lafw`) o con el software Logic de Saleae. A 24 MHz cada muestra vale 41.7 ns: el tiempo muerto de 1 µs se mide con ±42 ns.
+
+| Canal | Pin del Nano | Señal |
+| --- | --- | --- |
+| 0 | D9 | HA |
+| 1 | D10 | LA |
+| 2 | D11 | HB |
+| 3 | D3 | LB |
+| 4 | D12 | EN_HW |
+| GND | GND | **Obligatorio** |
+
+1. Muestreo **24 MHz**, al menos **100 ms**, disparo en **flanco de subida del canal 3** (inicio del semiciclo +). Espera ~2 s después de encender para que la rampa llegue al máximo.
+2. Guarda la sesión (`.sr` en PulseView) o exporta a CSV (PulseView o Saleae).
+3. Analízala:
+
+```
+python3 pruebas/analiza_captura.py captura.sr                     # 60 Hz, DT 1 µs (sin P9)
+python3 pruebas/analiza_captura.py captura.sr --hz 50 --dt-ns 500
+python3 pruebas/analiza_captura.py captura_saleae.csv --fs 24e6
+```
+
+El script verifica: HA/LA y HB/LB nunca juntos, tiempo muerto de cada flanco, hueco de la pierna B, portadora, frecuencia de salida, pulso más angosto, forma senoidal y amplitud (m), D12 en 0 y el estado al inicio de la captura. Termina con **"RESULTADO: todo correcto"** o con la lista de fallas.
+
+Se probó con capturas sintéticas de 24 MHz en los tres formatos (60 y 50 Hz). Una captura con **un solo flanco sin tiempo muerto entre 5 642** se marca como **FALLA**.
+
+> Una captura extra **justo al encender** muestra la rampa y comprueba que ninguna señal se mueve antes de que arranque la SPWM.
+
 ## 8. Qué se tomó del borrador antiguo y qué cambió
 
 El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó **solo como referencia de estudio**. Todo el código de esta carpeta está escrito desde cero (MIT).
@@ -252,3 +281,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | Paso 1: `config_portadora.h` (portadora, muestras, TOP, tiempo muerto en cuentas, protecciones al compilar) y `ISLA_CRITICO.ino` con salidas seguras y reporte. Explicación del cuarto de onda en el código y en la sección 3.1. Compila en 328P: 4.0 KB de flash, 199 B de RAM. Escrito desde cero (MIT); el borrador antiguo de 4400 líneas solo se usó como referencia de estudio |
 | 2026-11-12 | **Soporte de 50 Hz y 60 Hz** (`FRECUENCIA_LINEA_HZ`): portadora fija de 24 kHz, 480 muestras a 50 Hz con su propia tabla de cuarto de onda (120). `spwm_preparar(dt, frecuencia)` rechaza valores inválidos y queda en 60 Hz. Decisión: la frecuencia se elige solo en el código, no desde el SETUP. Advertencias de transformador y voltaje en la sección 5. Prueba en la PC: todo correcto en las dos frecuencias. ISR de 169–180 ciclos. Compila: 5.7 KB de flash, 233 B de RAM |
 | 2026-11-12 | **Techo absoluto de modulación del 95 %** (`M_TECHO_PORCIENTO`). Amplitud máxima = la menor entre el techo y el límite físico del DT en uso: 316 (500 ns) / 313 (1 µs). `spwm_amplitud_max()`. Prueba en la PC: todo correcto |
+| 2026-11-12 | `pruebas/analiza_captura.py`: valida la SPWM real con un analizador lógico de 24 MHz (`.sr` de PulseView, CSV de PulseView o de Saleae). Probado con capturas sintéticas; detecta un solo flanco sin tiempo muerto. Sección 7.1 |
