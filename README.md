@@ -37,7 +37,7 @@ Los módulos de gate driver son **intercambiables**: usan los mismos conectores 
 | Módulo | Tecnología | Tiempo muerto | Para qué | Estado |
 | --- | --- | --- | --- | --- |
 | IRS2186 | Driver de bootstrap | 500 ns | Producción, bajo costo | **Diseñado** (P9 en J1) |
-| UCC21520ADWR | Driver aislado | 500 ns | Mejor desempeño | Diseñado |
+| UCC21520DW | Driver aislado | 500 ns | Mejor desempeño | Diseñado |
 | **TLP250 + tótem TIP41C/TIP42C** | Optoacoplador DIP + transistores TO-220 | **1 µs** | **Modo trinchera:** zonas sin acceso a componentes modernos; reparable con partes de tienda local | **V.0.1 diseñado** |
 | **IR2110 + tótem TIP41C/TIP42C** | Driver de bootstrap legacy (DIP-14) + transistores TO-220 | **1 µs** | **Modo trinchera:** el driver de medio puente más fácil de conseguir o rescatar; reparable con partes de tienda local; de 1 a 5 MOSFET por posición | **V.0.1 diseñado** |
 
@@ -158,7 +158,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | --- | --- | --- | --- |
 | **IRS2186** | [README](hardware/gate-drivers/irs2186/README.md) | ✓ Esquemático (por bloques A–F con notas), PCB y proyecto | Interfaz con P9 a GND; tierras compartidas (lógica = potencia), unión única GND_K–GND con *net tie* y cómo controlar el lazo de tierra; bootstrap ES1D → R 2.2 Ω → VB con referencias; cálculo de los 500 ns; **alcance por cantidad de MOSFET** (1 IRF100P219 o hasta 2 IRF540N); opciones con tótem; lista de materiales; validación |
 | **TLP250 + tótem TIP41C/TIP42C** (trinchera) | [README](hardware/gate-drivers/tlp250-trinchera/README.md) | ✓ Esquemático (por bloques A–I con **guía rápida de trinchera**: TLP250 contra TLP250H, ensamble y prueba sin MOSFET), PCB y proyecto | Propósito educativo y de supervivencia; entrada aislada; por qué 1 µs; tótem y regla de 250 nC; **evaluación de 9 transistores** (por qué TIP41/42 y no BD, Darlington, IRF540 o BC); layout; BOM; ensamble con RTV neutro; validación en 10 pasos; **registro de errores corregidos durante el diseño** |
-| **UCC21520ADWR** | [README](hardware/gate-drivers/ucc21520/README.md) (borrador) | Pendiente de subir | Driver aislado de dos canales (4 A / 6 A), tiempo muerto programable por hardware, protección contra entradas encimadas, bootstrap; P9 a GND (500 ns). **Pendiente: R3 a 50 kΩ** para garantizar 500 ns en hardware |
+| **UCC21520DW** | [README](hardware/gate-drivers/ucc21520/README.md) | ✓ Esquemático (por bloques), PCB y proyecto | Driver aislado de dos canales (4 A / 6 A), protección contra entradas encimadas, bootstrap; P9 a GND (500 ns). **R3 = 49.9 kΩ**: 500 ns de respaldo por hardware (el driver aplica el mayor entre firmware y R3, no la suma). **UCC21520DW** (UVLO 8 V), no la versión A (5 V) |
 | **IR2110 + tótem TIP41C/TIP42C** (trinchera) | [README](hardware/gate-drivers/ir2110-trinchera/README.md) | ✓ Esquemático (por bloques A–I con **guía rápida de trinchera**: ensamble y prueba sin MOSFET), PCB y proyecto | VSS y COM separados con J5-6 a GND lógico; VDD de 5 V con 78L05; SD a VSS; tótem por canal con su desacoplo; zener en VB–VS1 y en VCC; P9 abierto (1 µs); **alcance de 1 a 5 MOSFET** y refuerzo del bootstrap; **registro de 8 errores corregidos**; BOM; validación |
 
 
@@ -218,7 +218,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | Etapa | Estado |
 | --- | --- |
 | Tarjeta del puente H (REV C) | **Lista para fabricar** (cobre 1 oz, auditada); pendiente validar en banco |
-| Módulo UCC21520 | Diseñado, con P9 a GND en J4; pendiente cambiar R3 a 50 kΩ y subir los archivos de KiCad |
+| Módulo UCC21520 | **V0.1** (2026-11-12): esquemático y PCB subidos, R3 = 49.9 kΩ, UCC21520DW. Pendiente: DRC, fabricar y validar en banco |
 | Módulo TLP250 de trinchera | V.0.1 diseñado; pendiente fabricar y validar |
 | Módulo IRS2186 | Diseñado con P9 en J1; pendiente fabricar y validar |
 | Módulo IR2110 + tótem TIP41C/TIP42C (trinchera) | V.0.1 diseñado (DRC sin errores); pendiente fabricar y validar |

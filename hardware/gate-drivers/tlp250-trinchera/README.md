@@ -2,7 +2,7 @@
 # Módulo gate driver de medio puente H con TLP250H — modo trinchera (legacy) con tótem TIP41C/TIP42C
 
 **Proyecto:** Puente H — prototipo SPWM "Isla del Sol" (inversor 48 V → 127 V / 60 Hz, 1000 W; modo cargador 1 kVA)
-**Módulo:** gate driver de **medio puente H** (una rama: MOSFET alto + MOSFET bajo), de servicio / legacy, intercambiable con IRS2186 y UCC21520ADWR (misma interfaz, mismo firmware)
+**Módulo:** gate driver de **medio puente H** (una rama: MOSFET alto + MOSFET bajo), de servicio / legacy, intercambiable con IRS2186 y UCC21520DW (misma interfaz, mismo firmware)
 **Versión de placa:** V.0.1.NOV.26.J.G
 **Estado:** diseño terminado (esquemático y layout); esquemático por bloques con guía de trinchera (2026-11-12). Pendiente: DRC final, fabricación y validación en banco
 **Fecha:** 2026-11-02 · **Revisión:** 2026-11-03 (diseño final) · 2026-11-12 (esquemático por bloques)

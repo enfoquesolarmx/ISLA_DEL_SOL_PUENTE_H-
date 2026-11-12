@@ -3,7 +3,7 @@
 
 **Proyecto:** Puente H — prototipo SPWM "Isla del Sol" (inversor 48 V → 127 V / 60 Hz, 1000 W; modo cargador 1 kVA)
 **Módulo:** gate driver de **medio puente H** (una rama: MOSFET alto + MOSFET bajo) con bootstrap. Es el **módulo principal de producción**: bajo costo y 500 ns de tiempo muerto
-**Intercambiable con:** UCC21520ADWR y TLP250 de trinchera (misma interfaz J1/J5, mismo firmware)
+**Intercambiable con:** UCC21520DW y TLP250 de trinchera (misma interfaz J1/J5, mismo firmware)
 **Estado:** diseño terminado con P9 en J1; esquemático reordenado por bloques (2026-11-12). Pendiente: DRC final, fabricación y validación en banco
 **Fecha:** 2026-11-03 (esquemático por bloques: 2026-11-12)
 **Documentos relacionados:** [`docs/identificacion_dt_pin9.md`](../../../docs/identificacion_dt_pin9.md), [`docs/compensacion_adaptativa_tiempo_muerto.md`](../../../docs/compensacion_adaptativa_tiempo_muerto.md), [módulo TLP250](../tlp250-trinchera/README.md)
@@ -46,7 +46,7 @@ Cada módulo maneja **una rama** del puente H: el **MOSFET del lado alto** (HO, 
 
 ### Por qué el IRS2186
 
-| Criterio | IRS2186 (este) | UCC21520ADWR | TLP250 + tótem |
+| Criterio | IRS2186 (este) | UCC21520DW | TLP250 + tótem |
 | --- | --- | --- | --- |
 | Costo y número de componentes | **El menor** ✓ | Medio | El mayor |
 | Tiempo muerto | **500 ns** ✓ | 500 ns | 1 µs |
