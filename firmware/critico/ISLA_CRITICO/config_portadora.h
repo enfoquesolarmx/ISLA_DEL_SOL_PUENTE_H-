@@ -63,10 +63,14 @@ static_assert(RELOJ_HZ == RELOJ_ESPERADO_HZ,
 //          Uruguay, Paraguay, Bolivia, gran parte de Asia...
 //   (Confirme siempre con la placa de la red o del generador del lugar.)
 //
-// El mismo firmware trae las DOS frecuencias. Aquí se elige la que usa el
-// equipo al encender; el valor se pasa a spwm_preparar(). Más adelante se
-// podrá elegir desde el menú SETUP del panel (AUX, guardado en EEPROM) y, con
-// red presente, se tomará la de la red medida (ac_fb_grid).
+// El mismo firmware trae las DOS frecuencias. AQUÍ, Y SÓLO AQUÍ, se elige la
+// que usa el equipo; el valor se pasa a spwm_preparar() al encender.
+// DECISIÓN DEL PROYECTO: NO se elige desde el menú SETUP del panel. Pasar de
+// 60 a 50 Hz obliga a cambiar el transformador (ver abajo): quien hace ese
+// cambio de hardware cambia esta línea y vuelve a cargar el firmware. Así
+// nadie cambia la frecuencia por accidente desde los botones.
+// Con red presente, ac_fb_grid (pendiente) medirá la frecuencia de la red y
+// NO sincronizará si no coincide con la elegida aquí.
 //
 // ⚠ CAMBIAR A 50 Hz NO BASTA CON EL FIRMWARE. Antes, revisar el hardware:
 //   - TRANSFORMADOR: a 50 Hz el núcleo trabaja con 20 % MÁS FLUJO que a 60 Hz

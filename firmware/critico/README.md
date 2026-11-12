@@ -150,7 +150,7 @@ Más de lo que estimó [DC-017](../../docs/decisiones_criticas.md) (80–120 cic
 
 ## 5. Frecuencia de línea: 50 o 60 Hz
 
-El mismo firmware trae las dos frecuencias. Hoy se elige en `config_portadora.h`:
+El mismo firmware trae las dos frecuencias. **Se elige solo en `config_portadora.h` y se vuelve a cargar el firmware; no hay opción en el menú SETUP.** Pasar de 60 a 50 Hz obliga a cambiar el transformador ([5.2](#52--cambiar-a-50-hz-no-basta-con-el-firmware)). Quien hace ese cambio de hardware cambia esta línea, y nadie cambia la frecuencia por accidente desde los botones.
 
 ```cpp
 constexpr uint8_t FRECUENCIA_LINEA_HZ = LINEA_60_HZ;   // <-- 60 o 50
@@ -180,8 +180,8 @@ constexpr uint8_t FRECUENCIA_LINEA_HZ = LINEA_60_HZ;   // <-- 60 o 50
 
 ### 5.3 Pendiente
 
-- **Elegir la frecuencia sin reprogramar:** desde el menú SETUP del panel (AUX), guardada en EEPROM y enviada al CRÍTICO por I2C. El CRÍTICO la aplica solo con la SPWM detenida.
-- **Con red presente:** medir la frecuencia de la red (`ac_fb_grid`) y negarse a sincronizar si no coincide con la elegida.
+- **Con red presente:** medir la frecuencia de la red (`ac_fb_grid`) y **no sincronizar** si no coincide con la elegida, con aviso en el LCD.
+- **Reporte:** el AUX mostrará en el LCD la frecuencia con la que se compiló el firmware (solo lectura).
 
 ## 6. Prueba en la PC (`pruebas/`)
 
@@ -244,4 +244,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | Fecha | Cambio |
 | --- | --- |
 | 2026-11-12 | Paso 1: `config_portadora.h` (portadora, muestras, TOP, tiempo muerto en cuentas, protecciones al compilar) y `ISLA_CRITICO.ino` con salidas seguras y reporte. Explicación del cuarto de onda en el código y en la sección 3.1. Compila en 328P: 4.0 KB de flash, 199 B de RAM. Escrito desde cero (MIT); el borrador antiguo de 4400 líneas solo se usó como referencia de estudio |
-| 2026-11-12 | **Soporte de 50 Hz y 60 Hz** (`FRECUENCIA_LINEA_HZ`): portadora fija de 24 kHz, 480 muestras a 50 Hz con su propia tabla de cuarto de onda (120). `spwm_preparar(dt, frecuencia)` rechaza valores inválidos y queda en 60 Hz. Advertencias de transformador y voltaje en la sección 5. Prueba en la PC: todo correcto en las dos frecuencias. ISR de 169–180 ciclos. Compila: 5.7 KB de flash, 233 B de RAM |
+| 2026-11-12 | **Soporte de 50 Hz y 60 Hz** (`FRECUENCIA_LINEA_HZ`): portadora fija de 24 kHz, 480 muestras a 50 Hz con su propia tabla de cuarto de onda (120). `spwm_preparar(dt, frecuencia)` rechaza valores inválidos y queda en 60 Hz. Decisión: la frecuencia se elige solo en el código, no desde el SETUP. Advertencias de transformador y voltaje en la sección 5. Prueba en la PC: todo correcto en las dos frecuencias. ISR de 169–180 ciclos. Compila: 5.7 KB de flash, 233 B de RAM |
