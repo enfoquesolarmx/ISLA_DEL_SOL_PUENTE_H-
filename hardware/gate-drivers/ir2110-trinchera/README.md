@@ -4,15 +4,44 @@
 **Módulo:** gate driver de **medio puente H** (una rama: MOSFET alto + MOSFET bajo), legacy / trinchera, con tótem por canal
 **Intercambiable con:** IRS2186, UCC21520ADWR y TLP250 de trinchera (misma interfaz J2/J5, mismo firmware)
 **Versión de placa:** V.0.1.NOV.26.J.G
-**Estado:** diseño terminado; DRC con 0 errores y 0 elementos sin conectar. Pendiente: fabricación y validación en banco
-**Fecha:** 2026-11-04
+**Estado:** diseño terminado; DRC con 0 errores y 0 elementos sin conectar; esquemático por bloques con guía de trinchera (2026-11-12). Pendiente: fabricación y validación en banco
+**Fecha:** 2026-11-04 (esquemático por bloques: 2026-11-12)
 **Documentos relacionados:** [`docs/identificacion_dt_pin9.md`](../../../docs/identificacion_dt_pin9.md), [`docs/sensado_corriente.md`](../../../docs/sensado_corriente.md), [módulo TLP250](../tlp250-trinchera/README.md), [módulo IRS2186](../irs2186/README.md)
 
 | Cara de componentes | Cara de soldadura |
 | --- | --- |
 | ![Módulo IR2110, vista 3D superior](img/ir2110_3d_superior.png) | ![Módulo IR2110, vista 3D inferior](img/ir2110_3d_inferior.png) |
 
-*Izquierda: arriba, la bornera J2 de entrada con R1 y R2 (10 kΩ, pull-down de HIN y LIN); en medio, el **IR2110 en DIP-14** con sus capacitores X7R; abajo, los **cuatro TO-220 del tótem** (TIP41C o D44H11 como NPN, TIP42C o D45H11 como PNP) y el header J5 hacia el puente H (H · VS1 · · · GK · L · G · 15V · llave · NC). La leyenda **"USAR SILICÓN RTV NEUTRO ENTRE TIPs"** recuerda fijar los transistores a la tarjeta con silicón de curado neutro. Derecha: la leyenda **"ATENCIÓN: DT = 1 µs — VALIDAR MOSFET Y SW"**, el regulador **78L05** (SOT-89) que da los 5 V de VDD, la red de bootstrap (2.2 Ω 1 W + ES1D), los dos **zener de 18 V** (Vb–VS1 y 15V–GND_K) y la **X** de la llave en la posición 8 de J5.*
+*Izquierda: arriba, la bornera J2 de entrada con R1 y R2 (10 kΩ, pull-down de HIN y LIN); en medio, el **IR2110 en DIP-14** con sus capacitores X7R; abajo, los **cuatro TO-220 del tótem** (TIP41C o D44H11 como NPN, TIP42C o D45H11 como PNP) y el header J5 hacia el puente H (H · VS1 · · · GK · L · G · 15V · llave · NC). La leyenda **"USAR SILICÓN RTV NEUTRO ENTRE TIPs"** recuerda fijar los transistores a la tarjeta con silicón de curado neutro. Derecha: la leyenda **"ATENCIÓN: DT = 1 µs — VALIDAR MOSFET Y SW"**, el regulador **78L05** (SOT-89) que da los 5 V de VDD, la red de bootstrap (2.2 Ω 1 W + ES1D), los dos **zener de 18 V** (Z1: VB1–VS1 y Z2: 15V–GND_K) y la **X** de la llave en la posición 8 de J5.*
+
+![Esquemático del módulo IR2110 + tótem por bloques](img/esquematico_ir2110.png)
+
+*Esquemático por bloques (KiCad 9, hoja A3), pensado para quien arma y repara: **A** entrada J2 · **B** lógica de 5 V con 78L05 · **C** IR2110 · **D** 15 V del lado bajo · **E** bootstrap · **F** tótem alto · **G** tótem bajo · **H** salida J5 · **I** guía rápida de trinchera (ensamble y prueba sin MOSFET). Cada bloque dice qué medir y qué pasa si una pieza va al revés.*
+
+## 0. Guía rápida de trinchera
+
+**Antes de soldar:**
+
+| Pieza | Cuidado | Si se hace mal |
+| --- | --- | --- |
+| U1 IR2110 | En **zócalo DIP-14**, muesca hacia el pin 1 | Se cambia sin cautín; al revés se quema al conectar |
+| J5 | **Quitar el pin 8** del header (llave) | El módulo podría entrar al revés en el puente H |
+| Z1 | Banda (cátodo) hacia **VB1** | Pone en corto el bootstrap: el MOSFET alto nunca enciende |
+| Z2 | Banda (cátodo) hacia **15 V** | Se calienta y jala los 15 V |
+| Q1–Q4 | NPN (TIP41C / D44H11G) arriba, PNP (TIP42C / D45H11G) abajo; acostados, aletas sin tocarse | NPN y PNP cruzados: la salida no sigue a la entrada |
+| TIPs | Silicón RTV **neutro** entre los cuerpos y el PCB | El silicón acético corroe las patas |
+
+**Prueba sin MOSFET** (15 V en J5-7; J5-6 y J5-4 a la tierra de la fuente; **J5-2 (VS1) unido a J5-4** para que cargue el bootstrap; J2 a la tarjeta de control o a 5 V):
+
+| Medir | Entre | Debe dar |
+| --- | --- | --- |
+| VDD | Pin 9 y pin 13 del IR2110 | 5.0 V ± 0.25 V |
+| VCC | Pin 3 y pin 2 | 15 V |
+| SD | Pin 11 a GND | 0 V |
+| Salidas con J2 suelto | HA_OUT (J5-1) y LA_OUT (J5-5) | 0 V |
+| L = 5 V | LA_OUT a GND_K | ≈ 14 V (15 V menos el V_BE del tótem) |
+| H = 5 V (después de un pulso de L, para cargar el bootstrap) | HA_OUT a VS1 | ≈ 13 V |
+| Tiempo muerto | Lo que reporta el MCU | **1 µs** (P9 abierto) |
 
 > Valores verificados contra `GATE_DRIVER_IR2110_TOTEM.kicad_pcb` (2026-11-04). Lo marcado *(verificar)* depende de la hoja de datos.
 
@@ -105,13 +134,13 @@ El IR2110 tiene **dos tierras**: **VSS** (lógica) y **COM** (retorno del lado b
 
 | Pin | Señal | Conexión |
 | --- | --- | --- |
-| 1 | LO | R3 (2.2 Ω) → bases del tótem L |
+| 1 | LO | Red LO_IR → R3 (2.2 Ω) → bases del tótem L |
 | 2 | COM | **GND_K** |
 | 3 | VCC | **15 V**, desacoplo a GND_K |
 | 4 | — | NC |
 | 5 | VS | **VS1** |
-| 6 | VB | Nodo del bootstrap |
-| 7 | HO | R5 (2.2 Ω) → bases del tótem H |
+| 6 | VB | VB1, nodo del bootstrap |
+| 7 | HO | Red HO_IR → R5 (2.2 Ω) → bases del tótem H |
 | 8 | — | NC |
 | 9 | VDD | **5 V** del 78L05 |
 | 10 | HIN | J2-1 (H), 10 kΩ a GND |
@@ -137,9 +166,9 @@ El IR2110 tiene **dos tierras**: **VSS** (lógica) y **COM** (retorno del lado b
 ### 3.4 Bootstrap (lado alto)
 
 ```
-15 V ── D5 ES1D ── R9 2.2 Ω 1 W ──┬── VB (pin 6)
+15 V ── D5 ES1D ── R9 2.2 Ω 1 W ──┬── VB1 (pin 6)
                                   ├── C3, C5: 2 × 10 µF X7R ── VS1
-                                  └── Z1: zener 18 V (1SMA5931B), cátodo a VB ── VS1
+                                  └── Z1: zener 18 V (1SMA5931B), cátodo a VB1 ── VS1
 ```
 
 - **Z1 con el cátodo a VB.** Si se monta al revés, conduce en directo y pone en corto el bootstrap: el MOSFET alto nunca enciende.
@@ -149,7 +178,7 @@ El IR2110 tiene **dos tierras**: **VSS** (lógica) y **COM** (retorno del lado b
 ### 3.5 Tótems (uno por canal)
 
 ```
-Canal H:  VB ──┬── C9 10 µF ── VS1
+Canal H: VB1 ──┬── C9 10 µF ── VS1
                C
   HO ─[R5 2.2 Ω]─B  Q1 TIP41C / D44H11G
                E ──┬── HA_OUT (J5-1)
@@ -195,10 +224,10 @@ Las resistencias de compuerta de cada MOSFET y las de **compuerta a fuente** est
 
 ## 5. Layout (lo que se cuidó)
 
-- **Dominio HV (columna del canal H):** Q1, Q2, C9, la pista Vb, HA_OUT, C3, C5, Z1 y el pin 6 del IR2110. **0.6 mm** al resto (regla `HV_a_LV`). Ninguna pista de GND_K, 15 V o GND la cruza **por la misma capa**; los cruces van por la otra capa y en ángulo.
+- **Dominio HV (columna del canal H):** Q1, Q2, C9, la pista VB1, HA_OUT, C3, C5, Z1 y el pin 6 del IR2110. **0.6 mm** al resto (regla `HV_a_LV`). Ninguna pista de GND_K, 15 V o GND la cruza **por la misma capa**; los cruces van por la otra capa y en ángulo.
 - **SD (11) a VSS (13):** la pista rodea por debajo del cuerpo sin tocar LIN (12).
 - **C6 (VCC–COM)** en B.Cu entre los pines 2 y 3; capacitor de salida del 78L05 junto a VDD.
-- **C8 en B.Cu entre los colectores de Q3 (15 V) y Q4 (GND_K)**; **C9 (Vb–VS1)** fuera del camino de otras redes.
+- **C8 en B.Cu entre los colectores de Q3 (15 V) y Q4 (GND_K)**; **C9 (VB1–VS1)** fuera del camino de otras redes.
 - **J5-6 (GND)** llega desde arriba, sin pasar sobre el pad 7 (15 V).
 - **TIP acostados**, aletas sin tocarse; sin disipador.
 
@@ -265,7 +294,7 @@ El DRC da **0 errores y 0 elementos sin conectar**, con 3 avisos de "huella no c
 | --- | --- | --- | --- | --- |
 | U1 | IR2110 | DIP-14 (7.62 mm) | F.Cu | Driver de medio puente (se puede montar en zócalo) |
 | U2 | L78L05 | SOT-89-3 | B.Cu | VDD = 5 V |
-| Q1 | TIP41C / D44H11G | TO-220-3 | F.Cu | NPN tótem H (colector a Vb) |
+| Q1 | TIP41C / D44H11G | TO-220-3 | F.Cu | NPN tótem H (colector a VB1) |
 | Q2 | TIP42C / D45H11G | TO-220-3 | F.Cu | PNP tótem H (colector a VS1) |
 | Q3 | TIP41C / D44H11G | TO-220-3 | F.Cu | NPN tótem L (colector a 15 V) |
 | Q4 | TIP42C / D45H11G | TO-220-3 | F.Cu | PNP tótem L (colector a GND_K) |
@@ -273,11 +302,11 @@ El DRC da **0 errores y 0 elementos sin conectar**, con 3 avisos de "huella no c
 | R3 | 2.2 Ω | 1206 | F.Cu | Base del tótem L |
 | R5 | 2.2 Ω | 1206 | B.Cu | Base del tótem H |
 | R9 | 2.2 Ω 1 W | 1210 | B.Cu | Limitador del bootstrap |
-| D5 | ES1D | SMA | B.Cu | Diodo de bootstrap |
-| 1SMA5931B1 (Z1) | 18 V | SMA | B.Cu | Vb–VS1 (cátodo a Vb) |
-| 1SMA5931B2 (Z2) | 18 V | SMA | B.Cu | 15 V–GND_K (cátodo a 15 V) |
-| C3, C5 | 10 µF X7R 50 V | **1210** | F.Cu | Bootstrap Vb–VS1 |
-| C9 | 10 µF X7R 50 V | **1210** | F.Cu | Tótem H (Vb–VS1) |
+| D5 | ES1D (ultrarrápido, no Schottky) | SMA | B.Cu | Diodo de bootstrap |
+| Z1 | 1SMA5931BT3G, 18 V | SMA | B.Cu | VB1–VS1 (cátodo a VB1) |
+| Z2 | 1SMA5931BT3G, 18 V | SMA | B.Cu | 15 V–GND_K (cátodo a 15 V) |
+| C3, C5 | 10 µF X7R 50 V | **1210** | F.Cu | Bootstrap VB1–VS1 |
+| C9 | 10 µF X7R 50 V | **1210** | F.Cu | Tótem H (VB1–VS1) |
 | C8 | 10 µF X7R 50 V | **1210** | B.Cu | Tótem L (15 V–GND_K) |
 | C2, C4 | 10 µF X7R 50 V | **1210** | B.Cu | VCC–COM |
 | C6 | 0.1 µF X7R | 1206 | B.Cu | VCC–COM, junto a los pines 2 y 3 |
@@ -324,6 +353,7 @@ El DRC da **0 errores y 0 elementos sin conectar**, con 3 avisos de "huella no c
 | --- | --- | --- | --- |
 | 2026-11-03 | Definición del módulo (IR2110 + tótem, P9 abierto, 78L05, VSS/COM separados, SD a VSS) y primer layout | Corregidos: VCC y SD sin conectar, colector de Q3, orientación de Z1, rutas de VS1 y GND_K | Desacoplo de tótems, serigrafía |
 | 2026-11-04 | J5-6 a GND lógico; serigrafía completa; DRC | 0 errores, 0 sin conectar, 3 avisos esperados de huella modificada | Fabricar, validar en banco |
+| 2026-11-12 | Esquemático reordenado por bloques A–I (A3) con notas y **guía rápida de trinchera**; zener 1SMA5931B1/B2 → **Z1/Z2**; redes Vb → **VB1**, HO y LO del IR2110 → **HO_IR / LO_IR**; D5 con símbolo de diodo rápido; valores con voltaje y dieléctrico; J2-5 (P9), J5-3, J5-8 y J5-9 marcados sin conexión; PWR_FLAG en 15V, GND y GND_K para el ERC | Conexiones idénticas (comparadas pin por pin). Referencias, redes y valores sincronizados en el PCB, sin mover pistas | ERC y DRC en KiCad; fabricar, validar en banco |
 | | | | |
 
 ---
