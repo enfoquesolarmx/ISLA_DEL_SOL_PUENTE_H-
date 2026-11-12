@@ -6,7 +6,7 @@
 
 **Licencia:** MIT ([LICENSE.md](../../LICENSE.md))
 
-**Estado:** paso 2, SPWM híbrida en el ATmega328P para **60 Hz o 50 Hz**, verificada en la PC. **Prueba de banco sin potencia:** D12 (EN_HW) queda en 0 y las señales no pasan de la compuerta AND a los gate drivers.
+**Estado:** paso 2, SPWM híbrida en el ATmega328P para **60 Hz o 50 Hz**, verificada en la PC y **validada en un Nano real con analizador lógico** (60 Hz, DT 1 µs; sección 7.0). **Prueba de banco sin potencia:** D12 (EN_HW) queda en 0 y las señales no pasan de la compuerta AND a los gate drivers.
 
 ---
 
@@ -229,6 +229,27 @@ Resultado actual: **todo correcto** en las dos frecuencias. DT mínimo de 8 / 16
 
 > Si cualquiera de estos puntos falla, **no conectes la etapa de potencia**.
 
+### 7.0 Resultado de la primera prueba real (2026-11-12)
+
+Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico genérico a 16 MHz con PulseView. **Validado.**
+
+| Medición | Predicho (prueba en la PC) | Medido en el Nano | |
+| --- | --- | --- | --- |
+| Reporte de arranque | TOP 333, 24 024.02 Hz, 400 muestras, DT 16, amplitud 313, m 0.939 | Igual | ✅ |
+| Ciclos en 10 s | 600–601 | 601, 601, 600 | ✅ |
+| Periodo de la pierna B (HB y LB) | 16.650 ms (60.060 Hz) | **16.656 ms (60.040 Hz)** | ✅ |
+| Fracción de LB en alto | 199 / 400 = 49.75 % | **49.7476 %** | ✅ |
+| Tiempo muerto de la pierna A (HA ↓ → LA ↑) | 16 cuentas = 1000 ns | **1000 ns** | ✅ |
+| HB y LB juntos | Nunca | Hueco visible en cada cruce | ✅ |
+
+- **La diferencia de 0.02 Hz** (60.040 contra 60.060) viene de la tolerancia del cristal del Nano y del reloj del analizador, ~330 ppm. Está dentro de lo esperado para un cristal de 16 MHz de clon. En modo red, el PLL la corrige.
+- **Los caracteres raros al inicio del Monitor Serie** son normales: el Nano se reinicia al abrir el puerto y el bootloader envía bytes antes de `Serial.begin()`.
+- **Pendiente:** correr `analiza_captura.py` sobre el `.sr` completo, con D12 en el canal 4 y 24 MHz si el analizador lo permite. Así quedan verificados el pulso más angosto, la forma senoidal y la amplitud real.
+
+![Monitor Serie](img/banco_paso2_monitor_serie.png)
+![Pierna B a 60 Hz](img/banco_paso2_pierna_b_60hz.png)
+![Tiempo muerto de 1 µs](img/banco_paso2_tiempo_muerto_1us.png)
+
 ### 7.1 Con analizador lógico (genérico de 24 MHz y 8 canales)
 
 Sirve el clon de Saleae de 24 MHz con **PulseView** (sigrok, gratuito, driver `fx2lafw`) o con el software Logic de Saleae. A 24 MHz cada muestra vale 41.7 ns: el tiempo muerto de 1 µs se mide con ±42 ns.
@@ -282,3 +303,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | **Soporte de 50 Hz y 60 Hz** (`FRECUENCIA_LINEA_HZ`): portadora fija de 24 kHz, 480 muestras a 50 Hz con su propia tabla de cuarto de onda (120). `spwm_preparar(dt, frecuencia)` rechaza valores inválidos y queda en 60 Hz. Decisión: la frecuencia se elige solo en el código, no desde el SETUP. Advertencias de transformador y voltaje en la sección 5. Prueba en la PC: todo correcto en las dos frecuencias. ISR de 169–180 ciclos. Compila: 5.7 KB de flash, 233 B de RAM |
 | 2026-11-12 | **Techo absoluto de modulación del 95 %** (`M_TECHO_PORCIENTO`). Amplitud máxima = la menor entre el techo y el límite físico del DT en uso: 316 (500 ns) / 313 (1 µs). `spwm_amplitud_max()`. Prueba en la PC: todo correcto |
 | 2026-11-12 | `pruebas/analiza_captura.py`: valida la SPWM real con un analizador lógico de 24 MHz (`.sr` de PulseView, CSV de PulseView o de Saleae). Probado con capturas sintéticas; detecta un solo flanco sin tiempo muerto. Sección 7.1 |
+| 2026-11-12 | **Primera prueba real en un Nano: validada.** Analizador lógico a 16 MHz: pierna B a 16.656 ms (60.040 Hz), LB 49.7476 % (predicho 49.75 %), tiempo muerto de la pierna A = 1000 ns, 600–601 ciclos en 10 s. Capturas en `img/`. Sección 7.0 |
