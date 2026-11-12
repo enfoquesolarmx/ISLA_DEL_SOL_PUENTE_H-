@@ -110,6 +110,10 @@ ISLA_DEL_SOL_PUENTE_H-/
     │       ├── README.md                           ← auditoría de corriente y temperatura
     │       ├── auditoria_cobre.py · termica_componentes.py · sensibilidad.py
     │       └── resultados/                         ← figuras (.png) y resúmenes (.json)
+    ├── control/
+    │   ├── README.md                               ← tarjeta de control V0.1: glosario de módulos
+    │   ├── ATMEGA328P_SPWM_TARJETA.kicad_pro / .kicad_sch / .kicad_pcb
+    │   └── img/                                    ← esquemático, capas y vistas 3D
     ├── transferencia_reles/
     │   ├── README.md                               ← tarjeta de transferencia de carga V0.1
     │   ├── RELAY_TRANSFER_INV_RED.kicad_pro / .kicad_sch / .kicad_pcb
@@ -126,7 +130,7 @@ ISLA_DEL_SOL_PUENTE_H-/
             └── img/                                ← esquemático, PCB y evidencia del proceso
 ```
 
-Próximamente: `hardware/sensores/` (sensor AC del primario), la tarjeta de control y `firmware/`.
+Próximamente: `hardware/sensores/` (sensor AC del primario) y `firmware/`.
 
 ### Documentos de sistema (`docs/`)
 
@@ -159,6 +163,12 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | --- | --- | --- | --- |
 | **Puente H SPWM 48 V** (REV C) | [README](hardware/puente_h/README.md) · [Auditoría](hardware/puente_h/auditoria/README.md) | ✓ Esquemático (3 hojas) y PCB | 4 × IRF100P219 con disipador SK 129; pierna A a 24 kHz y B a 60 Hz; sockets universales J10/J9 con llave; banco Rubycon + cerámicos con plano partido y lazo doblado (~4 nH); shunts con Kelvin; transformador compatible 24–28 V / 120 V; salida protegida al buck (R14 + T1A, buck ≥ 80 V); **cobre de 1 oz como condición de trinchera**, con **auditoría de corriente y temperatura** (MOSFET, Rubycon y cobre) y refuerzo opcional con alambre 12 AWG; ensamble, validación, BOM y pendientes |
 
+### Tarjeta de control (`hardware/control/`)
+
+| Tarjeta | Documento | Archivos KiCad | Qué incluye |
+| --- | --- | --- | --- |
+| **[Tarjeta de control SPWM V0.1](hardware/control/README.md)** | [Proyecto de la tarjeta (README)](hardware/control/README.md) | ✓ Esquemático (A2, por bloques) y PCB (esquemático = PCB verificado pin por pin, DRC sin errores) | Dos ATmega328P (Arduino Nano) en zócalo: **CRÍTICO** (SPWM, sensado AC/DC, corriente con SCT-013, batería, temperatura, P9, I_LIM, relés) y **AUX** (CAN/BMS, LCD 16×2 con 4 botones, ventilador, buzzer, monitor del riel de 15 V); cascada 48 → 15 → 8 → 5 V con tablero de LEDs y test points; **corte del PWM por hardware** (74HC08, SENSOR_OK, AUX_KILL); **caída automática a la red**; **glosario de los 22 módulos con la justificación de cada componente**, ensamble y pendientes |
+
 ### Tarjeta de transferencia de carga (`hardware/transferencia_reles/`)
 
 | Tarjeta | Documento | Archivos KiCad | Qué incluye |
@@ -181,9 +191,10 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 5. **[Módulo TLP250](hardware/gate-drivers/tlp250-trinchera/README.md):** cómo resolver lo mismo con partes de tienda local, y los errores típicos al diseñar un tótem.
 6. **[Módulo IR2110](hardware/gate-drivers/ir2110-trinchera/README.md):** el driver legacy clásico con tierras separadas y tótem para muchos MOSFET.
 7. **[Tarjeta del puente H](hardware/puente_h/README.md)** y su **[auditoría](hardware/puente_h/auditoria/README.md):** cómo se juntan los módulos, el banco de capacitores, el layout de potencia y cómo comprobar antes de fabricar que el cobre y los componentes aguantan.
-8. **[Tarjeta de transferencia de carga](hardware/transferencia_reles/README.md) (V0.1):** cómo la casa pasa entre la red y el inversor sin que nunca tenga las dos fuentes, cómo se conecta el cargador y cuándo se une el neutro a tierra.
-9. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md) (V0.2):** cómo medir la corriente del bus, limitarla para que arranquen los motores y cortar las compuertas por hardware antes que el fusible, con la salida fail-safe SENSOR_OK.
-10. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
+8. **[Tarjeta de control](hardware/control/README.md) (V0.1):** qué hace cada módulo y cada resistencia de la tarjeta que decide; el mejor punto de entrada para quien la arma o la repara.
+9. **[Tarjeta de transferencia de carga](hardware/transferencia_reles/README.md) (V0.1):** cómo la casa pasa entre la red y el inversor sin que nunca tenga las dos fuentes, cómo se conecta el cargador y cuándo se une el neutro a tierra.
+10. **[Sensor DC con comparador](hardware/sensores/sensor-dc-ina-comparador/README.md) (V0.2):** cómo medir la corriente del bus, limitarla para que arranquen los motores y cortar las compuertas por hardware antes que el fusible, con la salida fail-safe SENSOR_OK.
+11. **[Sensado de corriente](docs/sensado_corriente.md)** y **[compensación de tiempo muerto](docs/compensacion_adaptativa_tiempo_muerto.md):** los siguientes pasos, cuando el hardware ya esté validado.
 
 ## Herramientas
 
@@ -201,6 +212,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | Módulo IR2110 + tótem TIP41C/TIP42C (trinchera) | V.0.1 diseñado (DRC sin errores); pendiente fabricar y validar |
 | Módulo SENSOR_DC_INA_COMPARADOR | **V0.2** (2026-11-08): SENSOR_OK fail-safe, límite ±75 A (U4) e I_LIM; ERC/DRC sin errores. Pendiente: fabricar y validar en banco |
 | [Tarjeta de transferencia de carga](hardware/transferencia_reles/README.md) (5 relés, DC-019) | **V0.1** (2026-11-11): esquemático y PCB terminados, separaciones de 5 mm / 3 mm verificadas, auditoría térmica a 10 A. Pendiente: comparar los pines del relé de 15 V con la huella, fabricar y validar en banco |
+| [Tarjeta de control SPWM](hardware/control/README.md) | **V0.1** (2026-11-11): esquemático y PCB terminados, DRC sin errores, glosario de módulos. Pendiente: prueba de banco de la caída automática, firmware y validación |
 | Firmware | Pendiente |
 | Validación en banco | Pendiente |
 
