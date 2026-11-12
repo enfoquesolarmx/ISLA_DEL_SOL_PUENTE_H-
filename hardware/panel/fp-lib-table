@@ -1,0 +1,4 @@
+(fp_lib_table
+	(version 7)
+	(lib (name "Isla_del_Sol")(type "KiCad")(uri "${KIPRJMOD}/Isla_del_Sol.pretty")(options "")(descr "Ranuras M3 para postes del LCD"))
+)

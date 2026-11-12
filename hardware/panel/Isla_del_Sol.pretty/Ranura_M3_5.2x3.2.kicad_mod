@@ -1,0 +1,123 @@
+(footprint "Ranura_M3_5.2x3.2"
+	(version 20241229)
+	(generator "pcbnew")
+	(generator_version "9.0")
+	(layer "F.Cu")
+	(descr "Ranura M3 5.2x3.2 mm para poste del LCD, tolerancia horizontal")
+	(tags "mounting hole slot M3")
+	(property "Reference" "REF**"
+		(at 0 -4.2 0)
+		(layer "F.SilkS")
+		(uuid "8f8293ce-5d6c-45e0-a2da-2db6dd323699")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "Ranura_M3_5.2x3.2"
+		(at 0 4.2 0)
+		(layer "F.Fab")
+		(uuid "092724e1-76b2-4f8a-b675-08e3de1b1c24")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "1e536162-b8e9-4972-9e47-64cce748049e")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "df784b12-7d40-4bd7-9006-11c2bdb560dd")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr exclude_from_pos_files exclude_from_bom)
+	(fp_line
+		(start -1.0 -3.2)
+		(end 1.0 -3.2)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "Cmts.User")
+		(uuid "9ab97c8d-3123-47fb-a38d-ff618cb161de")
+	)
+	(fp_line
+		(start -1.0 3.2)
+		(end 1.0 3.2)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "Cmts.User")
+		(uuid "5abdd978-ad5a-442e-b2b5-6e0d2fdd9f1c")
+	)
+	(fp_line
+		(start -4.45 -3.45)
+		(end 4.45 -3.45)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "f6619e4a-c24c-411c-a543-1e2f6d59f5e7")
+	)
+	(fp_line
+		(start 4.45 -3.45)
+		(end 4.45 3.45)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "762c8d1a-c256-4521-a86d-fd881e023f7e")
+	)
+	(fp_line
+		(start 4.45 3.45)
+		(end -4.45 3.45)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "982a5775-eec7-416c-8eb7-f3257434daa7")
+	)
+	(fp_line
+		(start -4.45 3.45)
+		(end -4.45 -3.45)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "4b250bf9-1fdd-49ed-8cee-b7786a6a3e2c")
+	)
+	(pad "" np_thru_hole oval
+		(at 0 0)
+		(size 5.2 3.2)
+		(drill oval 5.2 3.2)
+		(layers "*.Cu" "*.Mask")
+		(uuid "a8f66a2a-1d14-437c-8351-6ad0af531d8d")
+	)
+	(embedded_fonts no)
+)

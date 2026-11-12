@@ -330,6 +330,8 @@ Dos canales iguales:
 
 **Decisión (2026-11-11):** la interfaz será una **pantalla LCD de 16×2 caracteres** con módulo I2C (PCF8574) y **4 botones**. Desde ahí se maneja el **menú del SETUP**, entre otras cosas el modo **INVERSOR CASA / INVERSOR CARGA (UPS)**, que decide la unión N–PE (DC-019). La implementación queda para una etapa posterior; el hardware ya está listo.
 
+**Tarjeta del panel:** [panel frontal V0.2](../panel/README.md), que acepta **LCD 16×2 o 20×4** con el módulo I2C **directo a zócalo**, las resistencias de la botonera y la propuesta de pantallas y menú SETUP.
+
 | J7 | Señal | Va a |
 | --- | --- | --- |
 | 1 | SCL_LCD | D5 del AUX (I2C por software, **en un bus aparte** del enlace CRÍTICO–AUX: si el LCD se cuelga, no tumba el enlace) |
