@@ -47,7 +47,9 @@ volatile uint8_t  TCCR1A, TCCR1B, TIMSK1, TIFR1;
 volatile uint16_t TCNT1, ICR1, OCR1A, OCR1B;
 extern "C" void TIMER1_OVF_vect(void);
 
-static const int RETARDO_ISR = 40;   // cuentas desde BOTTOM hasta que la ISR mueve la pierna B
+static const int RETARDO_ISR = 40;
+static bool REGLA_BOTTOM = true;   // nivel forzado en BOTTOM (comportamiento real del chip)
+static bool VOLCAR = false;         // imprime los flancos alrededor de un cruce   // cuentas desde BOTTOM hasta que la ISR mueve la pierna B
 static int fallas = 0;
 #define FALLA(...) do { if (fallas < 10) { printf("  FALLA: " __VA_ARGS__); printf("\n"); } fallas++; } while (0)
 
@@ -92,6 +94,12 @@ static Resultado correr(uint8_t dtPedido, uint16_t amp, int ciclos, uint8_t hz) 
       const bool subiendo = c < TOP;
       const int tcnt = subiendo ? c : 2 * TOP - c;
       bool haN = ha, laN = la;
+      // En BOTTOM, al cargar OCR nuevos, el chip deja cada salida en el nivel
+      // que le toca (HA alta si TCNT1 < OCR1A, LA alta si TCNT1 > OCR1B),
+      // aunque no haya coincidencia. Medido en banco (2026-11-12): al pasar
+      // OCR1A de 0 a TOP - DT en la muestra 1 del semiciclo -, HA sube en
+      // BOTTOM y da un pulso solo de medio periodo.
+      if (c == 0 && p > 0 && REGLA_BOTTOM) { haN = actA > 0; laN = actB == 0; }
       if (actA == 0) haN = false;
       else if (actA >= TOP) haN = true;
       else if (tcnt == actA) haN = !subiendo;            // subiendo: apaga; bajando: prende
@@ -102,6 +110,8 @@ static Resultado correr(uint8_t dtPedido, uint16_t amp, int ciclos, uint8_t hz) 
       if (la && !laN) { ultBajaLA = t; if (t - subeLA < r.pulsoMin) r.pulsoMin = t - subeLA; }
       if (!ha && haN) { subeHA = t; if (t - ultBajaLA < r.dtMinA) r.dtMinA = t - ultBajaLA; }
       if (!la && laN) { subeLA = t; if (t - ultBajaHA < r.dtMinA) r.dtMinA = t - ultBajaHA; }
+      if (VOLCAR && p >= 3 * N / 2 - 3 && p <= 3 * N / 2 + 3 && (ha != haN || la != laN))
+        printf("    t = %8.3f us: HA %d->%d  LA %d->%d\n", (t - (3 * N / 2 + 1) * 2 * TOP) / 16.0, ha, haN, la, laN);
       ha = haN; la = laN;
       if (ha && la) FALLA("HA y LA encendidos juntos (periodo %d, cuenta %d)", p, c);
       if (hb && lb) FALLA("HB y LB encendidos juntos (periodo %d, cuenta %d)", p, c);
@@ -173,6 +183,10 @@ int main() {
       if (amp >= 100 && std::fabs(r.errFund) > 0.01) FALLA("fundamental con error de %.2f %%", 100 * r.errFund);
     }
   }
+  // Flancos de la pierna A alrededor del cruce + -> - (amplitud máxima, DT 1 µs).
+  printf("\nFlancos de la pierna A en el cruce + -> - (t = 0: BOTTOM de la muestra 199; LB baja ahí, HB sube en 41.6 us;\n la muestra 1 del semiciclo - empieza en 83.25 us):\n");
+  VOLCAR = true; correr(DT_LEGACY_CUENTAS, AMPLITUD_MAX_LEGACY, 2, LINEA_60_HZ); VOLCAR = false;
+
   // Frecuencia inválida: debe rechazarla y quedarse en 60 Hz.
   if (spwm_preparar(DT_LEGACY_CUENTAS, 55) || spwm_frecuencia_hz() != LINEA_60_HZ || spwm_muestras_ciclo() != 400)
     FALLA("55 Hz no se rechazó o no cayó en 60 Hz");

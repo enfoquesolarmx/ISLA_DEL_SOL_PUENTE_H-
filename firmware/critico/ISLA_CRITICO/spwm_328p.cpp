@@ -51,6 +51,14 @@
  *    periodo 0:   pierna A apagada y se ENCIENDE el interruptor que entra.
  *    periodo 1..: pierna A con el patrón del nuevo semiciclo.
  *    Tiempo muerto de la pierna B = 1 periodo completo (41.6 µs).
+ *    PULSO SOLITARIO DE HA (medido en banco, 2026-11-12): en la muestra 1 del
+ *    semiciclo -, OCR1A pasa de 0 (pierna A apagada) a TOP - DT. En ese BOTTOM
+ *    el chip pone HA en el nivel que le toca ("alta mientras TCNT1 < OCR1A")
+ *    aunque no haya coincidencia: HA sube en BOTTOM, baja en TOP - DT (~19.8 µs)
+ *    y vuelve a subir 2 µs después. Es seguro: LA está apagada (OCR1B = TOP) y
+ *    HB encendido, así que HA + HB = salida en 0 V, que es justo lo que pide el
+ *    seno en ese punto. El tiempo muerto se respeta en todos los casos
+ *    (pruebas/prueba_spwm.cpp ya modela esta regla).
  *    En las muestras 0 y S-1 el seno vale 0.8 % (60 Hz) o 0.65 % (50 Hz): a esa amplitud el pulso sería
  *    menor que PULSO_MIN y no se generaría de todos modos. No se pierde onda.
  *

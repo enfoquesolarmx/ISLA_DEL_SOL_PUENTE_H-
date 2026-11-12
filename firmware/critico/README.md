@@ -191,7 +191,7 @@ constexpr uint8_t FRECUENCIA_LINEA_HZ = LINEA_60_HZ;   // <-- 60 o 50
 
 ## 6. Prueba en la PC (`pruebas/`)
 
-`pruebas/prueba_spwm.cpp` compila **el mismo `spwm_328p.cpp` que va al Nano**, con los registros simulados (`pruebas/avr_simulado/`). Recorre cada periodo cuenta por cuenta con la regla del comparador de la hoja de datos del ATmega328P (modo 8). Verifica:
+`pruebas/prueba_spwm.cpp` compila **el mismo `spwm_328p.cpp` que va al Nano**, con los registros simulados (`pruebas/avr_simulado/`). Recorre cada periodo cuenta por cuenta con la regla del comparador de la hoja de datos del ATmega328P (modo 8). Incluye la **regla del nivel en BOTTOM** medida en banco: al cargar OCR nuevos, cada salida queda en el nivel que le toca aunque no haya coincidencia. También imprime los flancos de la pierna A alrededor del cruce + → −, para compararlos con una captura. Verifica:
 
 1. HA y LA nunca encendidos juntos; HB y LB tampoco.
 2. Tiempo muerto de la pierna A ≥ DT pedido, en cada flanco.
@@ -264,6 +264,13 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
   - las lecturas atómicas de `loop()` apagan las interrupciones unos ciclos.
 
   Por eso el hueco puede variar unos µs alrededor de 41.6 µs. En el peor caso queda en ~36 µs, contra ~1 µs que necesita un gate driver. **La pierna A no tiene esta variación:** su tiempo muerto lo hace el hardware del timer (1000 ns exactos). Antes atribuí la diferencia a los caminos del código; con esta tercera medición, la causa principal es la latencia de la interrupción.
+- **Pulso solitario de HA al inicio del semiciclo −** (captura de 2 M muestras):
+  - **Qué se ve:** en la muestra 1 del semiciclo − (~83 µs después de que baja LB), HA sube sola **~20 µs**, baja **~2 µs** y luego empiezan los pulsos anchos normales.
+  - **Por qué:** en esa muestra OCR1A pasa de 0 (pierna A apagada en el cruce) a TOP − DT. En ese BOTTOM el ATmega328P pone la salida en el nivel que le toca ("alta mientras TCNT1 < OCR1A") **aunque no haya coincidencia del comparador**. HA sube en BOTTOM, baja al llegar a TOP − DT (19.8 µs) y vuelve a subir 2 µs después, en la bajada de la rampa.
+  - **Es seguro:** LA está apagada (OCR1B = TOP) y HB encendido, así que HA + HB da salida de 0 V. Es justo lo que pide el seno en ese punto: con d = 0 en el semiciclo −, la pierna A debe estar arriba.
+  - **El modelo de la PC no lo predecía:** suponía que una salida solo cambia al coincidir el comparador. Se agregó la regla del nivel en BOTTOM a `pruebas/prueba_spwm.cpp`. El modelo reproduce el pulso con los mismos tiempos (83.25 → 103.06 µs, 2 µs abajo, vuelve a subir) y **todas las verificaciones siguen pasando**: tiempo muerto de 8 / 16 cuentas, sin traslapes, pulso mínimo respetado.
+  - **Lección:** el banco encontró un comportamiento del chip que la simulación no tenía. Por eso cada paso se valida en hardware real.
+
 - **Pendiente:** correr `analiza_captura.py` sobre el `.sr` completo, con D12 en el canal 4 y 24 MHz si el analizador lo permite. Así quedan verificados el pulso más angosto, la forma senoidal y la amplitud real.
 
 ![Monitor Serie](img/banco_paso2_monitor_serie.png)
@@ -276,6 +283,7 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
 ![2 M muestras: 7.5 ciclos estables a 60.04 Hz](img/banco_paso2_2M_vista_general.png)
 ![2 M muestras: HB baja, LB sube 40.437 µs después](img/banco_paso2_2M_hb_a_lb_40437ns.png)
 ![2 M muestras: LB baja, HB sube 41.500 µs después](img/banco_paso2_2M_lb_a_hb_41500ns.png)
+![Pulso solitario de HA al inicio del semiciclo −](img/banco_paso2_pulso_solitario_ha.png)
 
 ### 7.1 Con analizador lógico (genérico de 24 MHz y 8 canales)
 
@@ -331,3 +339,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | **Techo absoluto de modulación del 95 %** (`M_TECHO_PORCIENTO`). Amplitud máxima = la menor entre el techo y el límite físico del DT en uso: 316 (500 ns) / 313 (1 µs). `spwm_amplitud_max()`. Prueba en la PC: todo correcto |
 | 2026-11-12 | `pruebas/analiza_captura.py`: valida la SPWM real con un analizador lógico de 24 MHz (`.sr` de PulseView, CSV de PulseView o de Saleae). Probado con capturas sintéticas; detecta un solo flanco sin tiempo muerto. Sección 7.1 |
 | 2026-11-12 | **Primera prueba real en un Nano: validada.** Pierna A, pierna B (40.44–42.19 µs en 5 cruces) y frecuencia (60.04 Hz estable en 7.5 ciclos). Analizador lógico a 16 MHz: pierna B a 16.656 ms (60.040 Hz), LB 49.7476 % (predicho 49.75 %), tiempo muerto de la pierna A = 1000 ns, 600–601 ciclos en 10 s. Capturas en `img/`. Sección 7.0 |
+| 2026-11-12 | **Pulso solitario de HA** en la muestra 1 del semiciclo − (~20 µs), encontrado en banco: el chip fija el nivel de la salida en BOTTOM al cambiar OCR1A de 0. Es seguro (HA + HB = 0 V, LA apagada). El modelo de la PC se corrigió con esa regla y lo reproduce; todas las verificaciones pasan. Nota en `spwm_328p.cpp` |
