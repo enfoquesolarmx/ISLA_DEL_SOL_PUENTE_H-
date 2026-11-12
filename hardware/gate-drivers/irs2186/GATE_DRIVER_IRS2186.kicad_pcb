@@ -108,7 +108,7 @@
 			)
 		)
 		(property "Value" "2.2Ω 1W"
-			(at 0.1025 -2.65 0)
+			(at 0.5125 -2.78 0)
 			(layer "F.SilkS")
 			(uuid "6141e264-17c2-40c4-8a42-8f56709df065")
 			(effects
@@ -4778,12 +4778,12 @@
 			)
 		)
 		(property "Value" "1µF 25V X7R"
-			(at 3.825 0.04 0)
+			(at 6.492443 0.04 0)
 			(layer "F.SilkS")
 			(uuid "b635fa5c-e01d-4be4-bdb4-65aa385d1c2d")
 			(effects
 				(font
-					(size 1 1)
+					(size 0.8 0.8)
 					(thickness 0.15)
 				)
 			)
@@ -5992,7 +5992,7 @@
 		)
 	)
 	(gr_text "IRS2186\nGD-24KHZ"
-		(at 77.5 50 90)
+		(at 77.4 46.8 90)
 		(layer "F.SilkS")
 		(uuid "703e2841-300d-43d0-a469-578be21ff00f")
 		(effects
