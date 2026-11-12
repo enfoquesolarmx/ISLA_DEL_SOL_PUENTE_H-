@@ -97,11 +97,11 @@
 	(net 17 "HA_OUT")
 	(net 18 "LA_OUT")
 	(net 19 "unconnected-(J5-Pin_3-Pad3)")
-	(net 20 "GND_PUENTE_H")
-	(net 21 "Net-(R5-Pad2)")
-	(net 22 "Net-(R6-Pad2)")
-	(net 23 "Net-(1SMA5931B1-K)")
-	(net 24 "unconnected-(J2-Pin_5-Pad5)")
+	(net 20 "unconnected-(J5-Pin_6-Pad6)")
+	(net 21 "HO_TLP")
+	(net 22 "LO_TLP")
+	(net 23 "VB1")
+	(net 24 "unconnected-(J1-Pin_5-Pad5)")
 	(footprint "Resistor_SMD:R_1206_3216Metric_Pad1.30x1.75mm_HandSolder"
 		(layer "F.Cu")
 		(uuid "0612fd7b-9f33-461b-b9aa-a90064897af7")
@@ -120,7 +120,7 @@
 				)
 			)
 		)
-		(property "Value" "330"
+		(property "Value" "330Ω"
 			(at 0 1.83 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -321,7 +321,7 @@
 				)
 			)
 		)
-		(property "Value" "TIP41C"
+		(property "Value" "TIP41C/D44H11G"
 			(at 11 -1 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -559,7 +559,7 @@
 				)
 			)
 		)
-		(property "Value" "10UF"
+		(property "Value" "10µF 50V X7R"
 			(at 0 1.85 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -716,7 +716,7 @@
 			(size 1.15 1.8)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(roundrect_rratio 0.217391)
-			(net 23 "Net-(1SMA5931B1-K)")
+			(net 23 "VB1")
 			(pintype "passive")
 			(uuid "56da4691-7e75-4ab7-b6f1-28a84e034552")
 		)
@@ -760,7 +760,7 @@
 				)
 			)
 		)
-		(property "Value" "330"
+		(property "Value" "330Ω"
 			(at 0 1.83 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -961,7 +961,7 @@
 				)
 			)
 		)
-		(property "Value" "10UF"
+		(property "Value" "10µF 50V X7R"
 			(at 0 1.85 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -1118,7 +1118,7 @@
 			(size 1.15 1.8)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(roundrect_rratio 0.217391)
-			(net 23 "Net-(1SMA5931B1-K)")
+			(net 23 "VB1")
 			(pintype "passive")
 			(uuid "8c8cb2fa-72a7-475e-aa1f-5cf57febd20d")
 		)
@@ -1162,7 +1162,7 @@
 				)
 			)
 		)
-		(property "Value" "TIP42C"
+		(property "Value" "TIP42C/D45H11G"
 			(at 11.08 0 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -1400,7 +1400,7 @@
 				)
 			)
 		)
-		(property "Value" "GATE_DRIVER_A"
+		(property "Value" "SALIDA AL PUENTE H"
 			(at 0 22.7 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -1652,7 +1652,7 @@
 			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net 20 "GND_PUENTE_H")
+			(net 20 "unconnected-(J5-Pin_6-Pad6)")
 			(pinfunction "Pin_6")
 			(pintype "passive")
 			(uuid "adb1eaa4-9035-4958-92bf-7b05445756bc")
@@ -1710,7 +1710,7 @@
 				)
 			)
 		)
-		(property "Value" "10UF"
+		(property "Value" "10µF 50V X7R"
 			(at 0 1.85 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -1911,7 +1911,7 @@
 				)
 			)
 		)
-		(property "Value" "2.2"
+		(property "Value" "2.2Ω"
 			(at 0 1.83 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -2077,7 +2077,7 @@
 			(size 1.3 1.75)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(roundrect_rratio 0.192308)
-			(net 21 "Net-(R5-Pad2)")
+			(net 21 "HO_TLP")
 			(pintype "passive")
 			(uuid "21e689f0-394d-41ae-a2f9-feccc4e7113f")
 		)
@@ -2112,7 +2112,7 @@
 				)
 			)
 		)
-		(property "Value" "2.2 1W"
+		(property "Value" "2.2Ω 1W"
 			(at 0 -4 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -2269,7 +2269,7 @@
 			(size 1.125 2.65)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(roundrect_rratio 0.222222)
-			(net 23 "Net-(1SMA5931B1-K)")
+			(net 23 "VB1")
 			(pintype "passive")
 			(uuid "695aca9b-557f-433a-b272-7b0a6a9c8d0c")
 		)
@@ -2313,7 +2313,7 @@
 				)
 			)
 		)
-		(property "Value" "TLP250"
+		(property "Value" "TLP250H (DIP-8)"
 			(at 3.81 9.95 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -2549,7 +2549,7 @@
 			(drill 0.8)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net 21 "Net-(R5-Pad2)")
+			(net 21 "HO_TLP")
 			(pinfunction "VO")
 			(pintype "output")
 			(uuid "7c96ee8e-61f2-43b8-9e47-0800711a84c9")
@@ -2560,7 +2560,7 @@
 			(drill 0.8)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net 21 "Net-(R5-Pad2)")
+			(net 21 "HO_TLP")
 			(pinfunction "VO")
 			(pintype "output")
 			(uuid "7766f741-7db5-48c5-bd17-9e23f084341b")
@@ -2571,7 +2571,7 @@
 			(drill 0.8)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net 23 "Net-(1SMA5931B1-K)")
+			(net 23 "VB1")
 			(pinfunction "VCC")
 			(pintype "power_in")
 			(uuid "8e50d2f3-5fa8-4354-8f6f-c239bb2fbc21")
@@ -2871,7 +2871,7 @@
 				)
 			)
 		)
-		(property "Value" "TLP250"
+		(property "Value" "TLP250H (DIP-8)"
 			(at 3.81 9.95 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -3107,7 +3107,7 @@
 			(drill 0.8)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net 22 "Net-(R6-Pad2)")
+			(net 22 "LO_TLP")
 			(pinfunction "VO")
 			(pintype "output")
 			(uuid "aa47c07a-c5ea-4231-b673-f35ebaa688ee")
@@ -3118,7 +3118,7 @@
 			(drill 0.8)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net 22 "Net-(R6-Pad2)")
+			(net 22 "LO_TLP")
 			(pinfunction "VO")
 			(pintype "output")
 			(uuid "6cac410c-934c-4728-9a67-84a3520777ba")
@@ -3165,7 +3165,7 @@
 				)
 			)
 		)
-		(property "Value" "2.2"
+		(property "Value" "2.2Ω"
 			(at 0 1.83 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -3331,7 +3331,7 @@
 			(size 1.3 1.75)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(roundrect_rratio 0.192308)
-			(net 22 "Net-(R6-Pad2)")
+			(net 22 "LO_TLP")
 			(pintype "passive")
 			(uuid "8d9ab283-544d-4696-85e1-0e2f32aea6de")
 		)
@@ -3555,7 +3555,7 @@
 		(at 147.1 57 180)
 		(descr "Connector Phoenix Contact, SPT 1.5/5-H-3.5 Terminal Block, 1990766 (https://www.phoenixcontact.com/online/portal/gb/?uri=pxc-oc-itemdetail:pid=1990766), generated with kicad-footprint-generator")
 		(tags "Connector Phoenix Contact SPT 1.5/5-H-3.5 1990766")
-		(property "Reference" "J2"
+		(property "Reference" "J1"
 			(at 8.15 -3.73 0)
 			(layer "F.SilkS")
 			(hide yes)
@@ -3567,7 +3567,7 @@
 				)
 			)
 		)
-		(property "Value" "SPWM"
+		(property "Value" "ENTRADA H·GND·L·GND·P9"
 			(at 8.15 13.27 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -4024,7 +4024,7 @@
 			(drill 1.1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net 24 "unconnected-(J2-Pin_5-Pad5)")
+			(net 24 "unconnected-(J1-Pin_5-Pad5)")
 			(pinfunction "Pin_5")
 			(pintype "passive")
 			(uuid "b82eaca1-1400-4284-aef1-57bd0e7bf95b")
@@ -4035,7 +4035,7 @@
 			(drill 1.1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net 24 "unconnected-(J2-Pin_5-Pad5)")
+			(net 24 "unconnected-(J1-Pin_5-Pad5)")
 			(pinfunction "Pin_5")
 			(pintype "passive")
 			(uuid "521e69f1-50e1-427b-9ede-a4f1ad74c842")
@@ -4272,7 +4272,7 @@
 				)
 			)
 		)
-		(property "Value" "TIP42C"
+		(property "Value" "TIP42C/D45H11G"
 			(at 11 -1 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -4499,7 +4499,7 @@
 				)
 			)
 		)
-		(property "Value" "TIP41C"
+		(property "Value" "TIP41C/D44H11G"
 			(at 11.08 -0.95 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -4679,7 +4679,7 @@
 			(drill 1.1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
-			(net 23 "Net-(1SMA5931B1-K)")
+			(net 23 "VB1")
 			(pinfunction "C")
 			(pintype "passive")
 			(uuid "9e78e147-e4b7-4dd4-80de-4b7f79e858f6")
@@ -4727,7 +4727,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "0.1UF"
+		(property "Value" "100nF X7R"
 			(at 0 -1.85 0)
 			(layer "B.Fab")
 			(hide yes)
@@ -4888,7 +4888,7 @@
 			(size 1.15 1.8)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.217391)
-			(net 23 "Net-(1SMA5931B1-K)")
+			(net 23 "VB1")
 			(pintype "passive")
 			(uuid "6310a62f-86a2-4138-a66f-eaae4ea8a5f7")
 		)
@@ -4933,7 +4933,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "0.1UF"
+		(property "Value" "100nF X7R"
 			(at 0 -1.85 0)
 			(layer "B.Fab")
 			(hide yes)
@@ -5139,7 +5139,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "10UF"
+		(property "Value" "10µF 50V X7R"
 			(at 0 -1.85 0)
 			(layer "B.Fab")
 			(hide yes)
@@ -5332,7 +5332,7 @@
 		(at 133.5 88.05 -90)
 		(descr "Diode SMA (DO-214AC)")
 		(tags "Diode SMA (DO-214AC)")
-		(property "Reference" "1SMA5931B1"
+		(property "Reference" "Z1"
 			(at -0.65 4.3 90)
 			(layer "B.SilkS")
 			(uuid "6ed54069-42cf-48d0-ac39-bba385c3a51c")
@@ -5564,7 +5564,7 @@
 			(size 2.5 1.8)
 			(layers "B.Cu" "B.Mask" "B.Paste")
 			(roundrect_rratio 0.1388888889)
-			(net 23 "Net-(1SMA5931B1-K)")
+			(net 23 "VB1")
 			(pinfunction "K")
 			(pintype "passive")
 			(uuid "cc046312-3938-4bef-8f23-e480b764cffb")

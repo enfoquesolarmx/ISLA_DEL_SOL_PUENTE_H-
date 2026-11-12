@@ -4,15 +4,54 @@
 **Proyecto:** Puente H — prototipo SPWM "Isla del Sol" (inversor 48 V → 127 V / 60 Hz, 1000 W; modo cargador 1 kVA)
 **Módulo:** gate driver de **medio puente H** (una rama: MOSFET alto + MOSFET bajo), de servicio / legacy, intercambiable con IRS2186 y UCC21520ADWR (misma interfaz, mismo firmware)
 **Versión de placa:** V.0.1.NOV.26.J.G
-**Estado:** diseño terminado (esquemático y layout). Pendiente: DRC final, fabricación y validación en banco
-**Fecha:** 2026-11-02 · **Revisión:** 2026-11-03 (diseño final)
+**Estado:** diseño terminado (esquemático y layout); esquemático por bloques con guía de trinchera (2026-11-12). Pendiente: DRC final, fabricación y validación en banco
+**Fecha:** 2026-11-02 · **Revisión:** 2026-11-03 (diseño final) · 2026-11-12 (esquemático por bloques)
 **Documentos relacionados:** `identificacion_dt_pin9.md` (P9, llave en posición 8, poka-yoke), `compensacion_adaptativa_tiempo_muerto.md`
 
 | Cara de componentes | Cara de soldadura |
 | --- | --- |
 | ![Módulo TLP250, vista 3D superior](img/tlp250_3d_superior.png) | ![Módulo TLP250, vista 3D inferior](img/tlp250_3d_inferior.png) |
 
-*Izquierda: arriba, la bornera J1 de entrada, con R3/R4 (330 Ω) en serie con los LED y R1/R2 (10 kΩ) a GND; en medio, los **dos TLP250H** (DIP-8), uno por canal; abajo, los dos tótems **acostados**, TIP41C (NPN) y TIP42C (PNP) con sus resistencias de 2.2 Ω, la red de bootstrap (2.2 Ω 1 W + diodo rápido), los 2 × 10 µF del bootstrap y el header J5. Derecha: las leyendas **"TRENZAR H Y L CON GND"**, **"OPERACIÓN DT TLP250 = 1 µs"** y **"OJO: USAR SILICÓN RTV NEUTRO ENTRE TIPs"**, los 0.1 µF pegados a cada TLP, el 10 µF de 15 V, el zener de 18 V (1SMA5931B1) y la **X** de la llave en la posición 8 de J5.*
+*Izquierda: arriba, la bornera J1 de entrada, con R3/R4 (330 Ω) en serie con los LED y R1/R2 (10 kΩ) a GND; en medio, los **dos TLP250H** (DIP-8), uno por canal; abajo, los dos tótems **acostados**, TIP41C (NPN) y TIP42C (PNP) con sus resistencias de 2.2 Ω, la red de bootstrap (2.2 Ω 1 W + diodo rápido), los 2 × 10 µF del bootstrap y el header J5. Derecha: las leyendas **"TRENZAR H Y L CON GND"**, **"OPERACIÓN DT TLP250 = 1 µs"** y **"OJO: USAR SILICÓN RTV NEUTRO ENTRE TIPs"**, los 0.1 µF pegados a cada TLP, el 10 µF de 15 V, el zener Z1 de 18 V (1SMA5931B) y la **X** de la llave en la posición 8 de J5.*
+
+![Esquemático del módulo TLP250H + tótem por bloques](img/esquematico_tlp250.png)
+
+*Esquemático por bloques (KiCad 9, hoja A3), pensado para quien arma y repara: **A** entrada J1 · **B** optoacoplador del canal alto (U1) · **C** optoacoplador del canal bajo (U2) · **D** 15 V del canal bajo · **E** bootstrap · **F** tótem alto · **G** tótem bajo · **H** salida J5 · **I** guía rápida de trinchera. Cada bloque dice qué medir y qué pasa si una pieza va al revés.*
+
+## 0. Guía rápida de trinchera
+
+**TLP250 o TLP250H: no son iguales.**
+
+| | TLP250H (diseño) | TLP250 "viejo" (sin H, rescatado) |
+| --- | --- | --- |
+| Corriente de alimentación | **3 mA máx.** | **11 mA máx.** (7 mA típ.) |
+| UVLO | Sí, 7.5–9.5 V | **No especificado** |
+| Rama A (24 kHz, el bootstrap se recarga cada 42 µs) | ✓ | ✓ |
+| Rama B (60 Hz, 8.3 ms sin recargar) | ✓ VB1 ≈ 11.8 V | ✗ VB1 cae ~5–8 V → el MOSFET alto queda a medio encender y sin protección |
+
+**Regla:** un TLP250 sin "H" solo va en el módulo de la **rama A** (o en las dos en modo cargador, a 24 kHz). En la rama B del inversor, TLP250H u otro módulo (IRS2186, IR2110, UCC21520).
+
+**Antes de soldar:**
+
+| Pieza | Cuidado | Si se hace mal |
+| --- | --- | --- |
+| U1, U2 | Zócalo DIP-8, muesca hacia el pin 1; revisar la letra **H** | Al revés no enciende; sin H, ver la tabla anterior |
+| R3, R4 | **330 Ω** con MCU de 5 V | Con 1 kΩ el LED no enciende bien (~1.7 mA) |
+| J5 | **Quitar el pin 8** del header (llave) | El módulo podría entrar al revés |
+| Z1 | Banda (cátodo) hacia **VB1** | Pone en corto el bootstrap: el MOSFET alto nunca enciende |
+| Q1–Q4 | NPN (TIP41C / D44H11G) en Q1 y Q4, PNP (TIP42C / D45H11G) en Q2 y Q3; acostados, aletas sin tocarse | Cruzados: la salida no sigue a la entrada; aletas juntas: corto VB1–GND_K |
+| TIPs | Silicón RTV **neutro** | El acético corroe; el caliente se ablanda a 60–80 °C |
+
+**Prueba sin MOSFET** (15 V en J5-7; J5-4 a la tierra de la fuente; **J5-2 (VS1) unido a J5-4** para que cargue el bootstrap; J1 a la tarjeta de control o a 5 V):
+
+| Medir | Entre | Debe dar |
+| --- | --- | --- |
+| Salidas con J1 suelto | HA_OUT (J5-1) y LA_OUT (J5-5) | 0 V |
+| L = 5 V | LA_OUT a GND_K | ≈ 14 V |
+| H = 5 V (después de un pulso de L) | HA_OUT a VS1 | ≈ 13 V |
+| Corriente del LED | Caída en R3 o R4 | ≈ 3.3 V (~10 mA) |
+| Aislamiento | J1-GND contra GND_K y contra VS1 | **Sin continuidad** |
+| Tiempo muerto | Lo que reporta el MCU | **1 µs** (P9 abierto) |
 
 ---
 
@@ -83,7 +122,7 @@ Este módulo existe para **cuando TI o Infineon no llegan**. Es una opción **ed
 | 3 | — | Libre (separación del nodo conmutado) |
 | 4 | GND_K | Referencia Kelvin del canal L |
 | 5 | LA_OUT | Emisores del tótem L |
-| 6 | GND_PUENTE_H | **Sin uso** en este módulo (la entrada está aislada) |
+| 6 | — | **Sin conectar** en este módulo (la entrada está aislada); marcado como no conectado en el esquemático |
 | 7 | 15 V | Alimentación |
 | 8 | — | **Llave mecánica:** sin pad; **quitar el pin 8 del header**; "X" en serigrafía |
 | 9 | — | Reservado, abierto |
@@ -105,15 +144,15 @@ GND y GND_K se unen en **un solo punto en la tarjeta del puente H**, nunca dentr
 ## 3. Esquemático por canal
 
 ```
-            J1-H ──[R3 330 Ω]──► 2 ┐                 VB (Net zener-K) ──┬── C2, C3 (2 × 10 µF) ── VS1
-                                   │ TLP250 U1   8 ── VB                 ├── C6 (0.1 µF, pines 8–5) ── VS1
-            J1-GND ────────────► 3 ┘             5 ── VS1                └── Z1 18 V (cátodo a VB) ── VS1
-                                              6,7 ──[R5 2.2 Ω]──┬── B  Q1 TIP41C  C ── VB
+            J1-H ──[R3 330 Ω]──► 2 ┐                 VB1 ───────────────┬── C2, C3 (2 × 10 µF) ── VS1
+                                   │ TLP250 U1   8 ── VB1                ├── C6 (0.1 µF, pines 8–5) ── VS1
+            J1-GND ────────────► 3 ┘             5 ── VS1                └── Z1 18 V (cátodo a VB1) ── VS1
+                                              6,7 ──[R5 2.2 Ω]──┬── B  Q1 TIP41C  C ── VB1
                                                                 │          E ──┬── HA_OUT (J5-1)
                                                                 └── B  Q2 TIP42C  E ──┘
                                                                            C ── VS1 (J5-2)
 
-  Bootstrap:  15 V ── D5 ES1D ── R9 2.2 Ω 1 W ── VB
+  Bootstrap:  15 V ── D5 ES1D ── R9 2.2 Ω 1 W ── VB1
 ```
 
 El canal L es igual, con U2, R4, R6, Q4 (TIP41C, colector a 15 V) y Q3 (TIP42C, colector a GND_K); C1 y C4 (10 µF) y C5 (0.1 µF) entre 15 V y GND_K.
@@ -154,11 +193,11 @@ R1 y R2 (10 kΩ) de H y L a GND mantienen los LED apagados si el MCU no está co
 | Canal | VCC / VEE | Fuente |
 | --- | --- | --- |
 | L | 15 V / GND_K | 15 V directo de J5-7 |
-| H | VB / VS1 | Bootstrap: 15 V → D5 ES1D → R9 2.2 Ω 1 W → VB, con 2 × 10 µF y zener 18 V |
+| H | VB1 / VS1 | Bootstrap: 15 V → D5 ES1D → R9 2.2 Ω 1 W → VB1, con 2 × 10 µF y zener Z1 de 18 V |
 
 - **Pendiente de subida:** τ = 2.2 Ω × 20 µF = 44 µs → ~0.34 V/µs ✓ (límite 3 V/µs).
 - **Caída en la rama de 60 Hz (8.3 ms encendido):** consumo del TLP (3 mA) más las 10 kΩ de compuerta de la tarjeta del puente H (con 2 MOSFET: 5 kΩ → ~2.8 mA):
-  `ΔV = (3 + 2.8) mA × 8.3 ms / 20 µF ≈ 2.4 V` → VB ≈ **11.8 V**, arriba del UVLO máximo de 9.5 V ✓ y de los 6 V a los que se especifica el R_DS(on) del IRF100P219 ✓.
+  `ΔV = (3 + 2.8) mA × 8.3 ms / 20 µF ≈ 2.4 V` → VB1 ≈ **11.8 V**, arriba del UVLO máximo de 9.5 V ✓ y de los 6 V a los que se especifica el R_DS(on) del IRF100P219 ✓.
 - **X7R y voltaje DC:** un 10 µF / 50 V en 1206 a 15 V puede quedar en ~5–7 µF reales; por eso son **2 × 10 µF**.
 - El orden D5 → R9 funciona igual que R → D (circuito de TI) usado en los otros módulos.
 
@@ -223,7 +262,7 @@ Datos: TIP41C/TIP42C (onsemi): V_CEO 100 V, 6 A continua, **10 A pico**, hFE ≥
 
 ## 6. Layout (como quedó en V.0.1)
 
-- **Dominio HV** (VB, VS1, HA_OUT, U1 lado de salida, Q1, Q2, C2, C3, C6, zener, D5, R9): **0.6 mm** de separación al resto (regla `HV_a_LV`). Distancia medida entre la pista GND_K y el pad VB del zener: **~1.13 mm** ✓.
+- **Dominio HV** (VB1, VS1, HA_OUT, U1 lado de salida, Q1, Q2, C2, C3, C6, zener, D5, R9): **0.6 mm** de separación al resto (regla `HV_a_LV`). Distancia medida entre la pista GND_K y el pad VB del zener: **~1.13 mm** ✓.
 - **Sin cobre de GND bajo el cuerpo de los TLP** (barrera del optoacoplador limpia).
 - **C5 y C6 (0.1 µF) en B.Cu**, entre los pads 5 y 8 de cada TLP, a ~5 mm ✓.
 - **Zener 1SMA5931B en B.Cu**, junto a C2/C3 y a la entrada de VS1 desde J5-2: recorta los picos en el depósito del bootstrap, antes de que VB llegue a los TIP y al TLP.
@@ -245,7 +284,7 @@ Datos: TIP41C/TIP42C (onsemi): V_CEO 100 V, 6 A continua, **10 A pico**, hFE ≥
 | "TRENZAR H Y L CON GND" y etiquetas H / GND / L / GND / P9 | Junto a J1 |
 | "TIP41C" / "TIP42C" con flechas de orientación | Junto a cada TO-220 |
 | "X" en la posición 8 de J5 | Cara superior y posterior |
-| "18V", "1SMA5931B1", "0.1UF", "10UF" | Cara posterior |
+| "18V", "Z1", "0.1UF", "10UF" | Cara posterior |
 | "OJO: USAR SILICON RTV NEUTRO ENTRE TIPs" | Cara posterior |
 | "V.0.1.NOV.26.J.G" | Cara posterior |
 
@@ -255,15 +294,15 @@ Datos: TIP41C/TIP42C (onsemi): V_CEO 100 V, 6 A continua, **10 A pico**, hFE ≥
 
 | Ref. | Cant. | Componente | Valor / parte | Nota |
 | --- | --- | --- | --- | --- |
-| U1, U2 | 2 | Optoacoplador | TLP250H (DIP-8) | Verificar pines en equivalentes |
+| U1, U2 | 2 | Optoacoplador | **TLP250H** (DIP-8) | Verificar pines en equivalentes; un TLP250 sin H solo en la rama A (sección 0) |
 | Q1, Q4 | 2 | NPN | TIP41C (o D44H11) | TO-220 B-C-E, acostado |
 | Q2, Q3 | 2 | PNP | TIP42C (o D45H11) | TO-220 B-C-E, acostado |
 | R3, R4 | 2 | Resistencia LED | **330 Ω** (interfaz de 5 V del proyecto) | Iguales |
 | R1, R2 | 2 | Pull-down de entrada | 10 kΩ | |
 | R5, R6 | 2 | Resistencia de base | 2.2 Ω | |
 | R9 | 1 | Resistencia bootstrap | 2.2 Ω 1 W | |
-| D5 | 1 | Diodo bootstrap | ES1D (o ES1J, como los otros módulos) | SMA |
-| Z1 | 1 | Zener | 1SMA5931B (18 V) | B.Cu |
+| D5 | 1 | Diodo bootstrap | ES1D (o ES1J, como los otros módulos), ultrarrápido, no Schottky | SMA |
+| Z1 | 1 | Zener | 1SMA5931BT3G (18 V) | B.Cu, cátodo a VB1 |
 | C2, C3 | 2 | Capacitor | 10 µF X7R 50 V 1206 | VB–VS1 |
 | C1, C4 | 2 | Capacitor | 10 µF X7R 50 V 1206 | 15 V–GND_K |
 | C5, C6 | 2 | Capacitor | 0.1 µF X7R | B.Cu, pines 8–5 de cada TLP |
@@ -325,13 +364,15 @@ Datos: TIP41C/TIP42C (onsemi): V_CEO 100 V, 6 A continua, **10 A pico**, hFE ≥
 | --- | --- | --- | --- |
 | 2026-11-02 | Evaluación de buffers y definición del módulo | Elegido TLP250H + tótem TIP41C/TIP42C; regla de 250 nC | Esquemático y layout |
 | 2026-11-03 | Esquemático y layout terminados, versión V.0.1.NOV.26.J.G | P9 en J1 abierto; J5 sin pad 8 con "X"; J1-GND aislado (J5-6 sin uso); C5/C6 y zener en B.Cu; TIP acostados; serigrafía completa | DRC final, fabricar, validar en banco |
+| 2026-11-12 | Esquemático reordenado por bloques A–I (A3) con notas y **guía rápida de trinchera** (TLP250 contra TLP250H, cuidados al soldar, prueba sin MOSFET); J2 → **J1** (como el README), zener 1SMA5931B1 → **Z1**; redes VB → **VB1**, salidas de los TLP → **HO_TLP / LO_TLP**; J5-6 marcado sin conexión (antes GND_PUENTE_H, sin uso); D5 con símbolo de diodo rápido; valores con voltaje y dieléctrico; PWR_FLAG para el ERC | Conexiones idénticas (comparadas pin por pin). Referencias, redes y valores sincronizados en el PCB, sin mover pistas | ERC y DRC en KiCad; fabricar, validar en banco |
 | | | | |
 
 ---
 
 ## 12. Referencias
 
-- Toshiba, TLP250H datasheet, Rev. 2.0 (2013).
+- Toshiba, TLP250H datasheet, Rev. 2.0 (2013): I_CC ≤ 3 mA, UVLO 7.5–9.5 V.
+- Toshiba, TLP250 datasheet: I_CCH / I_CCL 7 / 7.5 mA típ., 11 mA máx.; sin UVLO especificado.
 - onsemi, TIP41/TIP42 datasheet.
 - onsemi, D44H11/D45H11 datasheet.
 - Philips, BD135/137/139 datasheet (1999).
