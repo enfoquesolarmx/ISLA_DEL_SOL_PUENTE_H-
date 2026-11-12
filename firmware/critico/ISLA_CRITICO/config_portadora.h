@@ -1,0 +1,156 @@
+/*
+ * =============================================================================
+ *  config_portadora.h  -  Isla del Sol, micro CRÍTICO (A1)
+ *  Variables principales de la portadora del SPWM
+ * -----------------------------------------------------------------------------
+ *  QUÉ HACE
+ *    Define la frecuencia de conmutación (portadora), las muestras de la tabla
+ *    seno, el TOP del timer y el tiempo muerto en cuentas. Todo lo derivado se
+ *    calcula al compilar a partir de F_CPU; no ocupa RAM ni tiempo de CPU.
+ *    Este archivo NO toca registros: sólo números. Los timers se configuran
+ *    en spwm_328p.cpp / spwm_4809.cpp (capa por chip, DC-018).
+ *
+ *  HARDWARE AL QUE CORRESPONDE
+ *    Tarjeta de control (hardware/control), micro CRÍTICO en zócalo de Nano:
+ *      D9  -> HA  (lado alto, pierna A, 24 kHz)   J5/J9/J10 pin 1 del módulo
+ *      D10 -> LA  (lado bajo, pierna A, 24 kHz)   J5/J9/J10 pin 5 del módulo
+ *      D11 -> HB  (lado alto, pierna B, 60 Hz)
+ *      D3  -> LB  (lado bajo, pierna B, 60 Hz)
+ *    Puente H (hardware/puente_h): pierna A = Q1/Q2, pierna B = Q3/Q4.
+ *    Tiempo muerto según P9 del módulo gate driver (docs/identificacion_dt_pin9.md):
+ *      P9 a GND  -> 500 ns  (IRS2186, UCC21520DW)
+ *      P9 abierto -> 1 µs   (TLP250H, IR2110 trinchera, o falla: valor seguro)
+ *
+ *  CHIPS SOPORTADOS (zócalo multimodelo, DC-018)
+ *    ATmega328P a 16 MHz (Nano):        Timer1 phase-correct, TOP = 333
+ *    ATmega4809 a 20 MHz (Nano Every):  TCA0 dual-slope,      PER = 416
+ *
+ *  RECURSOS: ninguno (sólo constantes).
+ *
+ *  Licencia: MIT (ver LICENSE.md del repositorio). Escrito desde cero.
+ * =============================================================================
+ */
+#pragma once
+#include <stdint.h>
+
+// ============================ CHIP Y RELOJ ===================================
+#if defined(__AVR_ATmega328P__)
+  #define ISLA_CHIP_328P 1
+  constexpr uint32_t RELOJ_ESPERADO_HZ = 16000000UL;
+#elif defined(__AVR_ATmega4809__)
+  #define ISLA_CHIP_4809 1
+  constexpr uint32_t RELOJ_ESPERADO_HZ = 20000000UL;   // MegaCoreX a 20 MHz
+#else
+  #error "Chip no soportado: el CRÍTICO es ATmega328P (Nano) o ATmega4809 (Nano Every)"
+#endif
+
+#ifndef F_CPU
+  #error "F_CPU no definido: seleccione la placa correcta en el IDE"
+#endif
+
+constexpr uint32_t RELOJ_HZ = F_CPU;
+static_assert(RELOJ_HZ == RELOJ_ESPERADO_HZ,
+  "Reloj distinto del previsto: 328P a 16 MHz / 4809 a 20 MHz (MegaCoreX). "
+  "Revise la placa seleccionada en el IDE");
+
+// ======================== PARÁMETROS DE DISEÑO ===============================
+// Únicos valores que se eligen a mano. Todo lo demás se deriva.
+
+// Frecuencia de la red y de la salida del inversor (México: 60 Hz).
+constexpr uint16_t F_LINEA_HZ = 60;
+
+// Portadora objetivo. Sincronizada con la línea: 24 kHz = 400 × 60 Hz
+// (docs/modulacion_spwm.md, sección 4.3). Así cada ciclo de 60 Hz tiene
+// exactamente 400 periodos de portadora y el cruce por cero cae siempre en
+// el mismo punto: sin subarmónicos por deriva.
+constexpr uint32_t FSW_OBJETIVO_HZ = 24000UL;
+
+// Tiempos muertos que puede pedir el módulo gate driver por P9.
+// No cambiar sin actualizar docs/identificacion_dt_pin9.md.
+constexpr uint16_t DT_MODERNO_NS = 500;    // P9 = GND
+constexpr uint16_t DT_LEGACY_NS  = 1000;   // P9 abierto o falla (valor seguro)
+
+// ======================== MUESTRAS DE LA TABLA SENO ==========================
+constexpr uint16_t MUESTRAS_CICLO     = FSW_OBJETIVO_HZ / F_LINEA_HZ;   // 400
+constexpr uint16_t MUESTRAS_SEMICICLO = MUESTRAS_CICLO / 2;             // 200
+constexpr uint16_t MUESTRAS_CUARTO    = MUESTRAS_CICLO / 4;             // 100 (tabla en flash)
+
+static_assert(FSW_OBJETIVO_HZ % F_LINEA_HZ == 0,
+  "La portadora debe ser múltiplo entero de la frecuencia de línea");
+static_assert(MUESTRAS_CICLO % 4 == 0,
+  "Las muestras por ciclo deben ser múltiplo de 4 (tabla de un cuarto de onda)");
+
+// ======================== TOP DEL TIMER ======================================
+// Modo de doble pendiente (phase-correct en el 328P, dual-slope en el 4809):
+// el contador sube 0 -> TOP y baja TOP -> 0, una cuenta por ciclo de reloj.
+//   f_portadora = RELOJ / (2 × TOP)   ->   TOP = RELOJ / (2 × f_portadora)
+// Se trunca (división entera): la portadora queda un poco ARRIBA del objetivo.
+//   328P: 16 MHz / 48 000 = 333.33 -> 333  -> 24 024.0 Hz
+//   4809: 20 MHz / 48 000 = 416.67 -> 416  -> 24 038.5 Hz
+// Doble pendiente: pulsos centrados en el periodo, simétricos; el tiempo
+// muerto se obtiene desplazando el comparador del lado bajo (ver abajo).
+constexpr uint16_t TOP_CUENTAS = (uint16_t)(RELOJ_HZ / (2UL * FSW_OBJETIVO_HZ));
+
+// Ciclos de CPU disponibles en cada periodo de portadora (presupuesto de la ISR).
+// 328P: 666 ciclos; 4809: 832 ciclos. La ISR del SPWM debe usar una fracción
+// pequeña (DC-017 estima 80–120 ciclos). Medir en banco con un pin de prueba.
+constexpr uint16_t CICLOS_CPU_PERIODO = (uint16_t)(2UL * TOP_CUENTAS);
+
+// ======================== FRECUENCIAS REALES =================================
+// En centésimas de Hz para no usar float (se imprimen en el reporte de arranque).
+//   FSW_REAL_CHZ: 328P = 2 402 402 (24 024.02 Hz); 4809 = 2 403 846 (24 038.46 Hz)
+constexpr uint32_t FSW_REAL_CHZ = (uint32_t)((RELOJ_HZ * 100ULL) / (2UL * TOP_CUENTAS));
+
+// Salida a 400 periodos por ciclo, en milésimas de Hz:
+//   328P = 60 060 (60.060 Hz, +0.10 %);  4809 = 60 096 (60.096 Hz, +0.16 %)
+// En modo isla esto basta: el error queda dentro de lo que toleran cargas,
+// relojes y motores. En modo red, el PLL ajusta el TOP para seguir a la red
+// (ac_fb_grid, pendiente).
+constexpr uint32_t F_SALIDA_MHZ = (uint32_t)((RELOJ_HZ * 1000ULL) /
+                                             (2ULL * TOP_CUENTAS * MUESTRAS_CICLO));
+
+// Error de frecuencia en partes por millón (positivo = más rápida que 60 Hz).
+constexpr int32_t ERROR_FRECUENCIA_PPM =
+    (int32_t)(((int64_t)F_SALIDA_MHZ - (int64_t)F_LINEA_HZ * 1000) * 1000000LL /
+              ((int64_t)F_LINEA_HZ * 1000));
+
+static_assert(FSW_REAL_CHZ >= 2000000UL && FSW_REAL_CHZ <= 2500000UL,
+  "Portadora fuera de 20–25 kHz: revise RELOJ_HZ y FSW_OBJETIVO_HZ");
+static_assert(ERROR_FRECUENCIA_PPM >= -5000 && ERROR_FRECUENCIA_PPM <= 5000,
+  "La frecuencia de salida se aleja más de 0.5 % de 60 Hz");
+
+// ======================== RESOLUCIÓN Y TIEMPO MUERTO =========================
+// Cada cuenta del comparador desplaza cada flanco un ciclo de reloj:
+//   328P: 62.5 ns;  4809: 50 ns.  Se guarda en décimas de ns.
+constexpr uint16_t NS_X10_POR_CUENTA = (uint16_t)(10000000000ULL / RELOJ_HZ);
+
+// Conversión de ns a cuentas, redondeando HACIA ARRIBA (nunca menos tiempo
+// muerto del pedido).  500 ns -> 8 / 10 cuentas;  1 µs -> 16 / 20 cuentas.
+#define ISLA_NS_A_CUENTAS(ns) \
+  ((uint8_t)((((uint64_t)(ns)) * RELOJ_HZ + 999999999ULL) / 1000000000ULL))
+
+constexpr uint8_t DT_MODERNO_CUENTAS = ISLA_NS_A_CUENTAS(DT_MODERNO_NS);
+constexpr uint8_t DT_LEGACY_CUENTAS  = ISLA_NS_A_CUENTAS(DT_LEGACY_NS);
+
+// Lado alto (OCR1A / CMP0) normal; lado bajo (OCR1B / CMP1) invertido con
+//   comparador_bajo = comparador_alto + DT_cuentas
+// En doble pendiente eso abre un hueco de DT_cuentas en CADA flanco.
+// Para que el comparador del lado bajo nunca pase de TOP, el del lado alto
+// se limita a TOP - DT del peor caso (legacy):
+constexpr uint16_t COMPARADOR_ALTO_MAX = TOP_CUENTAS - DT_LEGACY_CUENTAS;   // 317 / 396
+
+// Fracción del periodo que se lleva el tiempo muerto (en milésimas):
+//   500 ns -> 12 (1.2 %);  1 µs -> 24 (2.4 %).  Coincide con modulacion_spwm.md.
+constexpr uint16_t DT_MODERNO_MILESIMAS =
+    (uint16_t)((uint32_t)DT_MODERNO_CUENTAS * 1000UL / CICLOS_CPU_PERIODO);
+constexpr uint16_t DT_LEGACY_MILESIMAS  =
+    (uint16_t)((uint32_t)DT_LEGACY_CUENTAS * 1000UL / CICLOS_CPU_PERIODO);
+
+static_assert(DT_LEGACY_CUENTAS > DT_MODERNO_CUENTAS,
+  "El tiempo muerto legacy debe ser mayor que el moderno (regla de P9)");
+static_assert((uint32_t)DT_MODERNO_CUENTAS * NS_X10_POR_CUENTA >= (uint32_t)DT_MODERNO_NS * 10,
+  "El tiempo muerto moderno en cuentas quedó por debajo de 500 ns");
+static_assert((uint32_t)DT_LEGACY_CUENTAS * NS_X10_POR_CUENTA >= (uint32_t)DT_LEGACY_NS * 10,
+  "El tiempo muerto legacy en cuentas quedó por debajo de 1 µs");
+static_assert(DT_LEGACY_CUENTAS * 10 < TOP_CUENTAS,
+  "El tiempo muerto ocupa más del 10 % del semiperiodo: revise la portadora");

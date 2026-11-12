@@ -133,9 +133,15 @@ ISLA_DEL_SOL_PUENTE_H-/
             ├── SSA2512_Littelfuse_Kelvin.kicad_mod ← huella del shunt
             ├── SSA2512_Littelfuse.step             ← modelo 3D del shunt
             └── img/                                ← esquemático, PCB y evidencia del proceso
+└── firmware/
+    └── critico/                                ← micro CRÍTICO (A1): SPWM, sensado, protecciones
+        ├── README.md
+        └── ISLA_CRITICO/                       ← sketch de Arduino, un archivo por módulo
+            ├── ISLA_CRITICO.ino
+            └── config_portadora.h
 ```
 
-Próximamente: `hardware/sensores/` (sensor AC del primario) y `firmware/`.
+Próximamente: `hardware/sensores/` (sensor AC del primario).
 
 ### Documentos de sistema (`docs/`)
 
@@ -226,7 +232,7 @@ Todos son **gate drivers de medio puente H** (una rama: MOSFET alto + MOSFET baj
 | [Tarjeta de transferencia de carga](hardware/transferencia_reles/README.md) (5 relés, DC-019) | **V0.1** (2026-11-11): esquemático y PCB terminados, separaciones de 5 mm / 3 mm verificadas, auditoría térmica a 10 A. Pendiente: comparar los pines del relé de 15 V con la huella, fabricar y validar en banco |
 | [Tarjeta de control SPWM](hardware/control/README.md) | **V0.1** (2026-11-11): esquemático y PCB terminados, DRC sin errores, glosario de módulos. Pendiente: prueba de banco de la caída automática, firmware y validación |
 | [Panel frontal LCD + botonera](hardware/panel/README.md) | **V0.2** (2026-11-11): LCD 16×2 o 20×4, módulo I2C directo a zócalo, esquemático y PCB. Pendiente: medir el módulo I2C real para ubicar J2, firmware de pantallas y SETUP |
-| Firmware | Pendiente |
+| [Firmware del CRÍTICO](firmware/critico/README.md) | **Paso 1** (2026-11-12): variables de la portadora (24 kHz = 400 × 60 Hz, TOP 333 / 416, tiempo muerto 8/16 o 10/20 cuentas por P9) para 328P y 4809; salidas seguras y reporte de arranque. Pendiente: timer y ISR del SPWM |
 | Validación en banco | Pendiente |
 
 ## Misión actual: SPWM con cargador básico de trinchera
