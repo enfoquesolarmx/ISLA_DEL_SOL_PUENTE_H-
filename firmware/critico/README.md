@@ -6,7 +6,7 @@
 
 **Licencia:** MIT ([LICENSE.md](../../LICENSE.md))
 
-**Estado:** paso 2, SPWM híbrida en el ATmega328P para **60 Hz o 50 Hz**, verificada en la PC y **validada en un Nano real con analizador lógico** (60 Hz, DT 1 µs; sección 7.0). **Prueba de banco sin potencia:** D12 (EN_HW) queda en 0 y las señales no pasan de la compuerta AND a los gate drivers.
+**Estado:** paso 2, SPWM híbrida en el ATmega328P para **60 Hz o 50 Hz**, verificada en la PC y **validada en un Nano real con analizador lógico** a 60 Hz y a 50 Hz, DT 1 µs (secciones 7.0 y 7.0b). **Prueba de banco sin potencia:** D12 (EN_HW) queda en 0 y las señales no pasan de la compuerta AND a los gate drivers.
 
 ---
 
@@ -285,6 +285,29 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
 ![2 M muestras: LB baja, HB sube 41.500 µs después](img/banco_paso2_2M_lb_a_hb_41500ns.png)
 ![Pulso solitario de HA al inicio del semiciclo −](img/banco_paso2_pulso_solitario_ha.png)
 
+### 7.0b Prueba real a 50 Hz (2026-11-12)
+
+Mismo Nano y mismo analizador (2 M muestras a 16 MHz), con `FRECUENCIA_LINEA_HZ = LINEA_50_HZ`. **Validado.**
+
+| Medición | Predicho | Medido en el Nano | |
+| --- | --- | --- | --- |
+| Reporte de arranque | 50 Hz, 480 muestras, 50.050 Hz; TOP, DT, amplitud y m iguales que a 60 Hz | Igual | ✅ |
+| Ciclos en 10 s | 500–501 | 501 | ✅ |
+| Periodo de la pierna B | ~19.98 ms (50.03–50.05 Hz) | **19.987 ms (50.032–50.034 Hz)**, igual en 5 ciclos | ✅ |
+| LB en alto | 239 / 480 = 49.79 % | **49.7906–49.8033 %** | ✅ |
+| Tiempo muerto de la pierna A | 1000 ns | **1000 ns** | ✅ |
+| Hueco de la pierna B | ~40–42 µs | **42 µs** y **41.812 µs** | ✅ |
+| Pierna A en el cruce | Apagada ~2 periodos; el patrón se invierte | Igual | ✅ |
+
+- **La frecuencia, 50.033 Hz contra 50.050 Hz,** tiene la misma desviación de ~330 ppm que a 60 Hz: es el cristal del Nano. Sale igual en las dos frecuencias, lo que confirma que la diferencia es del reloj y no del firmware.
+- **LB al 49.79 %** confirma 240 muestras por semiciclo, con la pierna B apagada una antes del cruce.
+
+![50 Hz: Monitor Serie](img/banco_50hz_monitor_serie.png)
+![50 Hz: vista general](img/banco_50hz_vista_general.png)
+![50 Hz: tiempo muerto de 1 µs](img/banco_50hz_tiempo_muerto_1us.png)
+![50 Hz: cruce por cero, pierna B a 42 µs](img/banco_50hz_cruce_pierna_b_42us.png)
+![50 Hz: pierna B a 41.812 µs](img/banco_50hz_pierna_b_41812ns.png)
+
 ### 7.1 Con analizador lógico (genérico de 24 MHz y 8 canales)
 
 Sirve el clon de Saleae de 24 MHz con **PulseView** (sigrok, gratuito, driver `fx2lafw`) o con el software Logic de Saleae. A 24 MHz cada muestra vale 41.7 ns: el tiempo muerto de 1 µs se mide con ±42 ns.
@@ -340,3 +363,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | `pruebas/analiza_captura.py`: valida la SPWM real con un analizador lógico de 24 MHz (`.sr` de PulseView, CSV de PulseView o de Saleae). Probado con capturas sintéticas; detecta un solo flanco sin tiempo muerto. Sección 7.1 |
 | 2026-11-12 | **Primera prueba real en un Nano: validada.** Pierna A, pierna B (40.44–42.19 µs en 5 cruces) y frecuencia (60.04 Hz estable en 7.5 ciclos). Analizador lógico a 16 MHz: pierna B a 16.656 ms (60.040 Hz), LB 49.7476 % (predicho 49.75 %), tiempo muerto de la pierna A = 1000 ns, 600–601 ciclos en 10 s. Capturas en `img/`. Sección 7.0 |
 | 2026-11-12 | **Pulso solitario de HA** en la muestra 1 del semiciclo − (~20 µs), encontrado en banco: el chip fija el nivel de la salida en BOTTOM al cambiar OCR1A de 0. Es seguro (HA + HB = 0 V, LA apagada). El modelo de la PC se corrigió con esa regla y lo reproduce; todas las verificaciones pasan. Nota en `spwm_328p.cpp` |
+| 2026-11-12 | **Prueba real a 50 Hz: validada.** 19.987 ms (50.033 Hz), LB 49.79 %, tiempo muerto de la pierna A 1000 ns, pierna B 41.8–42 µs, 501 ciclos en 10 s. Sección 7.0b |
