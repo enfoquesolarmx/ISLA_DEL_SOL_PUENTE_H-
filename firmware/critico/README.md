@@ -6,7 +6,7 @@
 
 **Licencia:** MIT ([LICENSE.md](../../LICENSE.md))
 
-**Estado:** ✅ **ETAPA BASE COMPLETADA (2026-11-12): generación de la SPWM híbrida validada en hardware real a 50 Hz y 60 Hz.** Etiqueta git `critico-etapa-base`. Prueba de banco **sin potencia**: D12 (EN_HW) queda en 0 y las señales no pasan de la compuerta AND a los gate drivers.
+**Estado:** ✅ **ETAPA BASE COMPLETADA (2026-11-12): generación de la SPWM híbrida validada en hardware real a 50 Hz y 60 Hz, con tiempo muerto de 1 µs y de 500 ns.** Etiqueta git `critico-etapa-base`. Prueba de banco **sin potencia**: D12 (EN_HW) queda en 0 y las señales no pasan de la compuerta AND a los gate drivers.
 
 ### Etapa base: qué quedó validado
 
@@ -15,14 +15,14 @@
 | Portadora de 24.02 kHz (TOP 333) sincronizada con la línea | Reporte de arranque y analizador lógico |
 | Salida de **60 Hz** (400 muestras) | 60.04 Hz, LB 49.75 %, 600–601 ciclos en 10 s (sección 7.0) |
 | Salida de **50 Hz** (480 muestras) | 50.033 Hz, LB 49.79 %, 501 ciclos en 10 s (sección 7.0b) |
-| Tiempo muerto de la pierna A hecho por el timer | **1000 ns** exactos, a 60 y a 50 Hz |
+| Tiempo muerto de la pierna A hecho por el timer | **1000 ns** exactos a 60 y 50 Hz; **500 ns** exactos a 60 Hz, en los dos flancos (sección 7.0c) |
 | Pierna B con un periodo de tiempo muerto en el cruce | **40.4–42.2 µs**, nunca encimadas |
 | Secuencia del cruce por cero y pulso solitario de HA | Explicada y reproducida por el modelo de la PC |
 | LUT de cuarto de onda, techo del 95 %, pulso mínimo, amplitud por ciclo | Prueba en la PC (`pruebas/prueba_spwm.cpp`): todo correcto |
 
 ### Siguientes etapas
 
-1. **Lectura de P9 (A7)** y validación del tiempo muerto de 500 ns en banco.
+1. **Lectura de P9 (A7):** elegir 500 ns o 1 µs según el módulo (los dos ya están validados en banco).
 2. **Arranque suave y lazo de voltaje** (`ac_fb_inversor`).
 3. **ADC disparado por la portadora:** batería, corriente y temperatura.
 4. **Protecciones** y secuencia de permiso D12 ([corte por hardware](../../docs/corte_por_hardware.md)).
@@ -336,6 +336,23 @@ Mismo Nano y mismo analizador (2 M muestras a 16 MHz), con `FRECUENCIA_LINEA_HZ 
 ![50 Hz: cruce por cero, pierna B a 42 µs](img/banco_50hz_cruce_pierna_b_42us.png)
 ![50 Hz: pierna B a 41.812 µs](img/banco_50hz_pierna_b_41812ns.png)
 
+### 7.0c Prueba real con tiempo muerto de 500 ns a 60 Hz (2026-11-12)
+
+Mismo Nano y mismo analizador (2 M muestras a 16 MHz). Cambio temporal en `setup()`: `spwm_preparar(DT_MODERNO_CUENTAS, ...)`, el valor que pedirán los módulos IRS2186 y UCC21520 con P9 a GND. Mismo método: medición manual en PulseView y Monitor Serie. **Validado.**
+
+| Medición | Predicho | Medido en el Nano | |
+| --- | --- | --- | --- |
+| DT en uso | 8 cuentas | 8 | ✅ |
+| Amplitud máxima / m | 316 / 0.948 (manda el techo del 95 %) | 316 / 0.948 | ✅ |
+| Frecuencia, TOP, ciclos en 10 s | 60.060 Hz, 333, 600–601 | Igual (601, 601) | ✅ |
+| **Tiempo muerto de la pierna A, en los dos flancos** (HA ↓ → LA ↑ y LA ↓ → HA ↑) | **500 ns** (8 cuentas) | **500 ns** en los dos | ✅ |
+
+- **Así quedan validados en hardware los dos tiempos muertos que puede pedir P9:** 1 µs (60 y 50 Hz) y 500 ns (60 Hz).
+- **En el repositorio el `.ino` sigue con `DT_LEGACY_CUENTAS` (1 µs).** Mientras no se lea P9, es el valor seguro. Con un módulo TLP250 o IR2110, 500 ns podría causar conducción cruzada.
+
+![500 ns: Monitor Serie](img/banco_dt500_monitor_serie.png)
+![500 ns: tiempo muerto de la pierna A](img/banco_dt500_tiempo_muerto_500ns.png)
+
 ### 7.1 Análisis automático con script (opcional)
 
 > **Estado:** el script **no se ha usado todavía con capturas reales**. La etapa base se validó a mano en PulseView (secciones 7.0 y 7.0b). El script solo se probó con capturas sintéticas. Sirve para revisar de una vez miles de flancos y lo que no se mide bien con cursores: pulso más angosto, forma senoidal y D12.
@@ -396,3 +413,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | **Prueba real a 50 Hz: validada.** 19.987 ms (50.033 Hz), LB 49.79 %, tiempo muerto de la pierna A 1000 ns, pierna B 41.8–42 µs, 501 ciclos en 10 s. Sección 7.0b |
 | 2026-11-12 | ✅ **ETAPA BASE COMPLETADA:** generación de la SPWM híbrida validada en hardware real a 50 y 60 Hz. Etiqueta `critico-etapa-base` |
 | 2026-11-12 | Aclarado el **método de validación**: la etapa base se midió a mano en la interfaz gráfica de PulseView (decodificadores PWM y Timing, cursores) y en el Monitor Serie. `analiza_captura.py` es opcional y aún no se ha usado con capturas reales |
+| 2026-11-12 | **Tiempo muerto de 500 ns validado en hardware real a 60 Hz:** 500 ns en los dos flancos de la pierna A, amplitud 316 (m 0.948), 601 ciclos en 10 s. Sección 7.0c. El `.ino` del repo sigue en 1 µs |
