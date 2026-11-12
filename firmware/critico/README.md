@@ -240,7 +240,9 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
 | Periodo de la pierna B (HB y LB) | 16.650 ms (60.060 Hz) | **16.656 ms (60.040 Hz)** | ✅ |
 | Fracción de LB en alto | 199 / 400 = 49.75 % | **49.7476 %** | ✅ |
 | Tiempo muerto de la pierna A (HA ↓ → LA ↑) | 16 cuentas = 1000 ns | **1000 ns** | ✅ |
-| Tiempo muerto de la pierna B (LB ↓ → HB ↑ y HB ↓ → LB ↑) | ~41.6 µs (1 periodo de portadora) | **Pendiente de medir** | ⏳ |
+| Tiempo muerto de la pierna B, HB ↓ → LB ↑ (fin del semiciclo −) | 41.625 µs (1 periodo de portadora) | **42 µs** (PulseView redondea a esa escala) | ✅ |
+| Tiempo muerto de la pierna B, LB ↓ → HB ↑ (fin del semiciclo +) | 41.625 µs | **Pendiente de medir** | ⏳ |
+| Pierna A alrededor del cruce | Apagada en las muestras 199 y 0 (~2 periodos); antes del cruce, HA ancho y LA angosto; después, al revés | Igual en la captura | ✅ |
 
 - **La diferencia de 0.02 Hz** (60.040 contra 60.060) viene de la tolerancia del cristal del Nano y del reloj del analizador, ~330 ppm. Está dentro de lo esperado para un cristal de 16 MHz de clon. En modo red, el PLL la corrige.
 - **Los caracteres raros al inicio del Monitor Serie** son normales: el Nano se reinicia al abrir el puerto y el bootloader envía bytes antes de `Serial.begin()`.
@@ -249,6 +251,7 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
 ![Monitor Serie](img/banco_paso2_monitor_serie.png)
 ![Pierna B a 60 Hz](img/banco_paso2_pierna_b_60hz.png)
 ![Tiempo muerto de 1 µs](img/banco_paso2_tiempo_muerto_1us.png)
+![Pierna B: HB baja, LB sube 42 µs después](img/banco_paso2_pierna_b_hb_a_lb.png)
 
 ### 7.1 Con analizador lógico (genérico de 24 MHz y 8 canales)
 
