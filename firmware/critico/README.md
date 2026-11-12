@@ -255,6 +255,12 @@ Resultado actual: **todo correcto** en las dos frecuencias. DT mínimo de 8 / 16
 
 Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico genérico a 16 MHz con PulseView. **Validado:** pierna A, pierna B y frecuencia.
 
+**Método:** medición **manual en la interfaz gráfica de PulseView**. Nada se midió con el script `analiza_captura.py`:
+- **Decodificador PWM** (*Duty cycle* y *Period*) sobre LB: fracción en alto y periodo de cada ciclo.
+- **Decodificador Timing** (*Time* y *Average*) sobre HB y LB: periodo y frecuencia ciclo por ciclo.
+- **Cursores** con zoom en los flancos: tiempo muerto de la pierna A (HA ↓ → LA ↑) y de la pierna B (HB ↓ → LB ↑ y LB ↓ → HB ↑).
+- **Monitor Serie** del Arduino IDE: reporte de arranque y ciclos en 10 s.
+
 | Medición | Predicho (prueba en la PC) | Medido en el Nano | |
 | --- | --- | --- | --- |
 | Reporte de arranque | TOP 333, 24 024.02 Hz, 400 muestras, DT 16, amplitud 313, m 0.939 | Igual | ✅ |
@@ -293,7 +299,7 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
   - **El modelo de la PC no lo predecía:** suponía que una salida solo cambia al coincidir el comparador. Se agregó la regla del nivel en BOTTOM a `pruebas/prueba_spwm.cpp`. El modelo reproduce el pulso con los mismos tiempos (83.25 → 103.06 µs, 2 µs abajo, vuelve a subir) y **todas las verificaciones siguen pasando**: tiempo muerto de 8 / 16 cuentas, sin traslapes, pulso mínimo respetado.
   - **Lección:** el banco encontró un comportamiento del chip que la simulación no tenía. Por eso cada paso se valida en hardware real.
 
-- **Pendiente:** correr `analiza_captura.py` sobre el `.sr` completo, con D12 en el canal 4 y 24 MHz si el analizador lo permite. Así quedan verificados el pulso más angosto, la forma senoidal y la amplitud real.
+- **No verificado todavía en hardware** (solo en la prueba de la PC): el pulso más angosto (≥ 500 ns), la forma senoidal en todos los pulsos, la amplitud real en el pico y que D12 nunca suba (D12 no se conectó al analizador). Se puede hacer con `analiza_captura.py` sobre un `.sr` completo (sección 7.1), o a mano con cursores en PulseView.
 
 ![Monitor Serie](img/banco_paso2_monitor_serie.png)
 ![Pierna B a 60 Hz](img/banco_paso2_pierna_b_60hz.png)
@@ -309,7 +315,7 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
 
 ### 7.0b Prueba real a 50 Hz (2026-11-12)
 
-Mismo Nano y mismo analizador (2 M muestras a 16 MHz), con `FRECUENCIA_LINEA_HZ = LINEA_50_HZ`. **Validado.**
+Mismo Nano y mismo analizador (2 M muestras a 16 MHz), con `FRECUENCIA_LINEA_HZ = LINEA_50_HZ`. **Validado**, con el mismo método: medición manual en PulseView (decodificadores PWM y Timing, cursores) y Monitor Serie.
 
 | Medición | Predicho | Medido en el Nano | |
 | --- | --- | --- | --- |
@@ -330,7 +336,9 @@ Mismo Nano y mismo analizador (2 M muestras a 16 MHz), con `FRECUENCIA_LINEA_HZ 
 ![50 Hz: cruce por cero, pierna B a 42 µs](img/banco_50hz_cruce_pierna_b_42us.png)
 ![50 Hz: pierna B a 41.812 µs](img/banco_50hz_pierna_b_41812ns.png)
 
-### 7.1 Con analizador lógico (genérico de 24 MHz y 8 canales)
+### 7.1 Análisis automático con script (opcional)
+
+> **Estado:** el script **no se ha usado todavía con capturas reales**. La etapa base se validó a mano en PulseView (secciones 7.0 y 7.0b). El script solo se probó con capturas sintéticas. Sirve para revisar de una vez miles de flancos y lo que no se mide bien con cursores: pulso más angosto, forma senoidal y D12.
 
 Sirve el clon de Saleae de 24 MHz con **PulseView** (sigrok, gratuito, driver `fx2lafw`) o con el software Logic de Saleae. A 24 MHz cada muestra vale 41.7 ns: el tiempo muerto de 1 µs se mide con ±42 ns.
 
@@ -387,3 +395,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | **Pulso solitario de HA** en la muestra 1 del semiciclo − (~20 µs), encontrado en banco: el chip fija el nivel de la salida en BOTTOM al cambiar OCR1A de 0. Es seguro (HA + HB = 0 V, LA apagada). El modelo de la PC se corrigió con esa regla y lo reproduce; todas las verificaciones pasan. Nota en `spwm_328p.cpp` |
 | 2026-11-12 | **Prueba real a 50 Hz: validada.** 19.987 ms (50.033 Hz), LB 49.79 %, tiempo muerto de la pierna A 1000 ns, pierna B 41.8–42 µs, 501 ciclos en 10 s. Sección 7.0b |
 | 2026-11-12 | ✅ **ETAPA BASE COMPLETADA:** generación de la SPWM híbrida validada en hardware real a 50 y 60 Hz. Etiqueta `critico-etapa-base` |
+| 2026-11-12 | Aclarado el **método de validación**: la etapa base se midió a mano en la interfaz gráfica de PulseView (decodificadores PWM y Timing, cursores) y en el Monitor Serie. `analiza_captura.py` es opcional y aún no se ha usado con capturas reales |
