@@ -134,6 +134,7 @@ ISLA_DEL_SOL_PUENTE_H-/
             ├── SSA2512_Littelfuse.step             ← modelo 3D del shunt
             └── img/                                ← esquemático, PCB y evidencia del proceso
 └── firmware/
+    ├── aux/ISLA_AUX_PRUEBA_I2C/                ← AUX (A2): prueba del enlace I2C (maestro)
     └── critico/                                ← micro CRÍTICO (A1): SPWM, sensado, protecciones
         ├── README.md
         ├── ISLA_CRITICO/                       ← sketch de Arduino, un archivo por módulo
@@ -211,7 +212,7 @@ Un archivo por módulo: cada uno empieza con un bloque que dice qué hace, qué 
 | Micro | Documento | Estado | Qué incluye |
 | --- | --- | --- | --- |
 | **CRÍTICO (A1)**, ATmega328P (Nano); Nano Every (4809) pendiente | [README](firmware/critico/README.md) | ✅ **Etapa base completada** (2026-11-12, etiqueta `critico-etapa-base`): generación de la SPWM híbrida verificada en la PC y **validada en un Nano real** con analizador lógico a 60 Hz (60.04 Hz) y 50 Hz (50.03 Hz); tiempo muerto de la pierna A de 1000 ns y de 500 ns, de la pierna B 40.4–42.2 µs; sin potencia (D12 = 0) | **Portadora de 24 kHz** sincronizada con la línea (TOP 333, 24.02 kHz). **60 o 50 Hz**, elegida solo en `config_portadora.h` (400 / 480 muestras; advertencias de transformador y voltaje para 50 Hz). **LUT de seno de un cuarto de onda en flash**, muestreada al centro del periodo y generada por script. **SPWM híbrida:** pierna A a 24 kHz con tiempo muerto hecho por el **timer** en cada flanco (8 / 16 cuentas según P9), pierna B a la frecuencia de línea con un periodo de tiempo muerto en el cruce por cero. Amplitud aplicada por ciclo (sin CD en el transformador). **Techo de modulación del 95 %** o el límite físico del tiempo muerto, el menor. Pulso mínimo de 500 ns y pulso de bootstrap garantizado. **D12 = 0 primero** al apagar. **Prueba en la PC** del mismo código, cuenta por cuenta. Comparación con el borrador antiguo |
-| **AUX (A2)**, panel, LCD, enlace I2C, CAN | — | Pendiente | — |
+| **AUX (A2)**, panel, LCD, enlace I2C, CAN | [README](firmware/aux/README.md) | **Enlace I2C validado en banco** (2026-11-13) | Sketch de prueba del enlace como maestro: PING + foto con CRC-8, avisos de enlace perdido o recuperado, liberación del bus. Pendiente: panel, LCD, CAN, buzzer y ventilador |
 
 Pendiente en el CRÍTICO: prueba de banco de la lectura de P9 (paso 3, ya escrito y verificado en la PC), arranque suave y lazo de voltaje, PLL con la red (TOP fraccionario), ADC disparado por la portadora, protecciones, enlace I2C y la versión para el 4809.
 

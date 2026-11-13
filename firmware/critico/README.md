@@ -27,7 +27,7 @@
 3. **ADC disparado por la portadora:** batería, corriente y temperatura.
 4. **Protecciones** y secuencia de permiso D12 ([corte por hardware](../../docs/corte_por_hardware.md)).
 5. **PLL con la red** (TOP fraccionario) y transferencia (`ac_fb_grid`).
-6. **Enlace I2C** con el AUX.
+6. **Enlace I2C** con el AUX: ✅ **validado en banco** (sección 7.3). Falta definir los comandos reales (arranque, paro, lecturas) y quitar el `Serial` del CRÍTICO (DC-017, regla 5).
 7. **ATmega4809** (Nano Every).
 
 ---
@@ -60,7 +60,7 @@ Cada archivo hace una sola cosa y empieza con un bloque que dice qué hace, qué
 | `ac_fb_inversor.h/.cpp` | Retroalimentación del voltaje de salida y lazo | Pendiente |
 | `ac_fb_grid.h/.cpp` | Red: presencia, frecuencia, fase y PLL; transferencia | Pendiente |
 | `protecciones.h/.cpp` | Fallas y apagado seguro (junto con el [corte por hardware](../../docs/corte_por_hardware.md)) | Pendiente |
-| `enlace_i2c.h/.cpp` | Enlace con el AUX: tramas con versión, secuencia y CRC | Pendiente |
+| `enlace_protocolo.h` + `enlace_i2c.h/.cpp` | Enlace con el AUX: el CRÍTICO es **esclavo 0x20** (DC-017). PING del AUX y foto de estado de 16 bytes con CRC-8, avisos de AUX conectado/perdido, reinicio del TWI si se traba | ✅ Validado en banco (7.3) |
 
 **Pines:** la asignación de cada pin del CRÍTICO y del AUX (función, entrada/salida, estado al encender y timer dueño) está en el [mapa de pines de la tarjeta de control](../../hardware/control/README.md#11-mapa-de-pines), verificado contra el esquemático. **El firmware no usa ningún pin que no esté en esa tabla.**
 
@@ -413,6 +413,68 @@ Con resistencias de ±5 % las cuentas pueden variar: 383–436, 484–539, 657�
 
 > **El caso 1 es el único en que el firmware usa 500 ns.** Si en cualquier otro caso PulseView mide 500 ns, **es una falla grave**: detén las pruebas y avísame.
 
+### 7.3 Prueba de banco del enlace I2C CRÍTICO ↔ AUX (validada, 2026-11-13)
+
+Dos Nanos: el **CRÍTICO** con `ISLA_CRITICO.ino` (paso 3 + enlace) y el **AUX** con [`firmware/aux/ISLA_AUX_PRUEBA_I2C`](../aux/ISLA_AUX_PRUEBA_I2C/ISLA_AUX_PRUEBA_I2C.ino). **Sin potencia.**
+
+#### Protocolo (`enlace_protocolo.h`, idéntico en los dos sketches)
+
+- **Roles (DC-017):** el **CRÍTICO es esclavo (0x20)** y nunca espera al bus; el **AUX es el maestro**. A 100 kHz.
+- **Comando del AUX, 4 bytes:** tipo, secuencia, dato y CRC-8. Hoy solo existe `PING` (0x01).
+- **Foto del CRÍTICO, 16 bytes:** versión, secuencia, eco del último PING, banderas (SPWM activa, detenida por P9, 50 Hz), estado de P9, DT, ciclos, lectura de A7, amplitud máxima, comandos con CRC malo, y CRC-8.
+- **CRC-8 SMBus:** polinomio 0x07, valor inicial 0. Los números de 16 bits van con el byte bajo primero.
+- **La interrupción de I2C solo copia bytes.** El CRÍTICO valida los comandos y arma la foto en `loop()`, cada 50 ms, y la copia de forma atómica: el AUX nunca recibe media foto.
+
+#### Detección y recuperación
+
+| Lado | Aviso (líneas `>>>`) | Cuándo |
+| --- | --- | --- |
+| AUX | `ENLACE ESTABLECIDO` / `ENLACE RECUPERADO` | Primera foto válida |
+| AUX | `ENLACE PERDIDO` | 3 fallas seguidas (~300 ms). Luego **libera el bus** cada ~1 s: hasta 9 pulsos en SCL, un STOP y reinicio del TWI (NXP UM10204, "bus clear") |
+| AUX | `CRITICO CONGELADO` | Responde, pero su foto no avanza en 300 ms (programa trabado) |
+| AUX | — | **Nunca muestra una foto de más de 300 ms** como si fuera actual |
+| CRÍTICO | `AUX conectado` / `AUX perdido` | Primer PING válido / 500 ms sin PING. Sin PING, reinicia su TWI esclavo cada 1 s |
+
+#### Resultados
+
+| Prueba | Resultado |
+| --- | --- |
+| Enlace al arrancar | `AUX conectado` a los **114 ms** |
+| PING sin pérdidas | **+100 cada 10 s** (10 por segundo), **CRC malo 0**, más de 1 700 PING seguidos |
+| Desconectar y reconectar el CRÍTICO o el AUX, varias veces | Se detecta y **se recupera solo** en los dos sentidos; ninguno se cuelga |
+| Tiempo muerto de la pierna A **con y sin** el enlace | **1 µs** en los dos casos: el I2C no lo afecta (lo hace el hardware del Timer1) |
+| Pierna B (cruce por cero) con el enlace | **~42 µs**, como sin el enlace |
+| Una fuente y una tierra, 20 M muestras (1.25 s) | **Sin anomalías** |
+| Memoria | CRÍTICO 9.9 KB de flash (32 %) y 517 B de RAM (25 %); AUX 9.2 KB |
+
+![Monitor del CRÍTICO: AUX conectado, PING sin pérdidas](img/i2c_monitor_critico.png)
+![Tiempo muerto de 1 µs con el enlace activo](img/i2c_dt_1us_con_enlace.png)
+![20 M muestras con una sola fuente: sin anomalías](img/i2c_20M_una_fuente.png)
+![Cruce por cero con el enlace activo](img/i2c_cruce_por_cero.png)
+
+#### Lo que se aprendió en el banco
+
+- **"El AUX no imprime después de reconectarlo":** era el Monitor Serie de la PC. Al quitar el USB con el Monitor abierto, Linux le asigna otro puerto (`ttyUSB1`). **Cierra el Monitor antes de desconectar** y revisa *Herramientas → Puerto*. El log del CRÍTICO (PING válidos) probaba que el AUX seguía funcionando.
+- **Sin el USB del CRÍTICO,** las pull-up del AUX pueden alimentarlo un poco por SDA y SCL. En la tarjeta real no pasa: los dos comparten el mismo 5 V.
+- **Pulsos de 63 ns en todas las señales a la vez:** no eran del firmware. Solo la interrupción del SPWM escribe en los pines de la pierna B, y lo hace solo en las muestras 199 y 0. Era un **lazo de tierra** entre dos computadoras. Ver la advertencia de abajo.
+
+![Lazo de tierra: pulsos en la vista general](img/i2c_lazo_tierra_vista.png)
+![Lazo de tierra: una muestra (63 ns) en los cuatro canales a la vez](img/i2c_lazo_tierra_63ns.png)
+
+> ⚠ **Advertencia para el trinchero: nunca monitorear con dos laptops a la vez**
+>
+> No conectes el CRÍTICO a una computadora y el AUX a otra (ni el analizador lógico a una tercera) mientras los dos Nanos estén unidos por el I2C (A4, A5 y GND).
+>
+> **Por qué:** cada computadora tiene su propia tierra. Al unir los Nanos por GND, las tierras de las dos computadoras quedan conectadas por ese cable y se forma un **lazo de tierra**. Por ahí circulan corrientes de ruido de los cargadores y del USB, que:
+> - generan **pulsos falsos de ~63 ns en todas las señales a la vez** al medir con el analizador (parecen cortos en el puente H, pero no lo son);
+> - pueden dar **errores de comunicación** y, en el peor caso, dañar un puerto USB o un Nano.
+>
+> **Cómo se hace bien:**
+> - **Una sola computadora y una sola tierra:** el CRÍTICO por USB, y el AUX alimentado desde sus pines (5 V → 5 V, GND → GND), más A4 y A5. El estado del enlace se ve en el Monitor del CRÍTICO (`AUX conectado`, `PING validos`).
+> - **Si necesitas ver los dos Monitores,** conecta los dos Nanos por USB a la **misma** computadora, y el analizador también a esa.
+>
+> *Evidencia: prueba del enlace del 2026-11-13. Con dos laptops aparecían pulsos de 63 ns en los cuatro canales; con una sola fuente y una sola tierra, 20 M muestras sin anomalías.*
+
 ### 7.1 Análisis automático con script (opcional)
 
 > **Estado:** el script **no se ha usado todavía con capturas reales**. La etapa base se validó a mano en PulseView (secciones 7.0 y 7.0b). El script solo se probó con capturas sintéticas. Sirve para revisar de una vez miles de flancos y lo que no se mide bien con cursores: pulso más angosto, forma senoidal y D12.
@@ -477,3 +539,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-13 | Enlace al nuevo **mapa de pines** de la tarjeta de control (sección 1.1). D7 del CRÍTICO para medir la duración real de la ISR |
 | 2026-11-13 | Gráfica de la LUT de 90° por cuadrantes (`img/lut_cuarto_de_onda.png`, `herramientas/grafica_lut.py`) en la sección 3.1 |
 | 2026-11-13 | **Paso 3: lectura de P9** (`dt_p9.h/.cpp`): 16 lecturas de A7 al encender, 500 ns solo con las dos ramas a GND, mixto o inestable → 1 µs, fuera de rango → no arranca, vigilancia cada 50 ms (3 lecturas distintas → SPWM detenida). Prueba en la PC (`pruebas/prueba_p9.cpp`): todo correcto. Compila: 7.3 KB de flash, 253 B de RAM. Prueba de banco pendiente (7.2) |
+| 2026-11-13 | **Enlace I2C CRÍTICO ↔ AUX validado en banco** (sección 7.3): CRÍTICO esclavo 0x20, PING + foto de 16 bytes con CRC-8, avisos y recuperación en los dos lados, liberación del bus en el AUX. Más de 1 700 PING sin pérdidas, CRC 0. No afecta al tiempo muerto (1 µs) ni a la pierna B (~42 µs). Advertencia de las dos laptops (lazo de tierra) |

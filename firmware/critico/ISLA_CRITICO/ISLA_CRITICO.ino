@@ -5,7 +5,7 @@
  *  Archivo principal: sólo llama a los módulos. La lógica vive en cada
  *  archivo .h / .cpp de esta carpeta (ver README.md).
  *
- *  ESTADO: paso 3 - SPWM híbrida + LECTURA DE P9, PRUEBA DE BANCO SIN POTENCIA.
+ *  ESTADO: paso 3 + PRUEBA DEL ENLACE I2C (esclavo 0x20), BANCO SIN POTENCIA.
  *    Al encender:
  *      1) puente apagado: D9, D10, D11, D3 en bajo y D12 (EN_HW) = 0, con el
  *         tiempo muerto seguro (1 µs) mientras no se sepa otra cosa;
@@ -30,6 +30,7 @@
 #include "config_spwm.h"
 #include "spwm.h"
 #include "dt_p9.h"
+#include "enlace_i2c.h"
 
 // Rampa de prueba de banco: cuentas que sube la amplitud en cada ciclo de línea.
 // 313–316 cuentas / 5 por ciclo = 63 ciclos ≈ 1 s a 60 Hz (1.3 s a 50 Hz). NO es el arranque suave final
@@ -82,6 +83,8 @@ static void reporteP9(uint16_t adc, EstadoP9 e) {
 }
 
 static bool detenidoPorP9 = false;
+static EstadoP9 p9Actual = P9_AMBOS_ABIERTOS;   // lo último leído, para el enlace I2C
+static uint16_t adcP9Actual = 0;
 
 void setup() {
   // 1) Puente apagado y D12 = 0 antes que nada, con el tiempo muerto seguro.
@@ -91,6 +94,8 @@ void setup() {
   // 2) P9: qué tiempo muerto piden los gate drivers.
   uint16_t adcP9 = 0;
   const EstadoP9 p9 = p9_detectar(&adcP9);
+  p9Actual = p9; adcP9Actual = adcP9;
+  enlace_iniciar();                   // esclavo I2C (0x20): el AUX ya puede preguntar
 
   // 3) Tiempo muerto según P9 (500 ns sólo si las dos ramas lo piden).
   const bool frecuenciaValida = spwm_preparar(p9_dt_cuentas(p9), FRECUENCIA_LINEA_HZ);
@@ -108,14 +113,22 @@ void setup() {
 
 void loop() {
   // Vigilancia de P9: si cambia con la SPWM corriendo, se apaga y no vuelve.
-  uint16_t adcP9;
-  EstadoP9 p9;
-  if (!detenidoPorP9 && p9_vigilar(&adcP9, &p9)) {
+  uint16_t adcP9 = 0;
+  EstadoP9 p9 = p9Actual;
+  const bool cambioP9 = !detenidoPorP9 && p9_vigilar(&adcP9, &p9);
+  if (!detenidoPorP9 && adcP9 != 0) { p9Actual = p9; adcP9Actual = adcP9; }
+  if (cambioP9) {
     spwm_detener();                   // D12 = 0 primero, salidas en bajo
     detenidoPorP9 = true;
     Serial.println(F("FALLA: P9 cambio con la SPWM corriendo (modulo flojo o cambiado)."));
     reporteP9(adcP9, p9);
     Serial.println(F("SPWM DETENIDA. Reinicie el Nano para volver a leer P9."));
+  }
+  enlace_atender(p9Actual, adcP9Actual, detenidoPorP9);   // I2C: comandos y foto nueva
+  if (enlace_aux_cambio()) {
+    Serial.print(F(">>> [")); Serial.print(millis()); Serial.print(F(" ms] "));
+    Serial.println(enlace_aux_presente() ? F("AUX conectado: primer PING valido recibido")
+                                         : F("AUX perdido: mas de 500 ms sin PING"));
   }
   if (detenidoPorP9) return;
 
@@ -142,6 +155,9 @@ void loop() {
     Serial.print(F("   |   "));
     const uint16_t a = analogRead(A7);
     reporteP9(a, p9_clasificar(a));
+    Serial.print(F("I2C: PING validos ")); Serial.print(enlace_comandos_ok());
+    Serial.print(F(", con CRC malo ")); Serial.print(enlace_comandos_malos());
+    Serial.print(F(", ultimo seq ")); Serial.println(enlace_ultimo_seq());
     c0 = c;
   }
 }
