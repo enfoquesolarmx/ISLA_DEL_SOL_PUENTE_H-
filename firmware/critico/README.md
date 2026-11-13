@@ -22,7 +22,7 @@
 
 ### Siguientes etapas
 
-1. **Lectura de P9 (A7):** elegir 500 ns o 1 µs según el módulo (los dos ya están validados en banco).
+1. **Lectura de P9 (A7):** elegir 500 ns o 1 µs según el módulo. **Paso 3 escrito y verificado en la PC; falta la prueba de banco** (sección 7.2).
 2. **Arranque suave y lazo de voltaje** (`ac_fb_inversor`).
 3. **ADC disparado por la portadora:** batería, corriente y temperatura.
 4. **Protecciones** y secuencia de permiso D12 ([corte por hardware](../../docs/corte_por_hardware.md)).
@@ -55,7 +55,7 @@ Cada archivo hace una sola cosa y empieza con un bloque que dice qué hace, qué
 | `spwm.h` + `spwm_328p.cpp` | SPWM híbrida: Timer1, ISR de portadora, pierna B en el cruce por cero, apagado | ✅ 328P |
 | `spwm_4809.cpp` | La misma SPWM con TCA0 | Pendiente: hoy da error al compilar, a propósito |
 | Arranque suave | Rampa de amplitud con el lazo de voltaje | Pendiente (va con `ac_fb_inversor`) |
-| `dt_p9.h/.cpp` | Lectura de P9 al encender y vigilancia ([identificación por P9](../../docs/identificacion_dt_pin9.md)) | Pendiente |
+| `dt_p9.h/.cpp` | Lectura de P9 en A7 al encender (16 lecturas) y vigilancia cada 50 ms ([identificación por P9](../../docs/identificacion_dt_pin9.md)) | ✅ Paso 3: verificado en la PC; banco pendiente (7.2) |
 | `adc_bateria.h/.cpp` | Voltaje y corriente de batería | Pendiente |
 | `ac_fb_inversor.h/.cpp` | Retroalimentación del voltaje de salida y lazo | Pendiente |
 | `ac_fb_grid.h/.cpp` | Red: presencia, frecuencia, fase y PLL; transferencia | Pendiente |
@@ -244,6 +244,20 @@ g++ -std=gnu++11 -O2 -D__AVR_ATmega328P__ -DF_CPU=16000000UL \
 
 Resultado actual: **todo correcto** en las dos frecuencias. DT mínimo de 8 / 16 cuentas exactas, pierna B 666 cuentas, CD < 0.0001, error de la fundamental −0.24 % (60 Hz) y −0.23 % (50 Hz) a amplitud máxima. Ese error viene de los pulsos que se quitan cerca del cruce por cero.
 
+**Prueba de P9** (`pruebas/prueba_p9.cpp`, compila el mismo `dt_p9.cpp` que va al Nano):
+- **Umbrales:** las 4 combinaciones de P9 con todas las tolerancias de R12, R13 y R14 (±1 % y ±5 %) y ±2 cuentas de error del ADC.
+- **Regla:** 500 ns solo con las dos ramas a GND.
+- **Arranque:** una lectura distinta da INESTABLE y 1 µs; A7 bajo no arranca.
+- **Vigilancia:** 1 o 2 lecturas de ruido no disparan; 3 seguidas sí (~150–250 ms).
+
+```
+g++ -std=gnu++11 -O2 -D__AVR_ATmega328P__ -DF_CPU=16000000UL \
+    -Ipruebas/avr_simulado -IISLA_CRITICO pruebas/prueba_p9.cpp ISLA_CRITICO/dt_p9.cpp -o prueba_p9
+./prueba_p9
+```
+
+Resultado actual: **todo correcto**.
+
 > **Correr esta prueba cada vez que alguien toque `spwm_328p.cpp` o `config_spwm.h`.** Ya encontró un error: con el umbral a la mitad salían pulsos de 250 ns.
 
 ## 7. Prueba de banco del paso 2
@@ -362,6 +376,43 @@ Mismo Nano y mismo analizador (2 M muestras a 16 MHz). Cambio temporal en `setup
 ![500 ns: Monitor Serie](img/banco_dt500_monitor_serie.png)
 ![500 ns: tiempo muerto de la pierna A](img/banco_dt500_tiempo_muerto_500ns.png)
 
+### 7.2 Prueba de banco del paso 3: lectura de P9 (pendiente)
+
+Simula en la protoboard la red de A7 de la tarjeta de control (sección 13) y los P9 de los dos módulos con cables. **Sin etapa de potencia; D12 sigue en 0.**
+
+**Material:** 2 resistencias de **10 kΩ** (R12, R13), 1 de **20 kΩ** (R14) y, opcional, un capacitor de **100 nF** (C18). Sirven de 5 % o mejores.
+
+```
+   5V ──[R12 10k]──┬──────────── A7 del Nano
+                   ├──[R13 10k]──── cable "P9_A"  (a GND = módulo de 500 ns; suelto = de 1 µs)
+                   ├──[R14 20k]──── cable "P9_B"  (a GND = módulo de 500 ns; suelto = de 1 µs)
+                   └──[C18 100n]─── GND   (opcional)
+```
+
+**Procedimiento:** para cada combinación, deja los cables como dice la tabla, **reinicia el Nano** (P9 se lee al encender) y anota lo que sale en el Monitor Serie. Luego mide el tiempo muerto de la pierna A en PulseView, igual que en la 7.0c.
+
+| # | P9_A | P9_B | Monitor Serie: "P9 en A7" | DT en uso | PulseView: HA ↔ LA |
+| --- | --- | --- | --- | --- | --- |
+| 1 | GND | GND | ~409 cuentas, ~2.00 V, `500 ns` | **8 (500 ns)** | **500 ns** |
+| 2 | GND | suelto | ~512 cuentas, ~2.50 V, `MIXTO, se usa 1 us` | 16 (1 µs) | 1000 ns |
+| 3 | suelto | GND | ~682 cuentas, ~3.33 V, `MIXTO, se usa 1 us` | 16 (1 µs) | 1000 ns |
+| 4 | suelto | suelto | ~1023 cuentas, ~5.00 V, `1 us` | 16 (1 µs) | 1000 ns |
+
+Con resistencias de ±5 % las cuentas pueden variar: 383–436, 484–539, 657–706 y 1021–1023. Los umbrales están a la mitad, en 460, 598 y 863 (`pruebas/prueba_p9.cpp`).
+
+**Pruebas de falla:**
+
+| # | Qué hacer | Qué debe pasar |
+| --- | --- | --- |
+| 5 | Arranca en el caso 1 (500 ns) y, **con la SPWM corriendo**, suelta P9_B | En ~150–250 ms: `FALLA: P9 cambio con la SPWM corriendo`, la lectura nueva (~512) y `SPWM DETENIDA`. En PulseView, D9, D10, D11 y D3 quedan en 0 |
+| 6 | Toca y suelta rápido un cable de P9 con la SPWM corriendo (menos de 100 ms) | No debe detenerse: hacen falta 3 lecturas seguidas distintas |
+| 7 | Conecta A7 directo a GND y reinicia | `FUERA DE RANGO` y `La SPWM NO arranca`. En PulseView no hay pulsos |
+| 8 | Quita R12, deja los dos P9 **sueltos** y reinicia varias veces | **Prueba para medir un riesgo, no para aprobar.** A7 queda flotando y puede leer cualquier cosa, **incluso la banda de 500 ns**. Anota qué sale en cada reinicio |
+
+> **Riesgo conocido (caso 8):** la falla segura de P9 depende de que **R12 esté presente**. Si R12 se abre, A7 queda flotando y el firmware no lo puede distinguir de una lectura válida, porque A7 es solo analógico y no tiene pull-up interno. Mitigaciones posibles, a decidir con el resultado del caso 8: R12 en el lado de componentes con soldadura inspeccionada, o una segunda resistencia de pull-up en paralelo.
+
+> **El caso 1 es el único en que el firmware usa 500 ns.** Si en cualquier otro caso PulseView mide 500 ns, **es una falla grave**: detén las pruebas y avísame.
+
 ### 7.1 Análisis automático con script (opcional)
 
 > **Estado:** el script **no se ha usado todavía con capturas reales**. La etapa base se validó a mano en PulseView (secciones 7.0 y 7.0b). El script solo se probó con capturas sintéticas. Sirve para revisar de una vez miles de flancos y lo que no se mide bien con cursores: pulso más angosto, forma senoidal y D12.
@@ -425,3 +476,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | **Tiempo muerto de 500 ns validado en hardware real a 60 Hz:** 500 ns en los dos flancos de la pierna A, amplitud 316 (m 0.948), 601 ciclos en 10 s. Sección 7.0c. El `.ino` del repo sigue en 1 µs |
 | 2026-11-13 | Enlace al nuevo **mapa de pines** de la tarjeta de control (sección 1.1). D7 del CRÍTICO para medir la duración real de la ISR |
 | 2026-11-13 | Gráfica de la LUT de 90° por cuadrantes (`img/lut_cuarto_de_onda.png`, `herramientas/grafica_lut.py`) en la sección 3.1 |
+| 2026-11-13 | **Paso 3: lectura de P9** (`dt_p9.h/.cpp`): 16 lecturas de A7 al encender, 500 ns solo con las dos ramas a GND, mixto o inestable → 1 µs, fuera de rango → no arranca, vigilancia cada 50 ms (3 lecturas distintas → SPWM detenida). Prueba en la PC (`pruebas/prueba_p9.cpp`): todo correcto. Compila: 7.3 KB de flash, 253 B de RAM. Prueba de banco pendiente (7.2) |
