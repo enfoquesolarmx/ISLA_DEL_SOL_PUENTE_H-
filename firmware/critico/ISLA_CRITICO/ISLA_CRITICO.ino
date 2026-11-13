@@ -5,14 +5,19 @@
  *  Archivo principal: sólo llama a los módulos. La lógica vive en cada
  *  archivo .h / .cpp de esta carpeta (ver README.md).
  *
- *  ESTADO: paso 2 - SPWM híbrida, PRUEBA DE BANCO SIN POTENCIA.
+ *  ESTADO: paso 3 + PRUEBA DEL ENLACE I2C (esclavo 0x20), BANCO SIN POTENCIA.
  *    Al encender:
- *      1) puente apagado: D9, D10, D11, D3 en bajo y D12 (EN_HW) = 0;
- *      2) reporte por el puerto serie de los valores de la portadora;
- *      3) arranca la SPWM a la frecuencia de FRECUENCIA_LINEA_HZ (60 o 50 Hz,
- *         en config_portadora.h) con tiempo muerto de 1 µs (el seguro: todavía
- *         no se lee P9) y sube la amplitud en rampa hasta el máximo en ~1 s;
- *      4) cada 10 s imprime los ciclos generados (~600 a 60 Hz, ~500 a 50 Hz).
+ *      1) puente apagado: D9, D10, D11, D3 en bajo y D12 (EN_HW) = 0, con el
+ *         tiempo muerto seguro (1 µs) mientras no se sepa otra cosa;
+ *      2) lee P9 en A7 (16 lecturas) y elige el tiempo muerto: 500 ns SOLO si
+ *         las dos ramas piden 500 ns; si no, 1 µs. Si A7 está fuera de rango
+ *         (falla de hardware), NO arranca;
+ *      3) reporte por el puerto serie: portadora, lectura de P9 y DT en uso;
+ *      4) arranca la SPWM a FRECUENCIA_LINEA_HZ (60 o 50 Hz) y sube la amplitud
+ *         en rampa hasta el máximo en ~1 s;
+ *      5) vigila P9 cada 50 ms: si cambia (módulo flojo o cambiado), detiene la
+ *         SPWM y no vuelve a arrancar hasta reiniciar el Nano;
+ *      6) cada 10 s imprime los ciclos generados y la lectura de P9.
  *
  *    D12 SE QUEDA EN 0 TODO EL TIEMPO: las señales se ven en los pines del Nano
  *    pero la compuerta AND (74HC08) de la tarjeta de control no las deja pasar
@@ -24,6 +29,8 @@
 #include "config_portadora.h"
 #include "config_spwm.h"
 #include "spwm.h"
+#include "dt_p9.h"
+#include "enlace_i2c.h"
 
 // Rampa de prueba de banco: cuentas que sube la amplitud en cada ciclo de línea.
 // 313–316 cuentas / 5 por ciclo = 63 ciclos ≈ 1 s a 60 Hz (1.3 s a 50 Hz). NO es el arranque suave final
@@ -63,21 +70,68 @@ static void reportePortadora() {
   Serial.print(F("Amplitud max (cuentas):  ")); Serial.println(spwm_amplitud_max());
   Serial.print(F("Indice m maximo:         "));
   imprimirFijo((uint32_t)spwm_amplitud_max() * 1000UL / TOP_CUENTAS, 1000); Serial.println();
-  Serial.print(F("DT en uso (cuentas):     ")); Serial.println(spwm_dt_cuentas());
+  Serial.print(F("DT en uso (cuentas):     ")); Serial.print(spwm_dt_cuentas());
+  Serial.println(spwm_dt_cuentas() == DT_MODERNO_CUENTAS ? F("  (500 ns)") : F("  (1 us)"));
   Serial.println(F("D12 (EN_HW) = 0: puente bloqueado, prueba sin potencia"));
 }
 
+// Imprime una lectura de P9: cuentas, voltaje y lo que significa.
+static void reporteP9(uint16_t adc, EstadoP9 e) {
+  Serial.print(F("P9 en A7: ")); Serial.print(adc); Serial.print(F(" cuentas = "));
+  imprimirFijo((uint32_t)adc * 5000UL / 1023UL, 1000); Serial.print(F(" V  -> "));
+  Serial.println(p9_texto(e));
+}
+
+static bool detenidoPorP9 = false;
+static EstadoP9 p9Actual = P9_AMBOS_ABIERTOS;   // lo último leído, para el enlace I2C
+static uint16_t adcP9Actual = 0;
+
 void setup() {
-  // 1) Puente apagado y D12 = 0 antes que nada; tiempo muerto seguro y la
-  //    frecuencia de línea elegida en config_portadora.h.
-  const bool frecuenciaValida = spwm_preparar(DT_LEGACY_CUENTAS, FRECUENCIA_LINEA_HZ);
-  Serial.begin(115200);               // 2) Reporte (Monitor Serie a 115200)
+  // 1) Puente apagado y D12 = 0 antes que nada, con el tiempo muerto seguro.
+  spwm_preparar(DT_LEGACY_CUENTAS, FRECUENCIA_LINEA_HZ);
+  Serial.begin(115200);               // Monitor Serie a 115200
+
+  // 2) P9: qué tiempo muerto piden los gate drivers.
+  uint16_t adcP9 = 0;
+  const EstadoP9 p9 = p9_detectar(&adcP9);
+  p9Actual = p9; adcP9Actual = adcP9;
+  enlace_iniciar();                   // esclavo I2C (0x20): el AUX ya puede preguntar
+
+  // 3) Tiempo muerto según P9 (500 ns sólo si las dos ramas lo piden).
+  const bool frecuenciaValida = spwm_preparar(p9_dt_cuentas(p9), FRECUENCIA_LINEA_HZ);
   reportePortadora();
+  reporteP9(adcP9, p9);
   if (!frecuenciaValida) Serial.println(F("AVISO: frecuencia invalida, se usa 60 Hz"));
-  spwm_arrancar();                    // 3) SPWM con amplitud 0
+
+  if (!p9_permite_arrancar(p9)) {
+    Serial.println(F("FALLA: P9 fuera de rango. La SPWM NO arranca. Revise A7, R12, R13, R14."));
+    detenidoPorP9 = true;
+    return;
+  }
+  spwm_arrancar();                    // 4) SPWM con amplitud 0
 }
 
 void loop() {
+  // Vigilancia de P9: si cambia con la SPWM corriendo, se apaga y no vuelve.
+  uint16_t adcP9 = 0;
+  EstadoP9 p9 = p9Actual;
+  const bool cambioP9 = !detenidoPorP9 && p9_vigilar(&adcP9, &p9);
+  if (!detenidoPorP9 && adcP9 != 0) { p9Actual = p9; adcP9Actual = adcP9; }
+  if (cambioP9) {
+    spwm_detener();                   // D12 = 0 primero, salidas en bajo
+    detenidoPorP9 = true;
+    Serial.println(F("FALLA: P9 cambio con la SPWM corriendo (modulo flojo o cambiado)."));
+    reporteP9(adcP9, p9);
+    Serial.println(F("SPWM DETENIDA. Reinicie el Nano para volver a leer P9."));
+  }
+  enlace_atender(p9Actual, adcP9Actual, detenidoPorP9);   // I2C: comandos y foto nueva
+  if (enlace_aux_cambio()) {
+    Serial.print(F(">>> [")); Serial.print(millis()); Serial.print(F(" ms] "));
+    Serial.println(enlace_aux_presente() ? F("AUX conectado: primer PING valido recibido")
+                                         : F("AUX perdido: mas de 500 ms sin PING"));
+  }
+  if (detenidoPorP9) return;
+
   // Rampa de banco: sube la amplitud una vez por ciclo de línea.
   static uint16_t cicloAnterior = 0;
   static uint16_t amplitud = 0;
@@ -97,7 +151,13 @@ void loop() {
   if (millis() - t0 >= 10000UL) {
     t0 += 10000UL;
     Serial.print(F("Ciclos en 10 s: "));
-    Serial.println((uint16_t)(c - c0));
+    Serial.print((uint16_t)(c - c0));
+    Serial.print(F("   |   "));
+    const uint16_t a = analogRead(A7);
+    reporteP9(a, p9_clasificar(a));
+    Serial.print(F("I2C: PING validos ")); Serial.print(enlace_comandos_ok());
+    Serial.print(F(", con CRC malo ")); Serial.print(enlace_comandos_malos());
+    Serial.print(F(", ultimo seq ")); Serial.println(enlace_ultimo_seq());
     c0 = c;
   }
 }

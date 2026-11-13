@@ -22,12 +22,12 @@
 
 ### Siguientes etapas
 
-1. **Lectura de P9 (A7):** elegir 500 ns o 1 µs según el módulo (los dos ya están validados en banco).
+1. **Lectura de P9 (A7):** elegir 500 ns o 1 µs según el módulo. **Paso 3 escrito y verificado en la PC; falta la prueba de banco** (sección 7.2).
 2. **Arranque suave y lazo de voltaje** (`ac_fb_inversor`).
 3. **ADC disparado por la portadora:** batería, corriente y temperatura.
 4. **Protecciones** y secuencia de permiso D12 ([corte por hardware](../../docs/corte_por_hardware.md)).
 5. **PLL con la red** (TOP fraccionario) y transferencia (`ac_fb_grid`).
-6. **Enlace I2C** con el AUX.
+6. **Enlace I2C** con el AUX: ✅ **validado en banco** (sección 7.3). Falta definir los comandos reales (arranque, paro, lecturas) y quitar el `Serial` del CRÍTICO (DC-017, regla 5).
 7. **ATmega4809** (Nano Every).
 
 ---
@@ -55,12 +55,12 @@ Cada archivo hace una sola cosa y empieza con un bloque que dice qué hace, qué
 | `spwm.h` + `spwm_328p.cpp` | SPWM híbrida: Timer1, ISR de portadora, pierna B en el cruce por cero, apagado | ✅ 328P |
 | `spwm_4809.cpp` | La misma SPWM con TCA0 | Pendiente: hoy da error al compilar, a propósito |
 | Arranque suave | Rampa de amplitud con el lazo de voltaje | Pendiente (va con `ac_fb_inversor`) |
-| `dt_p9.h/.cpp` | Lectura de P9 al encender y vigilancia ([identificación por P9](../../docs/identificacion_dt_pin9.md)) | Pendiente |
+| `dt_p9.h/.cpp` | Lectura de P9 en A7 al encender (16 lecturas) y vigilancia cada 50 ms ([identificación por P9](../../docs/identificacion_dt_pin9.md)) | ✅ Paso 3: verificado en la PC; banco pendiente (7.2) |
 | `adc_bateria.h/.cpp` | Voltaje y corriente de batería | Pendiente |
 | `ac_fb_inversor.h/.cpp` | Retroalimentación del voltaje de salida y lazo | Pendiente |
 | `ac_fb_grid.h/.cpp` | Red: presencia, frecuencia, fase y PLL; transferencia | Pendiente |
 | `protecciones.h/.cpp` | Fallas y apagado seguro (junto con el [corte por hardware](../../docs/corte_por_hardware.md)) | Pendiente |
-| `enlace_i2c.h/.cpp` | Enlace con el AUX: tramas con versión, secuencia y CRC | Pendiente |
+| `enlace_protocolo.h` + `enlace_i2c.h/.cpp` | Enlace con el AUX: el CRÍTICO es **esclavo 0x20** (DC-017). PING del AUX y foto de estado de 16 bytes con CRC-8, avisos de AUX conectado/perdido, reinicio del TWI si se traba | ✅ Validado en banco (7.3) |
 
 **Pines:** la asignación de cada pin del CRÍTICO y del AUX (función, entrada/salida, estado al encender y timer dueño) está en el [mapa de pines de la tarjeta de control](../../hardware/control/README.md#11-mapa-de-pines), verificado contra el esquemático. **El firmware no usa ningún pin que no esté en esa tabla.**
 
@@ -244,6 +244,20 @@ g++ -std=gnu++11 -O2 -D__AVR_ATmega328P__ -DF_CPU=16000000UL \
 
 Resultado actual: **todo correcto** en las dos frecuencias. DT mínimo de 8 / 16 cuentas exactas, pierna B 666 cuentas, CD < 0.0001, error de la fundamental −0.24 % (60 Hz) y −0.23 % (50 Hz) a amplitud máxima. Ese error viene de los pulsos que se quitan cerca del cruce por cero.
 
+**Prueba de P9** (`pruebas/prueba_p9.cpp`, compila el mismo `dt_p9.cpp` que va al Nano):
+- **Umbrales:** las 4 combinaciones de P9 con todas las tolerancias de R12, R13 y R14 (±1 % y ±5 %) y ±2 cuentas de error del ADC.
+- **Regla:** 500 ns solo con las dos ramas a GND.
+- **Arranque:** una lectura distinta da INESTABLE y 1 µs; A7 bajo no arranca.
+- **Vigilancia:** 1 o 2 lecturas de ruido no disparan; 3 seguidas sí (~150–250 ms).
+
+```
+g++ -std=gnu++11 -O2 -D__AVR_ATmega328P__ -DF_CPU=16000000UL \
+    -Ipruebas/avr_simulado -IISLA_CRITICO pruebas/prueba_p9.cpp ISLA_CRITICO/dt_p9.cpp -o prueba_p9
+./prueba_p9
+```
+
+Resultado actual: **todo correcto**.
+
 > **Correr esta prueba cada vez que alguien toque `spwm_328p.cpp` o `config_spwm.h`.** Ya encontró un error: con el umbral a la mitad salían pulsos de 250 ns.
 
 ## 7. Prueba de banco del paso 2
@@ -362,6 +376,105 @@ Mismo Nano y mismo analizador (2 M muestras a 16 MHz). Cambio temporal en `setup
 ![500 ns: Monitor Serie](img/banco_dt500_monitor_serie.png)
 ![500 ns: tiempo muerto de la pierna A](img/banco_dt500_tiempo_muerto_500ns.png)
 
+### 7.2 Prueba de banco del paso 3: lectura de P9 (pendiente)
+
+Simula en la protoboard la red de A7 de la tarjeta de control (sección 13) y los P9 de los dos módulos con cables. **Sin etapa de potencia; D12 sigue en 0.**
+
+**Material:** 2 resistencias de **10 kΩ** (R12, R13), 1 de **20 kΩ** (R14) y, opcional, un capacitor de **100 nF** (C18). Sirven de 5 % o mejores.
+
+```
+   5V ──[R12 10k]──┬──────────── A7 del Nano
+                   ├──[R13 10k]──── cable "P9_A"  (a GND = módulo de 500 ns; suelto = de 1 µs)
+                   ├──[R14 20k]──── cable "P9_B"  (a GND = módulo de 500 ns; suelto = de 1 µs)
+                   └──[C18 100n]─── GND   (opcional)
+```
+
+**Procedimiento:** para cada combinación, deja los cables como dice la tabla, **reinicia el Nano** (P9 se lee al encender) y anota lo que sale en el Monitor Serie. Luego mide el tiempo muerto de la pierna A en PulseView, igual que en la 7.0c.
+
+| # | P9_A | P9_B | Monitor Serie: "P9 en A7" | DT en uso | PulseView: HA ↔ LA |
+| --- | --- | --- | --- | --- | --- |
+| 1 | GND | GND | ~409 cuentas, ~2.00 V, `500 ns` | **8 (500 ns)** | **500 ns** |
+| 2 | GND | suelto | ~512 cuentas, ~2.50 V, `MIXTO, se usa 1 us` | 16 (1 µs) | 1000 ns |
+| 3 | suelto | GND | ~682 cuentas, ~3.33 V, `MIXTO, se usa 1 us` | 16 (1 µs) | 1000 ns |
+| 4 | suelto | suelto | ~1023 cuentas, ~5.00 V, `1 us` | 16 (1 µs) | 1000 ns |
+
+Con resistencias de ±5 % las cuentas pueden variar: 383–436, 484–539, 657–706 y 1021–1023. Los umbrales están a la mitad, en 460, 598 y 863 (`pruebas/prueba_p9.cpp`).
+
+**Pruebas de falla:**
+
+| # | Qué hacer | Qué debe pasar |
+| --- | --- | --- |
+| 5 | Arranca en el caso 1 (500 ns) y, **con la SPWM corriendo**, suelta P9_B | En ~150–250 ms: `FALLA: P9 cambio con la SPWM corriendo`, la lectura nueva (~512) y `SPWM DETENIDA`. En PulseView, D9, D10, D11 y D3 quedan en 0 |
+| 6 | Toca y suelta rápido un cable de P9 con la SPWM corriendo (menos de 100 ms) | No debe detenerse: hacen falta 3 lecturas seguidas distintas |
+| 7 | Conecta A7 directo a GND y reinicia | `FUERA DE RANGO` y `La SPWM NO arranca`. En PulseView no hay pulsos |
+| 8 | Quita R12, deja los dos P9 **sueltos** y reinicia varias veces | **Prueba para medir un riesgo, no para aprobar.** A7 queda flotando y puede leer cualquier cosa, **incluso la banda de 500 ns**. Anota qué sale en cada reinicio |
+
+> **Riesgo conocido (caso 8):** la falla segura de P9 depende de que **R12 esté presente**. Si R12 se abre, A7 queda flotando y el firmware no lo puede distinguir de una lectura válida, porque A7 es solo analógico y no tiene pull-up interno. Mitigaciones posibles, a decidir con el resultado del caso 8: R12 en el lado de componentes con soldadura inspeccionada, o una segunda resistencia de pull-up en paralelo.
+
+> **El caso 1 es el único en que el firmware usa 500 ns.** Si en cualquier otro caso PulseView mide 500 ns, **es una falla grave**: detén las pruebas y avísame.
+
+### 7.3 Prueba de banco del enlace I2C CRÍTICO ↔ AUX (validada, 2026-11-13)
+
+Dos Nanos: el **CRÍTICO** con `ISLA_CRITICO.ino` (paso 3 + enlace) y el **AUX** con [`firmware/aux/ISLA_AUX_PRUEBA_I2C`](../aux/ISLA_AUX_PRUEBA_I2C/ISLA_AUX_PRUEBA_I2C.ino). **Sin potencia.**
+
+#### Protocolo (`enlace_protocolo.h`, idéntico en los dos sketches)
+
+- **Roles (DC-017):** el **CRÍTICO es esclavo (0x20)** y nunca espera al bus; el **AUX es el maestro**. A 100 kHz.
+- **Comando del AUX, 4 bytes:** tipo, secuencia, dato y CRC-8. Hoy solo existe `PING` (0x01).
+- **Foto del CRÍTICO, 16 bytes:** versión, secuencia, eco del último PING, banderas (SPWM activa, detenida por P9, 50 Hz), estado de P9, DT, ciclos, lectura de A7, amplitud máxima, comandos con CRC malo, y CRC-8.
+- **CRC-8 SMBus:** polinomio 0x07, valor inicial 0. Los números de 16 bits van con el byte bajo primero.
+- **La interrupción de I2C solo copia bytes.** El CRÍTICO valida los comandos y arma la foto en `loop()`, cada 50 ms, y la copia de forma atómica: el AUX nunca recibe media foto.
+
+#### Detección y recuperación
+
+| Lado | Aviso (líneas `>>>`) | Cuándo |
+| --- | --- | --- |
+| AUX | `ENLACE ESTABLECIDO` / `ENLACE RECUPERADO` | Primera foto válida |
+| AUX | `ENLACE PERDIDO` | 3 fallas seguidas (~300 ms). Luego **libera el bus** cada ~1 s: hasta 9 pulsos en SCL, un STOP y reinicio del TWI (NXP UM10204, "bus clear") |
+| AUX | `CRITICO CONGELADO` | Responde, pero su foto no avanza en 300 ms (programa trabado) |
+| AUX | — | **Nunca muestra una foto de más de 300 ms** como si fuera actual |
+| CRÍTICO | `AUX conectado` / `AUX perdido` | Primer PING válido / 500 ms sin PING. Sin PING, reinicia su TWI esclavo cada 1 s |
+
+#### Resultados
+
+| Prueba | Resultado |
+| --- | --- |
+| Enlace al arrancar | `AUX conectado` a los **114 ms** |
+| PING sin pérdidas | **+100 cada 10 s** (10 por segundo), **CRC malo 0**, más de 1 700 PING seguidos |
+| Desconectar y reconectar el CRÍTICO o el AUX, varias veces | Se detecta y **se recupera solo** en los dos sentidos; ninguno se cuelga |
+| Tiempo muerto de la pierna A **con y sin** el enlace | **1 µs** en los dos casos: el I2C no lo afecta (lo hace el hardware del Timer1) |
+| Pierna B (cruce por cero) con el enlace | **~42 µs**, como sin el enlace |
+| Una fuente y una tierra, 20 M muestras (1.25 s) | **Sin anomalías** |
+| Memoria | CRÍTICO 9.9 KB de flash (32 %) y 517 B de RAM (25 %); AUX 9.2 KB |
+
+![Monitor del CRÍTICO: AUX conectado, PING sin pérdidas](img/i2c_monitor_critico.png)
+![Tiempo muerto de 1 µs con el enlace activo](img/i2c_dt_1us_con_enlace.png)
+![20 M muestras con una sola fuente: sin anomalías](img/i2c_20M_una_fuente.png)
+![Cruce por cero con el enlace activo](img/i2c_cruce_por_cero.png)
+
+#### Lo que se aprendió en el banco
+
+- **"El AUX no imprime después de reconectarlo":** era el Monitor Serie de la PC. Al quitar el USB con el Monitor abierto, Linux le asigna otro puerto (`ttyUSB1`). **Cierra el Monitor antes de desconectar** y revisa *Herramientas → Puerto*. El log del CRÍTICO (PING válidos) probaba que el AUX seguía funcionando.
+- **Sin el USB del CRÍTICO,** las pull-up del AUX pueden alimentarlo un poco por SDA y SCL. En la tarjeta real no pasa: los dos comparten el mismo 5 V.
+- **Pulsos de 63 ns en todas las señales a la vez:** no eran del firmware. Solo la interrupción del SPWM escribe en los pines de la pierna B, y lo hace solo en las muestras 199 y 0. Era un **lazo de tierra** entre dos computadoras. Ver la advertencia de abajo.
+
+![Lazo de tierra: pulsos en la vista general](img/i2c_lazo_tierra_vista.png)
+![Lazo de tierra: una muestra (63 ns) en los cuatro canales a la vez](img/i2c_lazo_tierra_63ns.png)
+
+> ⚠ **Advertencia para el trinchero: nunca monitorear con dos laptops a la vez**
+>
+> No conectes el CRÍTICO a una computadora y el AUX a otra (ni el analizador lógico a una tercera) mientras los dos Nanos estén unidos por el I2C (A4, A5 y GND).
+>
+> **Por qué:** cada computadora tiene su propia tierra. Al unir los Nanos por GND, las tierras de las dos computadoras quedan conectadas por ese cable y se forma un **lazo de tierra**. Por ahí circulan corrientes de ruido de los cargadores y del USB, que:
+> - generan **pulsos falsos de ~63 ns en todas las señales a la vez** al medir con el analizador (parecen cortos en el puente H, pero no lo son);
+> - pueden dar **errores de comunicación** y, en el peor caso, dañar un puerto USB o un Nano.
+>
+> **Cómo se hace bien:**
+> - **Una sola computadora y una sola tierra:** el CRÍTICO por USB, y el AUX alimentado desde sus pines (5 V → 5 V, GND → GND), más A4 y A5. El estado del enlace se ve en el Monitor del CRÍTICO (`AUX conectado`, `PING validos`).
+> - **Si necesitas ver los dos Monitores,** conecta los dos Nanos por USB a la **misma** computadora, y el analizador también a esa.
+>
+> *Evidencia: prueba del enlace del 2026-11-13. Con dos laptops aparecían pulsos de 63 ns en los cuatro canales; con una sola fuente y una sola tierra, 20 M muestras sin anomalías.*
+
 ### 7.1 Análisis automático con script (opcional)
 
 > **Estado:** el script **no se ha usado todavía con capturas reales**. La etapa base se validó a mano en PulseView (secciones 7.0 y 7.0b). El script solo se probó con capturas sintéticas. Sirve para revisar de una vez miles de flancos y lo que no se mide bien con cursores: pulso más angosto, forma senoidal y D12.
@@ -425,3 +538,5 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | **Tiempo muerto de 500 ns validado en hardware real a 60 Hz:** 500 ns en los dos flancos de la pierna A, amplitud 316 (m 0.948), 601 ciclos en 10 s. Sección 7.0c. El `.ino` del repo sigue en 1 µs |
 | 2026-11-13 | Enlace al nuevo **mapa de pines** de la tarjeta de control (sección 1.1). D7 del CRÍTICO para medir la duración real de la ISR |
 | 2026-11-13 | Gráfica de la LUT de 90° por cuadrantes (`img/lut_cuarto_de_onda.png`, `herramientas/grafica_lut.py`) en la sección 3.1 |
+| 2026-11-13 | **Paso 3: lectura de P9** (`dt_p9.h/.cpp`): 16 lecturas de A7 al encender, 500 ns solo con las dos ramas a GND, mixto o inestable → 1 µs, fuera de rango → no arranca, vigilancia cada 50 ms (3 lecturas distintas → SPWM detenida). Prueba en la PC (`pruebas/prueba_p9.cpp`): todo correcto. Compila: 7.3 KB de flash, 253 B de RAM. Prueba de banco pendiente (7.2) |
+| 2026-11-13 | **Enlace I2C CRÍTICO ↔ AUX validado en banco** (sección 7.3): CRÍTICO esclavo 0x20, PING + foto de 16 bytes con CRC-8, avisos y recuperación en los dos lados, liberación del bus en el AUX. Más de 1 700 PING sin pérdidas, CRC 0. No afecta al tiempo muerto (1 µs) ni a la pierna B (~42 µs). Advertencia de las dos laptops (lazo de tierra) |
