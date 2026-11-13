@@ -104,7 +104,7 @@ Las constantes se calculan al compilar a partir de `F_CPU`. El reporte de arranq
 
   *Arriba, la salida del ciclo con un color por cuadrante y qué índice se lee en cada uno. Abajo, el índice de la tabla: ida, vuelta, ida, vuelta. Generado por `herramientas/grafica_lut.py`.*
 
-  > **Cuando la memoria es limitada en la trinchera, las matemáticas maximizan los recursos.** Dos identidades de bachillerato, **sen(180° − x) = sen(x)** (el espejo) y **sen(180° + x) = −sen(x)** (el signo), **ahorran el 75 % de la tabla**: 100 valores en lugar de 400, es decir 200 B en lugar de 800 B de flash.
+  > **Maximizando la SPWM de trinchera sin coprocesador matemático ni hardware dedicado (como un DSP o un microcontrolador ARM con periféricos de PWM avanzados): las matemáticas básicas maximizan los recursos.** El ATmega328P no tiene unidad de punto flotante ni generador de tiempo muerto: el seno sale de una tabla de enteros y el tiempo muerto de un desfase entre comparadores (OCR1B = OCR1A + DT). Dos identidades de bachillerato, **sen(180° − x) = sen(x)** (el espejo) y **sen(180° + x) = −sen(x)** (el signo), **ahorran el 75 % de la tabla**: 100 valores en lugar de 400, es decir 200 B en lugar de 800 B de flash.
 
 - **Cada muestra se toma al centro de su periodo:** sen((k + 0.5) · 180° / 200), no sen(k · 180° / 200). Así la muestra k y la 199 − k valen lo mismo y el espejo sale exacto. En el borde, el pico queda sin pareja, la onda sale asimétrica y aparece componente par.
 - **Doble pendiente** (*phase-correct* / *dual-slope*). Los pulsos quedan centrados en el periodo. Con el lado bajo invertido y su comparador DT cuentas más arriba (`OCR1B = OCR1A + DT`), se abre el tiempo muerto **en cada flanco** con el mismo timer.
