@@ -61,7 +61,13 @@ a2.set_xlabel('Muestra del ciclo, m = 0 … 399', labelpad=8)
 a2.set_xlim(-4, 403); a2.set_xticks([0, 50, 100, 150, 200, 250, 300, 350, 399])
 sec = a2.secondary_xaxis('top', functions=(lambda x: x * 0.9, lambda d: d / 0.9))
 sec.set_xticks([0, 90, 180, 270, 360]); sec.set_xticklabels(['0°', '90°', '180°', '270°', '360°']); sec.tick_params(colors=INK2)
-fig.text(0.5, 0.005, 'Una sola tabla de 100 valores (200 B en flash) se lee 4 veces por ciclo: ida, vuelta, ida, vuelta.  '
+fig.text(0.5, -0.115, 'Trigonometría de bachillerato, aplicada\n'
+         'sen(180° − x) = sen(x)  →  el espejo        sen(180° + x) = −sen(x)  →  el signo\n'
+         'Se enseñan casi siempre sin mostrar para qué sirven. Aquí ahorran el 75 % de la tabla:\n'
+         '100 valores en lugar de 400 (200 B en lugar de 800 B de flash).',
+         ha='center', va='bottom', fontsize=10.5, color=INK, linespacing=1.55,
+         bbox=dict(boxstyle='round,pad=0.7', fc='#f3f2ee', ec=GRID, lw=1))
+fig.text(0.5, 0.005, 'Una sola tabla de 100 valores se lee 4 veces por ciclo: ida, vuelta, ida, vuelta.  '
          'Muestra al centro del periodo: tabla[q] = sen((q + 0.5)·180°/200).', ha='center', va='bottom', fontsize=9, color=INK2)
 
 leg = [Line2D([0], [0], color=COL[c], lw=3, label=nombres[c]) for c in range(4)]
