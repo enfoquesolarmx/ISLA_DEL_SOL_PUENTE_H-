@@ -99,6 +99,13 @@ Las constantes se calculan al compilar a partir de `F_CPU`. El reporte de arranq
 
 - **Portadora sincronizada a 400 × 60 Hz.** Cada ciclo de salida tiene exactamente 400 periodos de portadora: no hay subarmónicos y el cruce por cero cae siempre en el mismo punto.
 - **Tabla seno de un cuarto de onda (100 muestras a 60 Hz, 200 B en flash; 120 a 50 Hz).** La senoidal es simétrica: la subida de 0° a 90° se lee tal cual, la bajada de 90° a 180° es la misma tabla leída al revés (`tabla[199 − k]` a 60 Hz, `tabla[239 − k]` a 50 Hz) y el semiciclo negativo usa los mismos valores, porque la polaridad la pone la **pierna B**. Ocupa 200 B en lugar de 800 B, y el espejo cuesta ~3–4 ciclos de 666 por periodo. Va en flash (`PROGMEM`): en RAM, una tabla completa se comería el 40 % de los 2 KB del 328P.
+
+  ![LUT de 90°: cómo 100 muestras arman el ciclo completo](img/lut_cuarto_de_onda.png)
+
+  *Arriba, la salida del ciclo con un color por cuadrante y qué índice se lee en cada uno. Abajo, el índice de la tabla: ida, vuelta, ida, vuelta. Generado por `herramientas/grafica_lut.py`.*
+
+  > **Trigonometría de bachillerato, aplicada.** Las identidades **sen(180° − x) = sen(x)** (el espejo) y **sen(180° + x) = −sen(x)** (el signo) se enseñan en bachillerato, casi siempre sin mostrar para qué sirven. En este firmware **ahorran el 75 % de la tabla**: 100 valores en lugar de 400, es decir 200 B en lugar de 800 B de flash.
+
 - **Cada muestra se toma al centro de su periodo:** sen((k + 0.5) · 180° / 200), no sen(k · 180° / 200). Así la muestra k y la 199 − k valen lo mismo y el espejo sale exacto. En el borde, el pico queda sin pareja, la onda sale asimétrica y aparece componente par.
 - **Doble pendiente** (*phase-correct* / *dual-slope*). Los pulsos quedan centrados en el periodo. Con el lado bajo invertido y su comparador DT cuentas más arriba (`OCR1B = OCR1A + DT`), se abre el tiempo muerto **en cada flanco** con el mismo timer.
 - **Redondeo hacia arriba en el tiempo muerto.** Nunca queda menos del pedido.
@@ -417,3 +424,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | Aclarado el **método de validación**: la etapa base se midió a mano en la interfaz gráfica de PulseView (decodificadores PWM y Timing, cursores) y en el Monitor Serie. `analiza_captura.py` es opcional y aún no se ha usado con capturas reales |
 | 2026-11-12 | **Tiempo muerto de 500 ns validado en hardware real a 60 Hz:** 500 ns en los dos flancos de la pierna A, amplitud 316 (m 0.948), 601 ciclos en 10 s. Sección 7.0c. El `.ino` del repo sigue en 1 µs |
 | 2026-11-13 | Enlace al nuevo **mapa de pines** de la tarjeta de control (sección 1.1). D7 del CRÍTICO para medir la duración real de la ISR |
+| 2026-11-13 | Gráfica de la LUT de 90° por cuadrantes (`img/lut_cuarto_de_onda.png`, `herramientas/grafica_lut.py`) en la sección 3.1 |
