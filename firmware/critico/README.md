@@ -62,6 +62,8 @@ Cada archivo hace una sola cosa y empieza con un bloque que dice qué hace, qué
 | `protecciones.h/.cpp` | Fallas y apagado seguro (junto con el [corte por hardware](../../docs/corte_por_hardware.md)) | Pendiente |
 | `enlace_i2c.h/.cpp` | Enlace con el AUX: tramas con versión, secuencia y CRC | Pendiente |
 
+**Pines:** la asignación de cada pin del CRÍTICO y del AUX (función, entrada/salida, estado al encender y timer dueño) está en el [mapa de pines de la tarjeta de control](../../hardware/control/README.md#11-mapa-de-pines), verificado contra el esquemático. **El firmware no usa ningún pin que no esté en esa tabla.**
+
 **Reglas entre módulos:**
 1. **Cada timer tiene un solo dueño.** El timer de la pierna A es de `spwm`.
 2. **Las variables que comparte una interrupción van como `volatile`.** Si son de más de 1 byte, se leen con las interrupciones apagadas.
@@ -174,7 +176,7 @@ Entre OCR1A y OCR1B hay DT cuentas: en la subida de la rampa, HA se apaga y DT c
 
 Igual en 60 y 50 Hz. Leer la tabla y los límites de la frecuencia elegida desde variables cuesta ~10 ciclos.
 
-Más de lo que estimó [DC-017](../../docs/decisiones_criticas.md) (80–120 ciclos): casi todo es la multiplicación de 32 bits y los registros que guarda. Sobra margen para el Timer0 de `millis()` y el puerto serie dentro del periodo. **Pendiente:** medir en banco y, si hace falta espacio para el ADC, optimizar la multiplicación.
+Más de lo que estimó [DC-017](../../docs/decisiones_criticas.md) (80–120 ciclos): casi todo es la multiplicación de 32 bits y los registros que guarda. **Pendiente: medirlo en el chip real con D7 del CRÍTICO** (libre y reservado para esto por DC-017): en 1 al entrar a la interrupción y en 0 al salir; con el analizador, el ancho del pulso es la duración real. Sobra margen para el Timer0 de `millis()` y el puerto serie dentro del periodo. **Pendiente:** medir en banco y, si hace falta espacio para el ADC, optimizar la multiplicación.
 
 ## 5. Frecuencia de línea: 50 o 60 Hz
 
@@ -414,3 +416,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | ✅ **ETAPA BASE COMPLETADA:** generación de la SPWM híbrida validada en hardware real a 50 y 60 Hz. Etiqueta `critico-etapa-base` |
 | 2026-11-12 | Aclarado el **método de validación**: la etapa base se midió a mano en la interfaz gráfica de PulseView (decodificadores PWM y Timing, cursores) y en el Monitor Serie. `analiza_captura.py` es opcional y aún no se ha usado con capturas reales |
 | 2026-11-12 | **Tiempo muerto de 500 ns validado en hardware real a 60 Hz:** 500 ns en los dos flancos de la pierna A, amplitud 316 (m 0.948), 601 ciclos en 10 s. Sección 7.0c. El `.ino` del repo sigue en 1 µs |
+| 2026-11-13 | Enlace al nuevo **mapa de pines** de la tarjeta de control (sección 1.1). D7 del CRÍTICO para medir la duración real de la ISR |

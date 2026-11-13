@@ -23,7 +23,7 @@ La tarjeta de control lleva **dos microcontroladores** (módulos Arduino Nano co
 
 | # | Módulo | Microcontrolador | Decisión | En una frase |
 | --- | --- | --- | --- | --- |
-| 1 | [Microcontroladores CRÍTICO y AUX](#1-microcontroladores-crítico-y-aux) | — | DC-010, DC-012, DC-017 | El CRÍTICO genera la onda y protege; el AUX informa y conversa |
+| 1 | [Microcontroladores CRÍTICO y AUX](#1-microcontroladores-crítico-y-aux) · [**Mapa de pines**](#11-mapa-de-pines) | — | DC-010, DC-012, DC-017 | El CRÍTICO genera la onda y protege; el AUX informa y conversa |
 | 2 | [Entrada de 48 V y su protección](#2-entrada-de-48-v-y-su-protección) | — | DC-003 | Que un pico de la batería no queme el buck |
 | 3 | [Buck 48 → 15 V (XL7015)](#3-buck-48--15-v-xl7015) | — | DC-002 | El riel de drivers, relés y ventilador |
 | 4 | [Buck 15 → 8 V (MP1584)](#4-buck-15--8-v-mp1584) | — | DC-004 | Baja el voltaje para que el 7805 vaya frío |
@@ -65,6 +65,77 @@ La tarjeta de control lleva **dos microcontroladores** (módulos Arduino Nano co
 
 - **Los dos van en zócalo:** se cambian sin soldar, y el mismo zócalo acepta un **Nano Every (ATmega4809)** con otro firmware (DC-017, DC-018).
 - **Si el enlace I2C se cae:** el AUX manda un latido cada ~100 ms. Si el CRÍTICO no lo recibe en ~500 ms, **deja de cargar** y sigue protegiendo la batería con su propia lectura.
+
+### 1.1 Mapa de pines
+
+> **Fuente de verdad para el firmware.** Verificado pin por pin contra el esquemático (`ATMEGA328P_SPWM_TARJETA.kicad_sch`, 2026-11-13): cada red de esta tabla es la que tiene el pin en KiCad. Si cambia el esquemático, **se actualiza esta tabla en el mismo cambio**.
+
+**Columnas:**
+- **Al encender:** cómo debe quedar el pin desde la primera línea de `setup()`, antes que cualquier otra cosa.
+- **Dueño:** el timer o periférico que lo controla; ningún otro módulo del firmware debe tocarlo.
+
+#### CRÍTICO (A1): tiempo real, SPWM y protección
+
+| Pin | Red (KiCad) | Función | E/S | Al encender | Dueño | Sección |
+| --- | --- | --- | --- | --- | --- | --- |
+| D0 / D1 | — | Puerto serie (USB, carga del firmware, reporte) | — | Libre para `Serial` | USART | — |
+| **D2** | `CRIT_D2_ILIM` | **I_LIM:** 0 V = en el límite de corriente → bajar la modulación | Entrada (INT0) | Entrada, **sin** pull-up interno (R40 externo) | INT0 | [14](#14-límite-de-corriente-i_lim) |
+| **D3** | `LB_IN` | **LB:** pierna B, lado bajo (60/50 Hz) → 74HC08 | Salida | **BAJO** | ISR del Timer1 | [12](#12-corte-del-pwm-por-hardware) |
+| **D4** | `INV_D4` | **INV_CMD:** la casa pasa al inversor (K4 + K2), vía R39 | Salida | **BAJO** (casa en la red) | Lógica de transferencia | [15](#15-órdenes-a-la-tarjeta-de-transferencia-j15), [16](#16-caída-automática-a-la-red) |
+| **D5** | `CARG_CMD` | **CARG_CMD:** el transformador se conecta a la red para cargar (K1 + K3) | Salida | **BAJO** | Lógica de transferencia | [15](#15-órdenes-a-la-tarjeta-de-transferencia-j15) |
+| **D6** | `TN_CMD` | **TN_CMD:** unión N–PE (K5), solo en INVERSOR CASA | Salida | **BAJO** | Lógica de transferencia | [15](#15-órdenes-a-la-tarjeta-de-transferencia-j15) |
+| D7 | — | **Libre.** Reservado para medir la carga de las interrupciones (DC-017) | Salida | BAJO | Pruebas | — |
+| **D8** | `CRIT_D8_EN_SENSE` | **EN_SENSE:** lee si EN_HW está en alto (alguien quitó el permiso) | **Entrada** (nunca salida: R38) | Entrada, sin pull-up | — | [12](#12-corte-del-pwm-por-hardware) |
+| **D9** | `HA_IN` | **HA:** pierna A, lado alto (24 kHz) → 74HC08 | Salida | **BAJO** | **Timer1** (OC1A) | [12](#12-corte-del-pwm-por-hardware) |
+| **D10** | `LA_IN` | **LA:** pierna A, lado bajo (24 kHz) → 74HC08 | Salida | **BAJO** | **Timer1** (OC1B) | [12](#12-corte-del-pwm-por-hardware) |
+| **D11** | `HB_IN` | **HB:** pierna B, lado alto (60/50 Hz) → 74HC08 | Salida | **BAJO** | ISR del Timer1 | [12](#12-corte-del-pwm-por-hardware) |
+| **D12** | `D12_ON_OF` | **EN_HW:** permiso del puente, vía R25 y el interruptor J4 | Salida | **BAJO** (puente bloqueado) | Arranque / protecciones | [12](#12-corte-del-pwm-por-hardware) |
+| D13 | — | Libre (LED del Nano) | Salida | BAJO | — | — |
+| **A0** | `AC_FB_A0` | Voltaje AC de **salida del inversor** (lazo de amplitud) | Analógica | — | ADC | [8](#8-sensado-ac-del-inversor-y-de-la-red) |
+| **A1** | `TEMP_A1` | **NTC** del disipador; ~5 V = sensor ausente → no arrancar | Analógica | — | ADC | [11](#11-temperatura-ntc-10-k) |
+| **A2** | `I_AC` | Corriente AC, pinza **SCT-013-015** | Analógica | — | ADC | [9](#9-corriente-ac-con-pinza-sct-013-015) |
+| **A3** | `DC_FB_A3` | **Voltaje de batería** | Analógica | — | ADC | [10](#10-voltaje-de-batería) |
+| **A4 / A5** | `I2C_SDA` / `I2C_SCL` | **Enlace I2C con el AUX** (R10, R11 de 4.7 kΩ) | I2C | Según el rol en el enlace | TWI | [1](#1-microcontroladores-crítico-y-aux) |
+| **A6** | `AC_FB_GRID_A6` | Voltaje AC de **la red** (fase para sincronizar) | **Solo analógica** | — | ADC | [8](#8-sensado-ac-del-inversor-y-de-la-red) |
+| **A7** | `A7` | **P9:** tiempo muerto que pide cada gate driver (R12, R13, R14) | **Solo analógica** | — | ADC | [13](#13-lectura-de-p9-tiempo-muerto) |
+
+**Timers del CRÍTICO:** Timer1 = SPWM (completo, con su interrupción). Timer0 = `millis()` de Arduino: no se reconfigura. Timer2 = libre.
+
+#### AUX (A2): comunicación, interfaz y vigilancia
+
+| Pin | Red (KiCad) | Función | E/S | Al encender | Dueño | Sección |
+| --- | --- | --- | --- | --- | --- | --- |
+| D0 / D1 | — | Puerto serie (USB) | — | Libre para `Serial` | USART | — |
+| **D2** | `CAN_INT_D2` | **INT** del MCP2515 (hay mensaje CAN) | Entrada (INT0) | Entrada | INT0 | [17](#17-can-con-el-bms) |
+| **D3** | `AUX_D3_SENSOR_OK` | **SENSOR_OK:** alto = falla del sensor o sobrecorriente (R26 lo sube) | Entrada (**INT1, flanco de subida**) | Entrada, sin pull-up interno (R26 externo) | INT1 | [12](#12-corte-del-pwm-por-hardware) |
+| **D4** | `SDA_LCD` | SDA del LCD (I2C **por software**, bus aparte) | I2C SW | Según la librería | I2C por software | [18](#18-pantalla-lcd-162-y-botonera) |
+| **D5** | `SCL_LCD` | SCL del LCD | I2C SW | Según la librería | I2C por software | [18](#18-pantalla-lcd-162-y-botonera) |
+| **D6** | `D6_FAN` | **Ventilador** (Q4), PWM; máximo ~80 % con ventilador de 12 V | Salida | **BAJO** (apagado) | **Timer0** (`analogWrite`, ~976 Hz) | [19](#19-ventilador) |
+| **D7** | `AUX_KILL` | **Apaga el puente** (vía D9): 0 = apagado enclavado | Salida | **ALTO** (1 = no apaga) | Vigilancia | [12](#12-corte-del-pwm-por-hardware) |
+| **D8** | `D8_BUZ` | **Buzzer** y LED de alarma (Q2) | Salida | BAJO (callado) | — | [20](#20-buzzer-y-led-de-alarma) |
+| **D9** | `CS_D9` | **CS** del MCP2515 | Salida | ALTO (CAN sin seleccionar) | SPI | [17](#17-can-con-el-bms) |
+| **D10** | — | **Sin conexión, pero tiene que ser salida** | **Salida** | BAJO o ALTO, **nunca entrada** | SPI (SS) | [17](#17-can-con-el-bms) |
+| **D11** | `MOSI_D11` | MOSI del MCP2515 | SPI | — | SPI | [17](#17-can-con-el-bms) |
+| **D12** | `MISO_D12` | MISO del MCP2515 | SPI | — | SPI | [17](#17-can-con-el-bms) |
+| **D13** | `SCK_D13` | SCK del MCP2515 (comparte el LED del Nano) | SPI | — | SPI | [17](#17-can-con-el-bms) |
+| **A0** | `I_OUT_A0_AUX` | Corriente DC del sensor (**I_OUT**, informativa) | Analógica | — | ADC | [12](#12-corte-del-pwm-por-hardware) |
+| **A1** | `MON_15V_A1` | **Monitor del riel de 15 V** (15 V → 2.63 V) | Analógica | — | ADC | [7](#7-monitor-del-riel-de-15-v) |
+| A2, A3 | — | Libres | — | — | — | — |
+| **A4 / A5** | `I2C_SDA` / `I2C_SCL` | **Enlace I2C con el CRÍTICO** | I2C | Según el rol en el enlace | TWI | [1](#1-microcontroladores-crítico-y-aux) |
+| A6 | — | Libre (solo analógica) | — | — | — | — |
+| **A7** | `BOTON_LCD` | **Botonera** de 4 botones en un solo pin (R42 de 10 kΩ) | **Solo analógica** | — | ADC | [18](#18-pantalla-lcd-162-y-botonera) |
+
+**Timers del AUX:** Timer0 = `millis()` y el PWM del ventilador (D6); **no se le cambia la frecuencia**, porque eso rompe `millis()`. Timer1 y Timer2 = libres.
+
+#### Reglas que no se ven en el esquemático
+
+1. **Salidas que mueven potencia o relés, en bajo antes que nada:** en el CRÍTICO D3, D4, D5, D6, D9, D10, D11 y D12; en el AUX D6 y D8. Primero se escribe el nivel y después se pone el pin como salida (`digitalWrite(p, LOW); pinMode(p, OUTPUT);`): así nunca sale un pulso en el arranque.
+2. **D10 del AUX nunca como entrada:** si queda como entrada y recibe un bajo, el SPI del ATmega pasa a modo esclavo y el CAN se cae.
+3. **D7 del AUX en ALTO:** un `LOW` por error **apaga el puente**. No es un pin libre.
+4. **D8 del CRÍTICO siempre entrada:** es la lectura de EN_HW. Si se pone como salida, pelea con la red; R38 limita el daño, pero la lectura se pierde.
+5. **A6 y A7, en los dos micros, son solo analógicos:** `digitalRead()` e `INPUT_PULLUP` no funcionan ahí. Sus pull-ups (R12 en el CRÍTICO, R42 en el AUX) son externos.
+6. **Hay dos "D3" y dos "D2":** D3 es LB en el CRÍTICO y SENSOR_OK en el AUX; D2 es I_LIM en el CRÍTICO y CAN INT en el AUX. Por eso las redes llevan prefijo (`CRIT_`, `AUX_`).
+7. **Pines libres:** en el CRÍTICO D7 y D13; en el AUX A2, A3 y A6 (D10 está libre pero obligado como salida). Antes de usar uno, se agrega aquí y al esquemático.
 
 ---
 
