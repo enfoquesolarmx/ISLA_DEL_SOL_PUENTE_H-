@@ -417,6 +417,23 @@ Con resistencias de ±5 % las cuentas pueden variar: 383–436, 484–539, 657�
 
 Dos Nanos: el **CRÍTICO** con `ISLA_CRITICO.ino` (paso 3 + enlace) y el **AUX** con [`firmware/aux/ISLA_AUX_PRUEBA_I2C`](../aux/ISLA_AUX_PRUEBA_I2C/ISLA_AUX_PRUEBA_I2C.ino). **Sin potencia.**
 
+#### Por qué dos microcontroladores y un enlace entre ellos
+
+**Un solo ATmega328P no puede con todo el inversor.** El trabajo se reparte en dos micros ([DC-010](../../docs/decisiones_criticas.md)) y el enlace I2C es lo que los mantiene coordinados. Las razones, con números medidos en este proyecto:
+
+1. **El SPWM ya ocupa casi un tercio del CPU.** La interrupción de la portadora corre 24 024 veces por segundo y tarda ~180–190 de los **666 ciclos** de cada periodo: **~29 %** (sección 4.5). Al CRÍTICO todavía le faltan el ADC del voltaje AC, la corriente, la batería y la temperatura, el lazo de voltaje, el PLL con la red y las protecciones. [DC-017](../../docs/decisiones_criticas.md) fija como límite **CPU < 50 % en el peor caso**. No queda lugar para nada más.
+2. **El ATmega no tiene prioridades entre interrupciones.** Mientras corre cualquier otra interrupción, la del SPWM **espera**. El LCD, el CAN con el BMS (SPI con el MCP2515), los botones y los mensajes generan interrupciones largas y frecuentes. En el mismo micro, cada una **retrasaría la onda y la deformaría** (DC-017).
+3. **La memoria no alcanza para los dos trabajos.** El ATmega328P tiene **2 KB de RAM**. El CRÍTICO terminado necesita ~800 B (DC-017), y hoy ya usa 517 B con el enlace incluido. Los textos del LCD, las tramas CAN, el registro de eventos y el menú SETUP no caben junto a eso.
+4. **Si falla la parte "conversadora", la protección sigue.** Si el LCD se traba, el CAN se cae o el AUX se reinicia, **el CRÍTICO sigue generando la onda y protegiendo con sus propias lecturas** (DC-010). Al revés, el AUX vigila al CRÍTICO y puede apagar el puente por hardware (AUX_KILL), y además existe el corte por hardware independiente de los dos.
+
+**El reparto** ([DC-010](../../docs/decisiones_criticas.md)): lo que **decide la onda y la protege** vive en el CRÍTICO (SPWM, sensados AC, sincronía con la red, relés, protecciones). Lo que **informa y conversa** vive en el AUX (LCD y botones, CAN con el BMS, ventilador, buzzer, registro).
+
+**Por eso el enlace tiene que ser confiable, y eso es lo que validó esta prueba:**
+- el CRÍTICO **nunca espera al bus** (es esclavo: solo responde una foto ya armada);
+- los datos llegan **íntegros** (CRC-8, eco del PING);
+- cada lado **sabe en ~300–500 ms si el otro desapareció** y se recupera solo;
+- y el enlace **no altera la onda**: tiempo muerto de 1 µs y pierna B de ~42 µs, con y sin I2C.
+
 #### Protocolo (`enlace_protocolo.h`, idéntico en los dos sketches)
 
 - **Roles (DC-017):** el **CRÍTICO es esclavo (0x20)** y nunca espera al bus; el **AUX es el maestro**. A 100 kHz.
