@@ -1,6 +1,9 @@
 # ISLA_AUX_PANEL — panel 16x2 + botonera + enlace I2C con el CRÍTICO (AUX)
 
-**Estado: borrador, sin validar en SimulIDE ni en banco.**
+**Estado:**
+- Pantalla AIP31068, botonera y SETUP validados en SimulIDE 1.1-SR2.
+- Falta validar en físico: 16x2 con PCF8574 (`LCD_TIPO 0`) y botonera real.
+- El enlace I2C con el CRÍTICO ya está validado en banco (ver `firmware/critico/README.md` §7.3).
 
 ## La perilla (en `config_panel.h`)
 
@@ -82,6 +85,13 @@ Los voltajes, las corrientes, la batería y la temperatura siguen siendo **de mu
 | AIP31068 | `7C` | `80 28` ×3, `80 0C`, `80 01`, `80 06`, `80 80` | `40 49`, `40 53`, `40 4C`… ("ISL…") |
 | PCF8574 | `4E` | nibble 3 ×3, nibble 2, luego `28 0C 01 06` en mitades con pulso EN; luz (bit 3) encendida | RS = 1 |
 
-**Falta:**
-- validarlo en SimulIDE (AIP31068 y enlace con dos Nano);
-- probar un 16x2 PCF8574 real.
+**Limitación de SimulIDE 1.1-SR2:** el ATmega328P simulado como esclavo I2C no suelta SDA cuando le toca transmitir.
+- Resultado: el AUX lee la foto en ceros, con `ver` y `timeout` altos y `SDA=0` aun después de los 9 pulsos de recuperación.
+- La escritura (PING) sí pasa.
+- Con el sketch `ISLA_AUX_PRUEBA_I2C`, ya validado en banco, pasa lo mismo, así que es del simulador.
+- El enlace se valida sólo en hardware real.
+
+**Falta en físico:**
+- 16x2 con PCF8574 (`LCD_TIPO 0`);
+- botonera con R42;
+- pantalla 4 con el CRÍTICO real.
