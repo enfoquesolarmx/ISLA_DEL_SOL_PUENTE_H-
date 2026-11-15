@@ -14,7 +14,10 @@
 
 void enlace_iniciar();
 // Llamar en cada vuelta de loop(): procesa comandos y renueva la foto cada 50 ms.
-void enlace_atender(uint8_t estadoP9, uint16_t adcP9, bool detenidoPorP9);
+void enlace_atender(uint8_t estadoP9, uint16_t adcP9, bool detenidoPorP9, uint16_t bateriaDv, uint8_t estadoBateria,
+                    uint8_t perfilBateria, bool perfilRechazado);
+// true (una vez) si el AUX pidió cambiar la tecnología de batería; entrega cuál.
+bool enlace_pedido_perfil(uint8_t *perfil);
 // Para el reporte por Serial (sólo banco).
 uint16_t enlace_comandos_ok();
 uint16_t enlace_comandos_malos();

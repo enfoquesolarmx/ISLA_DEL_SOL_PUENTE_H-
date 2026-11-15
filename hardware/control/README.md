@@ -282,6 +282,8 @@ Dos canales iguales:
 
 **Falla segura:** si R4 se abre, la lectura **sube**, el firmware ve "sobrevoltaje" y apaga.
 
+**Firmware:** conversión, límites de corte de las 3 tecnologías (plomo-ácido, LiFePO4 15S y 16S) y su selección desde el SETUP: [firmware del CRÍTICO, sección 7.4](../../firmware/critico/README.md).
+
 ---
 
 ## 11. Temperatura (NTC 10 k)

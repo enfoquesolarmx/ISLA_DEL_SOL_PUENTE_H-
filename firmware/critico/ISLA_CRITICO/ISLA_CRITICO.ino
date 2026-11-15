@@ -17,7 +17,15 @@
  *         en rampa hasta el máximo en ~1 s;
  *      5) vigila P9 cada 50 ms: si cambia (módulo flojo o cambiado), detiene la
  *         SPWM y no vuelve a arrancar hasta reiniciar el Nano;
- *      6) cada 10 s imprime los ciclos generados y la lectura de P9.
+ *      6) cada 10 s imprime los ciclos generados y la lectura de P9;
+ *      7) mide la batería en A3 (DC_FB_A3) cada 50 ms y la manda en la foto
+ *         I2C (protocolo v2); cada 2 s la imprime por serie;
+ *      8) límites de la batería (perfiles_bateria.h; la tecnología se escoge
+ *         en el SETUP del panel y se guarda en EEPROM): con corte bajo o alto
+ *         detiene la SPWM (D12 = 0 primero) y la vuelve a arrancar, desde
+ *         amplitud 0, cuando la batería pasa la reconexión;
+ *      9) cambio de tecnología: comando PERFIL del AUX por I2C, o "P0" (plomo),
+ *         "P1" (LFP15), "P2" (LFP16) por el Monitor Serie.
  *
  *    D12 SE QUEDA EN 0 TODO EL TIEMPO: las señales se ven en los pines del Nano
  *    pero la compuerta AND (74HC08) de la tarjeta de control no las deja pasar
@@ -31,6 +39,8 @@
 #include "spwm.h"
 #include "dt_p9.h"
 #include "enlace_i2c.h"
+#include "bateria.h"
+#include "config_bateria.h"
 
 // Rampa de prueba de banco: cuentas que sube la amplitud en cada ciclo de línea.
 // 313–316 cuentas / 5 por ciclo = 63 ciclos ≈ 1 s a 60 Hz (1.3 s a 50 Hz). NO es el arranque suave final
@@ -82,7 +92,51 @@ static void reporteP9(uint16_t adc, EstadoP9 e) {
   Serial.println(p9_texto(e));
 }
 
+// Batería: cuentas, voltaje en A3 y voltaje de la batería.
+static void reporteBateria() {
+  const uint16_t c = bateria_cuentas();
+  Serial.print(F("BAT en A3: ")); Serial.print(c); Serial.print(F(" cuentas = "));
+  imprimirFijo((uint32_t)c * 5000UL / 1023UL, 1000); Serial.print(F(" V  -> bateria "));
+  imprimirFijo(bateria_dv(), 10); Serial.print(F(" V"));
+  Serial.print(F("  [")); Serial.print(bateria_texto(bateria_estado())); Serial.println(']');
+}
+
 static bool detenidoPorP9 = false;
+static uint16_t amplitudRampa = 0;     // rampa de banco; vuelve a 0 en cada arranque
+// Ventana de 10 s para contar ciclos; se reinicia en cada arranque de la SPWM
+// (spwm_arrancar() pone el contador de ciclos en 0).
+static uint32_t tVentana = 0;
+static uint16_t cVentana = 0;
+
+static bool perfilRechazado = false;
+
+static void reporteLimites();
+// Cambio de tecnología: detiene la SPWM, revisa, guarda y reevalúa desde cero.
+// La SPWM vuelve sola (desde amplitud 0) si la batería cabe en los límites nuevos.
+static void aplicarPerfil(uint8_t p) {
+  Serial.print(F(">>> [")); Serial.print(millis()); Serial.print(F(" ms] Cambio de bateria a "));
+  Serial.println(perfil_nombre(p));
+  if (spwm_activo()) { spwm_detener(); Serial.println(F("SPWM DETENIDA para cambiar la tecnologia.")); }
+  const RechazoPerfil r = bateria_cambiar_perfil(p);
+  perfilRechazado = (r != PERFIL_OK);
+  if (r == PERFIL_INVALIDO) Serial.println(F("RECHAZADO: tecnologia invalida"));
+  else if (r == PERFIL_NO_CABE) Serial.println(F("RECHAZADO: el voltaje medido no cabe en esa tecnologia (bateria equivocada?)"));
+  else Serial.println(F("ACEPTADO y guardado en EEPROM."));
+  reporteLimites();
+  reporteBateria();
+}
+
+static void reporteLimites() {
+  const LimitesBateria &l = bateria_limites();
+  Serial.print(F("Bateria: ")); Serial.print(perfil_nombre(bateria_perfil()));
+  Serial.println(F("  (se cambia en el SETUP del panel, o por serie: P0 plomo, P1 LFP15, P2 LFP16)"));
+  Serial.print(F("  aviso < ")); imprimirFijo(l.aviso, 10);
+  Serial.print(F(" V | corte < ")); imprimirFijo(l.corte, 10);
+  Serial.print(F(" V (10 s) | emergencia < ")); imprimirFijo(l.emergencia, 10);
+  Serial.print(F(" V (0.5 s)\n  reconexion >= ")); imprimirFijo(l.reconexion, 10);
+  Serial.print(F(" V (30 s) | corte alto > ")); imprimirFijo(l.alto, 10);
+  Serial.print(F(" V (2 s), vuelve <= ")); imprimirFijo(l.altoVuelta, 10); Serial.println(F(" V"));
+}
 static EstadoP9 p9Actual = P9_AMBOS_ABIERTOS;   // lo último leído, para el enlace I2C
 static uint16_t adcP9Actual = 0;
 
@@ -108,7 +162,13 @@ void setup() {
     detenidoPorP9 = true;
     return;
   }
-  spwm_arrancar();                    // 4) SPWM con amplitud 0
+  // 4) Batería: se lee ANTES de arrancar (sin esperar los 50 ms).
+  bateria_iniciar();                  // tecnología guardada en la EEPROM
+  bateria_leer_ahora();
+  reporteLimites();
+  reporteBateria();
+  if (bateria_permite_trabajar()) spwm_arrancar();   // SPWM con amplitud 0
+  else Serial.println(F("SPWM NO arranca: bateria fuera de limites"));
 }
 
 void loop() {
@@ -124,7 +184,31 @@ void loop() {
     reporteP9(adcP9, p9);
     Serial.println(F("SPWM DETENIDA. Reinicie el Nano para volver a leer P9."));
   }
-  enlace_atender(p9Actual, adcP9Actual, detenidoPorP9);   // I2C: comandos y foto nueva
+  bateria_atender();                  // A3 cada 50 ms (también con la SPWM detenida)
+  enlace_atender(p9Actual, adcP9Actual, detenidoPorP9, bateria_dv(), bateria_estado(),
+                 bateria_perfil(), perfilRechazado);   // I2C: comandos y foto nueva
+  // Cambio de tecnología de batería: del panel (I2C) o por serie ("P0".."P2").
+  uint8_t perfilNuevo;
+  bool pedido = enlace_pedido_perfil(&perfilNuevo);
+  if (!pedido && Serial.available() >= 2 && Serial.peek() == 'P') {
+    Serial.read();
+    perfilNuevo = (uint8_t)(Serial.read() - '0');
+    pedido = true;
+  } else if (!pedido && Serial.available() && Serial.peek() != 'P') {
+    Serial.read();                    // basura (fin de línea, etc.)
+  }
+  if (pedido) aplicarPerfil(perfilNuevo);
+  static EstadoBateria batAnterior = bateria_estado();
+  if (bateria_estado() != batAnterior) {
+    batAnterior = bateria_estado();
+    Serial.print(F(">>> [")); Serial.print(millis()); Serial.print(F(" ms] "));
+    reporteBateria();
+  }
+  static uint32_t tBat = 0;
+  if (millis() - tBat >= 2000UL) {
+    tBat = millis();
+    reporteBateria();
+  }
   if (enlace_aux_cambio()) {
     Serial.print(F(">>> [")); Serial.print(millis()); Serial.print(F(" ms] "));
     Serial.println(enlace_aux_presente() ? F("AUX conectado: primer PING valido recibido")
@@ -132,32 +216,41 @@ void loop() {
   }
   if (detenidoPorP9) return;
 
+  // Límites de batería: detener o volver a arrancar.
+  if (spwm_activo() && !bateria_permite_trabajar()) {
+    spwm_detener();                   // D12 = 0 primero, salidas en bajo
+    Serial.println(F("SPWM DETENIDA por bateria."));
+  } else if (!spwm_activo() && bateria_permite_trabajar()) {
+    amplitudRampa = 0;
+    spwm_arrancar();                  // desde amplitud 0, con la rampa
+    tVentana = millis(); cVentana = spwm_ciclos();
+    Serial.println(F("SPWM ARRANCA: bateria dentro de limites."));
+  }
+  if (!spwm_activo()) return;
+
   // Rampa de banco: sube la amplitud una vez por ciclo de línea.
   static uint16_t cicloAnterior = 0;
-  static uint16_t amplitud = 0;
   const uint16_t c = spwm_ciclos();
   if (c != cicloAnterior) {
     cicloAnterior = c;
-    if (amplitud < spwm_amplitud_max()) {
-      amplitud += RAMPA_BANCO_CUENTAS_POR_CICLO;
-      spwm_fijar_amplitud(amplitud);   // se recorta solo al máximo
+    if (amplitudRampa < spwm_amplitud_max()) {
+      amplitudRampa += RAMPA_BANCO_CUENTAS_POR_CICLO;
+      spwm_fijar_amplitud(amplitudRampa);   // se recorta solo al máximo
     }
   }
 
   // Verificación de frecuencia: ciclos en ventanas de 10 s
   // (600 o 601 a 60 Hz; 500 o 501 a 50 Hz).
-  static uint32_t t0 = millis();
-  static uint16_t c0 = 0;
-  if (millis() - t0 >= 10000UL) {
-    t0 += 10000UL;
+  if (millis() - tVentana >= 10000UL) {
+    tVentana += 10000UL;
     Serial.print(F("Ciclos en 10 s: "));
-    Serial.print((uint16_t)(c - c0));
+    Serial.print((uint16_t)(c - cVentana));
     Serial.print(F("   |   "));
     const uint16_t a = analogRead(A7);
     reporteP9(a, p9_clasificar(a));
     Serial.print(F("I2C: PING validos ")); Serial.print(enlace_comandos_ok());
     Serial.print(F(", con CRC malo ")); Serial.print(enlace_comandos_malos());
     Serial.print(F(", ultimo seq ")); Serial.println(enlace_ultimo_seq());
-    c0 = c;
+    cVentana = c;
   }
 }

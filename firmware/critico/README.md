@@ -24,11 +24,12 @@
 
 1. **Lectura de P9 (A7):** elegir 500 ns o 1 µs según el módulo. **Paso 3 escrito y verificado en la PC; falta la prueba de banco** (sección 7.2).
 2. **Arranque suave y lazo de voltaje** (`ac_fb_inversor`).
-3. **ADC disparado por la portadora:** batería, corriente y temperatura.
-4. **Protecciones** y secuencia de permiso D12 ([corte por hardware](../../docs/corte_por_hardware.md)).
-5. **PLL con la red** (TOP fraccionario) y transferencia (`ac_fb_grid`).
-6. **Enlace I2C** con el AUX: ✅ **validado en banco** (sección 7.3). Falta definir los comandos reales (arranque, paro, lecturas) y quitar el `Serial` del CRÍTICO (DC-017, regla 5).
-7. **ATmega4809** (Nano Every).
+3. **Batería (A3) y sus límites de corte:** ✅ escrito, con **3 tecnologías** (plomo-ácido, LiFePO4 15S y 16S) escogidas desde el SETUP del panel; **validado en SimulIDE**, falta el banco (sección 7.4).
+4. **ADC disparado por la portadora:** corriente y temperatura (y mover ahí la batería y P9).
+5. **Protecciones** y secuencia de permiso D12 ([corte por hardware](../../docs/corte_por_hardware.md)).
+6. **PLL con la red** (TOP fraccionario) y transferencia (`ac_fb_grid`).
+7. **Enlace I2C** con el AUX: ✅ **validado en banco** (sección 7.3). **Protocolo v2** (batería y comando de tecnología) escrito; falta revalidarlo en banco. Falta definir los comandos de arranque y paro y quitar el `Serial` del CRÍTICO (DC-017, regla 5).
+8. **ATmega4809** (Nano Every).
 
 ---
 
@@ -56,11 +57,14 @@ Cada archivo hace una sola cosa y empieza con un bloque que dice qué hace, qué
 | `spwm_4809.cpp` | La misma SPWM con TCA0 | Pendiente: hoy da error al compilar, a propósito |
 | Arranque suave | Rampa de amplitud con el lazo de voltaje | Pendiente (va con `ac_fb_inversor`) |
 | `dt_p9.h/.cpp` | Lectura de P9 en A7 al encender (16 lecturas) y vigilancia cada 50 ms ([identificación por P9](../../docs/identificacion_dt_pin9.md)) | ✅ Paso 3: verificado en la PC; banco pendiente (7.2) |
-| `adc_bateria.h/.cpp` | Voltaje y corriente de batería | Pendiente |
+| `bateria.h/.cpp` | Voltaje de batería en A3 (divisor 68k + 68k + 10k, DC-007), sin float: décimas de V = cuentas × 730 / 1023. **Límites de corte** con retardos (aviso, corte 10 s, emergencia 0.5 s, reconexión 30 s, corte alto 2 s), falla del divisor que sólo se borra con reinicio. **Tecnología guardada en EEPROM** con CRC | ✅ Prueba en la PC y SimulIDE (7.4); banco pendiente |
+| `perfiles_bateria.h` | **Las 3 tecnologías** y sus límites por celda, con fuentes: plomo-ácido 24 celdas, LiFePO4 15S y 16S. **Idéntico en los dos sketches** | ✅ |
+| `config_bateria.h` | Tecnología de fábrica (EEPROM vacía) y retardos | ✅ |
+| Corriente de batería | Sensor DC (INA240) | Pendiente |
 | `ac_fb_inversor.h/.cpp` | Retroalimentación del voltaje de salida y lazo | Pendiente |
 | `ac_fb_grid.h/.cpp` | Red: presencia, frecuencia, fase y PLL; transferencia | Pendiente |
 | `protecciones.h/.cpp` | Fallas y apagado seguro (junto con el [corte por hardware](../../docs/corte_por_hardware.md)) | Pendiente |
-| `enlace_protocolo.h` + `enlace_i2c.h/.cpp` | Enlace con el AUX: el CRÍTICO es **esclavo 0x20** (DC-017). PING del AUX y foto de estado de 16 bytes con CRC-8, avisos de AUX conectado/perdido, reinicio del TWI si se traba | ✅ Validado en banco (7.3) |
+| `enlace_protocolo.h` + `enlace_i2c.h/.cpp` | Enlace con el AUX: el CRÍTICO es **esclavo 0x20** (DC-017). PING del AUX y foto de estado de 16 bytes con CRC-8, avisos de AUX conectado/perdido, reinicio del TWI si se traba. **v2:** batería, su estado y la tecnología en la foto; comando `0x02` para cambiar la tecnología | ✅ v1 validada en banco (7.3); v2 por revalidar |
 
 **Pines:** la asignación de cada pin del CRÍTICO y del AUX (función, entrada/salida, estado al encender y timer dueño) está en el [mapa de pines de la tarjeta de control](../../hardware/control/README.md#11-mapa-de-pines), verificado contra el esquemático. **El firmware no usa ningún pin que no esté en esa tabla.**
 
@@ -415,7 +419,7 @@ Con resistencias de ±5 % las cuentas pueden variar: 383–436, 484–539, 657�
 
 ### 7.3 Prueba de banco del enlace I2C CRÍTICO ↔ AUX (validada, 2026-11-13)
 
-Dos Nanos: el **CRÍTICO** con `ISLA_CRITICO.ino` (paso 3 + enlace) y el **AUX** con [`firmware/aux/ISLA_AUX_PRUEBA_I2C`](../aux/ISLA_AUX_PRUEBA_I2C/ISLA_AUX_PRUEBA_I2C.ino). **Sin potencia.**
+Dos Nanos: el **CRÍTICO** con `ISLA_CRITICO.ino` (paso 3 + enlace) y el **AUX** con [`firmware/auxiliar/ISLA_AUX_PRUEBA_I2C`](../auxiliar/ISLA_AUX_PRUEBA_I2C/ISLA_AUX_PRUEBA_I2C.ino). **Sin potencia.**
 
 #### Por qué dos microcontroladores y un enlace entre ellos
 
@@ -437,8 +441,9 @@ Dos Nanos: el **CRÍTICO** con `ISLA_CRITICO.ino` (paso 3 + enlace) y el **AUX**
 #### Protocolo (`enlace_protocolo.h`, idéntico en los dos sketches)
 
 - **Roles (DC-017):** el **CRÍTICO es esclavo (0x20)** y nunca espera al bus; el **AUX es el maestro**. A 100 kHz.
-- **Comando del AUX, 4 bytes:** tipo, secuencia, dato y CRC-8. Hoy solo existe `PING` (0x01).
-- **Foto del CRÍTICO, 16 bytes:** versión, secuencia, eco del último PING, banderas (SPWM activa, detenida por P9, 50 Hz), estado de P9, DT, ciclos, lectura de A7, amplitud máxima, comandos con CRC malo, y CRC-8.
+- **Comando del AUX, 4 bytes:** tipo, secuencia, dato y CRC-8. `PING` (0x01) y, desde la v2, `PERFIL` (0x02, dato = tecnología de batería).
+- **Foto del CRÍTICO, 16 bytes:** versión, secuencia, eco del último comando, banderas (SPWM activa, detenida por P9, 50 Hz; en la v2 también la tecnología de batería y si el último cambio fue rechazado), estado de P9, DT, ciclos, lectura de A7, amplitud máxima, **batería en décimas de V** (v1: comandos con CRC malo), **estado de la batería** (v1: reservado) y CRC-8.
+- **Versión 2 (2026-11-15):** escrita y verificada en SimulIDE sólo del lado de cada micro (el simulador no maneja al ATmega como esclavo que transmite). **Falta revalidarla en banco** con los dos Nanos.
 - **CRC-8 SMBus:** polinomio 0x07, valor inicial 0. Los números de 16 bits van con el byte bajo primero.
 - **La interrupción de I2C solo copia bytes.** El CRÍTICO valida los comandos y arma la foto en `loop()`, cada 50 ms, y la copia de forma atómica: el AUX nunca recibe media foto.
 
@@ -491,6 +496,55 @@ Dos Nanos: el **CRÍTICO** con `ISLA_CRITICO.ino` (paso 3 + enlace) y el **AUX**
 > - **Si necesitas ver los dos Monitores,** conecta los dos Nanos por USB a la **misma** computadora, y el analizador también a esa.
 >
 > *Evidencia: prueba del enlace del 2026-11-13. Con dos laptops aparecían pulsos de 63 ns en los cuatro canales; con una sola fuente y una sola tierra, 20 M muestras sin anomalías.*
+
+### 7.4 Batería: lectura en A3 y límites de corte (SimulIDE, 2026-11-15; banco pendiente)
+
+**Módulos:** `bateria.h/.cpp`, `perfiles_bateria.h`, `config_bateria.h`. **Sólo mide y corta la SPWM**: el cargador (DC-018) y la corriente vienen después.
+
+#### Las 3 tecnologías (`perfiles_bateria.h`)
+
+Se escogen en el **SETUP del panel** (B4 sostenido 3 s → "Bat" → B4 → B2/B3 → B4 sostenido 3 s para confirmar) o, en el banco, por el Monitor Serie del CRÍTICO (`P0`, `P1`, `P2`). El AUX sólo **propone**: el CRÍTICO detiene la SPWM, revisa que el voltaje medido quepa entre la emergencia y el alto de la tecnología nueva (si no, la **rechaza**: ¿batería equivocada?), la guarda en su EEPROM con CRC y vuelve a arrancar desde amplitud 0. Si el enlace se cae, sigue protegiendo con lo guardado. Sin EEPROM válida usa la de fábrica (`PERFIL_FABRICA`, plomo).
+
+| Límite | Retardo | Plomo-ácido 24 celdas | LiFePO4 15S | LiFePO4 16S |
+| --- | --- | --- | --- | --- |
+| Aviso (panel) | — | 44.4 V (1.85 V/celda) | 46.5 V (3.10) | 49.6 V (3.10) |
+| **Corte** | 10 s | **42.0 V** (1.75) | **43.5 V** (2.90) | **46.4 V** (2.90) |
+| **Emergencia** | 0.5 s | 37.2 V (1.55) | 42.0 V (2.80) | 44.8 V (2.80) |
+| **Reconexión** | 30 s | 49.9 V (2.083 = 80 % en reposo) | 48.0 V (3.20 = 20 %) | 51.2 V (3.20 = 20 %) |
+| **Corte alto** | 2 s | 66.0 V (2.75) | 54.7 V (3.65) | 58.4 V (3.65) |
+| Vuelve del alto | 30 s | 64.0 V (2.67) | 51.7 V (3.45) | 55.2 V (3.45) |
+
+- **10 s en el corte:** el bajón de unos segundos al arrancar un motor no apaga el inversor.
+- **Reconexión muy arriba del corte, a propósito:** al quitarle la carga, la batería rebota varios volts sin haberse cargado; si la reconexión estuviera cerca, el inversor prendería y apagaría sin parar.
+- **LiFePO4: el corte va 0.1 V/celda arriba del BMS** (2.8 V): el inversor ve el promedio y el BMS cada celda; el inversor corta **primero**.
+- **Revisado con una batería 16S real que se llena a 56.0 V** (3.50 V/celda): el corte alto (58.4 V) queda 2.4 V arriba y no estorba al cargador.
+- **Falla del divisor** (A3 ≥ 1000 cuentas, ≥ 71.4 V, R4 abierta): corta y **no reconecta** hasta reiniciar, aunque se cambie de tecnología.
+- **Fuentes:** [Trojan, Flooded Battery Quick Start Guide](https://ressupply.com/documents/trojan_battery/Flooded_Battery_Quick_Start_Guide.pdf); [Victron, ajustes de batería baja de los inversores VE.Direct](https://www.victronenergy.com/media/pg/Inverter_VE.Direct_120V_-_HW15/en/configuration/low-battery-alarm-and-charge-detect-settings.html); [Victron, Lithium Battery Smart](https://www.victronenergy.de/upload/documents/Datasheet-12,8-Volt-lithium-iron-phosphate-batteries-Smart-EN.pdf) y [smallBMS](https://victronenergy.com/media/pg/smallBMS_with_pre-alarm/en/introduction.html); [EVE, tabla de estado de carga LiFePO4](https://www.evemall.eu/selection-guide/eve-lifepo4-state-charge-chart-discharge-curve-capacity-diagrams). **Antes de usar en campo, revisar contra la hoja de TU batería y TU BMS.**
+
+#### Prueba en la PC (`pruebas/bateria_pc/`)
+
+Límites y retardos con voltajes simulados: motor de 5 s sin corte, corte a los 10 s, rebote sin reconexión, reconexión a los 30 s, emergencia a los 0.5 s, corte alto a los 2 s, falla del divisor que se queda, cambio de tecnología aceptado o rechazado, EEPROM vacía o dañada → fábrica. Todo correcto.
+
+#### Validado en SimulIDE 1.1-SR2 (2026-11-15), con plomo-ácido
+
+| Prueba | Resultado |
+| --- | --- |
+| Lectura: fuente en 62.86 V | 880 cuentas = 4.301 V → **62.8 V** (cálculo: 880.7 cuentas, 62.8 V) |
+| Pantalla 2 del AUX (`SIMULIDE 1`) | `BAT 62.8V`, igual que el serie del CRÍTICO |
+| Corte bajo: 40.5 V | `CORTE: bateria baja` y `SPWM DETENIDA`; analizador plano |
+| Reconexión: 54.2 V | `[normal]` y `SPWM ARRANCA`; `Ciclos en 10 s: 600` |
+| 65.0 V | `[normal]` (abajo del alto) |
+| Corte alto: 67.6 V | `CORTE: bateria alta` y `SPWM DETENIDA` |
+| Vuelve del alto: 57.7 V | `[normal]` y `SPWM ARRANCA` |
+| Menú SETUP "Bat" | Escoge, muestra `C… A…`, confirma con 3 s; `SIN RESPUESTA` porque en SimulIDE no hay enlace |
+
+**SimulIDE no valida:** el enlace I2C (el ATmega simulado no suelta SDA al transmitir como esclavo), los tiempos reales ni el ruido. Por eso el AUX tiene la perilla `SIMULIDE` (lee una copia del divisor en su A3; en el firmware real va en 0).
+
+#### Pendiente en banco
+
+1. Lectura de A3 contra el multímetro (fuente de laboratorio o batería). Si el 5 V del Nano no da 5.00 V, la lectura se recorre igual: calibración con K en EEPROM, pendiente.
+2. Protocolo v2: batería, estado y tecnología en la pantalla por I2C; cambio desde el SETUP con `ACEPTADO` y `RECHAZADO`; la tecnología sigue después de reiniciar.
+3. El corte por bajo voltaje del BMS de la batería real, para confirmar el margen de 0.1 V/celda.
 
 ### 7.1 Análisis automático con script (opcional)
 
@@ -557,3 +611,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-13 | Gráfica de la LUT de 90° por cuadrantes (`img/lut_cuarto_de_onda.png`, `herramientas/grafica_lut.py`) en la sección 3.1 |
 | 2026-11-13 | **Paso 3: lectura de P9** (`dt_p9.h/.cpp`): 16 lecturas de A7 al encender, 500 ns solo con las dos ramas a GND, mixto o inestable → 1 µs, fuera de rango → no arranca, vigilancia cada 50 ms (3 lecturas distintas → SPWM detenida). Prueba en la PC (`pruebas/prueba_p9.cpp`): todo correcto. Compila: 7.3 KB de flash, 253 B de RAM. Prueba de banco pendiente (7.2) |
 | 2026-11-13 | **Enlace I2C CRÍTICO ↔ AUX validado en banco** (sección 7.3): CRÍTICO esclavo 0x20, PING + foto de 16 bytes con CRC-8, avisos y recuperación en los dos lados, liberación del bus en el AUX. Más de 1 700 PING sin pérdidas, CRC 0. No afecta al tiempo muerto (1 µs) ni a la pierna B (~42 µs). Advertencia de las dos laptops (lazo de tierra) |
+| 2026-11-15 | **Batería en A3** (`bateria.h/.cpp`) y **límites de corte** para **3 tecnologías** (`perfiles_bateria.h`: plomo-ácido, LiFePO4 15S y 16S, con fuentes), escogidas desde el SETUP del panel y guardadas en EEPROM; corte, emergencia, reconexión y corte alto con retardos. **Protocolo v2** (batería, estado y tecnología en la foto; comando `0x02`). Prueba en la PC: todo correcto. **Validado en SimulIDE** (sección 7.4); banco pendiente. Corregido el reporte de ciclos tras rearrancar la SPWM |
