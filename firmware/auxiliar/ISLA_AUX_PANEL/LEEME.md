@@ -7,7 +7,10 @@
 | Pantalla AIP31068 (`LCD_TIPO 1`) | SimulIDE 1.1-SR2 | ✅ Contesta y muestra las pantallas |
 | Botonera en A7 (con R42) | SimulIDE 1.1-SR2 | ✅ B1 197, B2 414, B3 613, sin botón 1022 |
 | SETUP (B4 sostenido 3 s) | SimulIDE 1.1-SR2 | ✅ Entra con A7 = 814, muestra `SETUP 1/3` |
-| Enlace I2C con el CRÍTICO | Banco, Nanos reales | ✅ Ya validado (`firmware/critico/README.md` §7.3) |
+| Batería en la pantalla 2 (`SIMULIDE 1`) | SimulIDE 1.1-SR2 | ✅ `BAT 62.8V`, igual que el CRÍTICO |
+| SETUP: tecnología de batería | SimulIDE 1.1-SR2 | ✅ Menú y confirmación; `SIN RESPUESTA` (sin enlace en el simulador) |
+| Enlace I2C con el CRÍTICO | Banco, Nanos reales | ✅ v1 validada (`firmware/critico/README.md` §7.3) |
+| Protocolo v2 (batería, tecnología) | — | ⏳ Falta en banco |
 | Enlace I2C con el CRÍTICO | SimulIDE 1.1-SR2 | ❌ Falla del simulador (ver abajo) |
 | 16x2 con PCF8574 (`LCD_TIPO 0`) | — | ⏳ Falta en físico |
 | Botonera física con R42 | — | ⏳ Falta en físico |

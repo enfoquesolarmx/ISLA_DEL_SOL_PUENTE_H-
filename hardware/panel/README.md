@@ -182,6 +182,7 @@ Todos los mide la tarjeta de control (el CRÍTICO por sus pines, el AUX por CAN 
 | Opción | Valores | Qué hace | Candado propuesto |
 | --- | --- | --- | --- |
 | **Modo de trabajo** | INVERSOR CASA / INVERSOR CARGA (UPS) | CASA: el inversor alimenta la casa y **se une N–PE** (TN). UPS: alimenta una carga y **no se une** (DC-019) | **Solo con el inversor apagado** (EN_HW = 0) y confirmando con B4 |
+| **Batería** | PLOMO (24 celdas) / LFP15 / LFP16 | Escoge los límites de corte ([firmware del CRÍTICO, 7.4](../../firmware/critico/README.md)) | El panel solo **propone**: el CRÍTICO detiene la SPWM, **rechaza** si el voltaje medido no cabe en esa tecnología y la guarda en su EEPROM. Se confirma con B4 sostenido 3 s ✅ *(escrito; SimulIDE)* |
 | **Pantalla** | 16×2 / 20×4 | Acomoda los datos al tamaño | — |
 | **Luz de fondo** | Siempre / 1 min / 5 min | Ahorra energía de la batería | — |
 | **Diagnóstico** | Solo lectura | Lecturas crudas del ADC, dirección I2C detectada, versión de firmware | — |
