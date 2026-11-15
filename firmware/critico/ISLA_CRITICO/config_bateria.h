@@ -71,6 +71,10 @@ static_assert(CELDAS_LIFEPO4 == 15 || CELDAS_LIFEPO4 == 16, "LiFePO4: 15 o 16 ce
 //  - Victron, Lithium Battery Smart 12.8 V (hoja de datos) y smallBMS:
 //    pre-alarma < 3.1 V, desconexión de carga < 2.8 V, paro de carga > 3.75 V.
 //  - Hojas de celda EVE (LF280K / LF105): carga hasta 3.65 V, descarga hasta 2.5 V.
+//  - EVE, tabla SOC en reposo: 3.40 V = 100 %, 3.26 V = 50 %, 3.20 V = 20 %,
+//    3.00 V = 10 %, 2.50 V = 0 %.
+//  - Validado con una batería 16S real que se llena a 56.0 V (3.50 V/celda):
+//    el corte alto queda 2.4 V arriba de su carga y no estorba al cargador.
 // El inversor ve el PROMEDIO del paquete; el BMS ve cada celda. Una celda
 // desbalanceada llega a 2.8 V antes que el promedio, por eso el corte del
 // inversor va 0.1 V arriba del corte del BMS: el inversor corta PRIMERO.
@@ -78,9 +82,10 @@ static_assert(CELDAS_LIFEPO4 == 15 || CELDAS_LIFEPO4 == 16, "LiFePO4: 15 o 16 ce
 constexpr uint16_t BAT_MV_AVISO      = 3100;   // pre-alarma de Victron
 constexpr uint16_t BAT_MV_CORTE      = 2900;   // 0.1 V arriba del corte del BMS
 constexpr uint16_t BAT_MV_EMERGENCIA = 2800;   // corte de carga del BMS (Victron)
-constexpr uint16_t BAT_MV_RECONEXION = 3200;   // nominal: ya no es rebote
-constexpr uint16_t BAT_MV_ALTO       = 3750;   // paro de carga de Victron (> 3.65 de EVE)
-constexpr uint16_t BAT_MV_ALTO_VUELTA = 3600;
+constexpr uint16_t BAT_MV_RECONEXION = 3200;   // 20 % en reposo (EVE): el rebote tras el corte
+                                               // (~3.0–3.1 V, ~10 %) no llega; hay que cargar
+constexpr uint16_t BAT_MV_ALTO       = 3650;   // máximo de carga de la celda (EVE)
+constexpr uint16_t BAT_MV_ALTO_VUELTA = 3450;   // abajo de la carga típica (3.50) y arriba del reposo lleno (3.40)
 // mV por celda × celdas / 100 = décimas de V del paquete
 constexpr uint16_t BAT_AVISO_DV        = (uint32_t)BAT_MV_AVISO      * CELDAS_LIFEPO4 / 100;
 constexpr uint16_t BAT_CORTE_DV        = (uint32_t)BAT_MV_CORTE      * CELDAS_LIFEPO4 / 100;
@@ -88,8 +93,8 @@ constexpr uint16_t BAT_EMERGENCIA_DV   = (uint32_t)BAT_MV_EMERGENCIA * CELDAS_LI
 constexpr uint16_t BAT_RECONEXION_DV   = (uint32_t)BAT_MV_RECONEXION * CELDAS_LIFEPO4 / 100;
 constexpr uint16_t BAT_ALTO_CORTE_DV   = (uint32_t)BAT_MV_ALTO       * CELDAS_LIFEPO4 / 100;
 constexpr uint16_t BAT_ALTO_RECONEXION_DV = (uint32_t)BAT_MV_ALTO_VUELTA * CELDAS_LIFEPO4 / 100;
-//   15S: aviso 46.5 | corte 43.5 | emergencia 42.0 | reconexión 48.0 | alto 56.2 | vuelve 54.0
-//   16S: aviso 49.6 | corte 46.4 | emergencia 44.8 | reconexión 51.2 | alto 60.0 | vuelve 57.6
+//   15S: aviso 46.5 | corte 43.5 | emergencia 42.0 | reconexión 48.0 | alto 54.7 | vuelve 51.7
+//   16S: aviso 49.6 | corte 46.4 | emergencia 44.8 | reconexión 51.2 | alto 58.4 | vuelve 55.2
 // Las dos cargadas (54.75 V y 58.4 V) caben con el TVS D1 SMBJ58A (DC-003).
 #if CELDAS_LIFEPO4 == 15
 #define BAT_NOMBRE "LiFePO4 15S"
