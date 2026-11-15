@@ -33,8 +33,8 @@ enlace con el CRÍTICO.
 
 ## Prueba de enlace en SimulIDE 1.1 (dos Arduino Nano)
 
-1. **Nano CRÍTICO:** carga `ISLA_CRITICO.hex` (sketch `ISLA_CRITICO` del repositorio, sin cambios). Es el esclavo 0x20.
-2. **Nano AUX:** carga `ISLA_AUX_PANEL.hex` con `LCD_TIPO 1`. Es el maestro.
+1. **Nano CRÍTICO:** carga `hex/ISLA_CRITICO.hex` (sketch `ISLA_CRITICO` del repositorio, sin cambios). Es el esclavo 0x20.
+2. **Nano AUX:** carga `hex/ISLA_AUX_PANEL_AIP31068.hex` (`LCD_TIPO 1`). Es el maestro.
 3. **Conecta:** A4↔A4, A5↔A5 y GND↔GND, con 4.7 kΩ de A4 y de A5 a 5 V. Pantalla AIP31068 en D4/D5 del AUX, y botonera en A7 del AUX.
 4. **A7 del CRÍTICO (P9):**
    - Sin nada conectado, P9 sale FUERA DE RANGO y la SPWM no arranca, pero el enlace sí funciona. La pantalla 4 dice `SPWM STOP P9`.
@@ -49,7 +49,7 @@ Los voltajes, las corrientes, la batería y la temperatura siguen siendo **de mu
 
 ## Qué hace
 
-- **Pantallas 1, 2 y 3** de `hardware/panel` §5, con datos de muestra que cambian solos. B2 y B3 pasan de una a otra.
+- **Pantallas 1, 2 y 3** de `hardware/panel` §5, con datos de muestra que cambian solos, y **pantalla 4 (CRITICO)** con datos reales del enlace. B2 y B3 pasan de una a otra.
 - **SETUP:** B4 sostenido 3 s.
   - Dentro de SETUP, B2 y B3 mueven entre opciones, B4 cambia el valor y B1 sale.
   - Opciones: la frecuencia (sólo se muestra; se cambia en `config_portadora.h`), la luz de fondo (sólo PCF8574) y la lectura cruda de A7.
