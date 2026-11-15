@@ -100,6 +100,10 @@ static void reporteBateria() {
 
 static bool detenidoPorP9 = false;
 static uint16_t amplitudRampa = 0;     // rampa de banco; vuelve a 0 en cada arranque
+// Ventana de 10 s para contar ciclos; se reinicia en cada arranque de la SPWM
+// (spwm_arrancar() pone el contador de ciclos en 0).
+static uint32_t tVentana = 0;
+static uint16_t cVentana = 0;
 
 static void reporteLimites() {
   Serial.print(F("Bateria: ")); Serial.println(F(BAT_NOMBRE));
@@ -183,6 +187,7 @@ void loop() {
   } else if (!spwm_activo() && bateria_permite_trabajar()) {
     amplitudRampa = 0;
     spwm_arrancar();                  // desde amplitud 0, con la rampa
+    tVentana = millis(); cVentana = spwm_ciclos();
     Serial.println(F("SPWM ARRANCA: bateria dentro de limites."));
   }
   if (!spwm_activo()) return;
@@ -200,18 +205,16 @@ void loop() {
 
   // Verificación de frecuencia: ciclos en ventanas de 10 s
   // (600 o 601 a 60 Hz; 500 o 501 a 50 Hz).
-  static uint32_t t0 = millis();
-  static uint16_t c0 = 0;
-  if (millis() - t0 >= 10000UL) {
-    t0 += 10000UL;
+  if (millis() - tVentana >= 10000UL) {
+    tVentana += 10000UL;
     Serial.print(F("Ciclos en 10 s: "));
-    Serial.print((uint16_t)(c - c0));
+    Serial.print((uint16_t)(c - cVentana));
     Serial.print(F("   |   "));
     const uint16_t a = analogRead(A7);
     reporteP9(a, p9_clasificar(a));
     Serial.print(F("I2C: PING validos ")); Serial.print(enlace_comandos_ok());
     Serial.print(F(", con CRC malo ")); Serial.print(enlace_comandos_malos());
     Serial.print(F(", ultimo seq ")); Serial.println(enlace_ultimo_seq());
-    c0 = c;
+    cVentana = c;
   }
 }
