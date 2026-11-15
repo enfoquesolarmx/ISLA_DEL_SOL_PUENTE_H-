@@ -29,7 +29,9 @@
  *  FILTRO: promedio de 8 lecturas cada 50 ms. C1 ya filtra el rizo de 120 Hz
  *  (τ ≈ 10 ms); el promedio quita el ruido de conmutación de la SPWM.
  *
- *  LÍMITES DE CORTE: config_bateria.h (química y voltajes, con fuentes).
+ *  LÍMITES DE CORTE: perfiles_bateria.h (tecnologías y voltajes, con fuentes).
+ *  La tecnología activa se guarda en la EEPROM (se escoge en el SETUP del
+ *  panel); sin EEPROM válida se usa PERFIL_FABRICA (config_bateria.h).
  *  bateria_estado() dice si el inversor puede trabajar; el .ino detiene o
  *  rearranca la SPWM según eso.
  *
@@ -45,6 +47,7 @@
  */
 #pragma once
 #include <stdint.h>
+#include "perfiles_bateria.h"
 
 constexpr uint16_t BAT_DV_TOPE          = 730;   // 1023 cuentas = 73.0 V
 constexpr uint16_t BAT_CUENTAS_R4_ABIERTA = 1000; // ≥ 71.4 V: R4 abierta o batería imposible
@@ -71,6 +74,18 @@ enum EstadoBateria : uint8_t {
 EstadoBateria bateria_estado();
 bool bateria_permite_trabajar();   // NORMAL o AVISO
 const __FlashStringHelper *bateria_texto(EstadoBateria e);
+
+// Tecnología activa (PerfilBateria) y cambio pedido desde el panel.
+uint8_t bateria_perfil();
+const LimitesBateria &bateria_limites();
+// Rechazos al pedir un cambio de tecnología.
+enum RechazoPerfil : uint8_t { PERFIL_OK, PERFIL_INVALIDO, PERFIL_NO_CABE };
+// Cambia la tecnología, la guarda en la EEPROM y reevalúa desde cero.
+// Rechaza si el voltaje medido no cabe entre la emergencia y el alto de la
+// tecnología nueva (batería equivocada). La SPWM la detiene quien llama.
+RechazoPerfil bateria_cambiar_perfil(uint8_t perfil);
+// Carga la tecnología de la EEPROM (llamar en setup() antes de leer).
+void bateria_iniciar();
 
 uint16_t bateria_dv();         // último voltaje en décimas de V (0 hasta la 1a lectura)
 uint16_t bateria_cuentas();    // último promedio crudo

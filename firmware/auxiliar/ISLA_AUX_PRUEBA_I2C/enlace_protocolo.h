@@ -8,10 +8,16 @@
  *
  *  COMANDO del AUX al CRÍTICO (4 bytes):
  *    [0] tipo   [1] secuencia   [2] dato   [3] CRC-8 de 0..2
+ *    tipos: 0x01 PING (dato 0), cada 100 ms: latido
+ *           0x02 PERFIL (dato = PerfilBateria): cambiar la tecnología de
+ *                batería. También cuenta como latido. El CRÍTICO lo revisa y,
+ *                si lo acepta, se ve en la foto ([3] b4-b5).
  *  ESTADO del CRÍTICO al AUX (16 bytes):
  *    [0]  versión del protocolo        [1]  secuencia de la foto
  *    [2]  eco: secuencia del último comando válido
- *    [3]  banderas: b0 SPWM activa, b1 detenida por P9, b2 línea de 50 Hz
+ *    [3]  banderas: b0 SPWM activa, b1 detenida por P9, b2 línea de 50 Hz,
+ *         b4-b5 tecnología de batería activa (PerfilBateria),
+ *         b6 último cambio de tecnología RECHAZADO
  *    [4]  estado de P9 (EstadoP9)       [5]  tiempo muerto en cuentas
  *    [6-7]   ciclos de línea            [8-9]   lectura de A7 (P9)
  *    [10-11] amplitud máxima            [12-13] batería en décimas de V
@@ -34,6 +40,7 @@ constexpr uint8_t ENLACE_VERSION           = 2;
 constexpr uint8_t ENLACE_LARGO_COMANDO     = 4;
 constexpr uint8_t ENLACE_LARGO_ESTADO      = 16;
 constexpr uint8_t ENLACE_CMD_PING          = 0x01;
+constexpr uint8_t ENLACE_CMD_PERFIL        = 0x02;
 
 inline uint8_t enlace_crc8(const uint8_t *d, uint8_t n) {
   uint8_t crc = 0;

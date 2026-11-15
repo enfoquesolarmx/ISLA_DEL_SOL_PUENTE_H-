@@ -19,6 +19,8 @@
  *    B2 ARRIBA / B3 ABAJO : cambian de pantalla (1 -> 2 -> 3 -> 4 -> 1)
  *    B4 OK sostenido 3 s  : entra a SETUP
  *    En SETUP: B2/B3 mueven, B4 cambia el valor, B1 ATRÁS sale.
+ *    SETUP 2/4 Batería: B4 para escoger (PLOMO / LFP15 / LFP16), B2/B3 para
+ *    recorrer, B4 sostenido 3 s para confirmar, B1 para cancelar.
  *    La frecuencia 50/60 Hz se MUESTRA pero NO se cambia aquí: sólo en
  *    config_portadora.h del CRÍTICO (decisión de diseño).
  *
@@ -33,6 +35,7 @@
 #include "lcd.h"
 #include "botonera.h"
 #include "enlace_aux.h"
+#include "perfiles_bateria.h"
 
 constexpr uint16_t REFRESCO_MS = 250;
 
@@ -41,7 +44,23 @@ constexpr uint8_t VISTAS_NORMALES = 4;
 static Vista vista = V_INVERSOR;
 static uint8_t itemSetup = 0;
 static bool luzEncendida = true;
-constexpr uint8_t ITEMS_SETUP = 3;
+constexpr uint8_t ITEMS_SETUP = 4;
+enum ItemSetup : uint8_t { I_FRECUENCIA, I_BATERIA, I_LUZ, I_A7 };
+
+// Cambio de tecnología de batería (SETUP 2/4):
+//   B4 corto        -> escoger (B2/B3 recorren PLOMO / LFP15 / LFP16)
+//   B4 sostenido 3 s-> confirmar: se manda al CRÍTICO por I2C
+//   B1              -> cancelar
+// El CRÍTICO decide: lo acepta (y lo guarda en su EEPROM) o lo rechaza si el
+// voltaje medido no cabe en esa tecnología. Aquí sólo se muestra el resultado.
+enum PasoBat : uint8_t { BAT_VIENDO, BAT_ESCOGIENDO, BAT_ESPERANDO, BAT_RESULTADO };
+static PasoBat pasoBat = BAT_VIENDO;
+static uint8_t candidato = PERFIL_LFP16;
+static uint8_t seqPerfil = 0;
+static uint32_t tPerfil = 0;
+static const char *resultadoBat = "";
+constexpr uint16_t MS_ESPERA_RESPUESTA = 2000;   // sin eco en 2 s: SIN RESPUESTA
+constexpr uint16_t MS_ASENTAR = 500;             // tras el eco, 0.5 s para que la foto traiga el perfil nuevo
 
 static char fila[17];
 
@@ -80,7 +99,9 @@ static void dibujar() {
       snprintf(fila, sizeof fila, "%u.%uA  %uW  CASA", iAc / 10, iAc % 10, pot);         lcd_fila(1, fila);
       break;
     case V_BATERIA:
-      snprintf(fila, sizeof fila, "BAT %sV SOC--%%", bat); lcd_fila(0, fila);   // SOC: del BMS (pendiente)
+      // Tecnología activa (del CRÍTICO); el SOC vendrá del BMS (pendiente).
+      snprintf(fila, sizeof fila, "BAT %sV %s", bat, hayFoto ? perfil_nombre(foto.perfilBateria) : "-----");
+      lcd_fila(0, fila);
       // Renglón 2: estado de la batería que decide el CRÍTICO (config_bateria.h).
       // En SimulIDE no llega (sin enlace): se deja el dato de muestra.
       if (!hayFoto || foto.estadoBateria == 0) lcd_fila(1, "CARGA  +8.0A");   // muestra
@@ -107,9 +128,24 @@ static void dibujar() {
       break;
     case V_SETUP:
       snprintf(fila, sizeof fila, "SETUP %u/%u", itemSetup + 1, ITEMS_SETUP); lcd_fila(0, fila);
-      if (itemSetup == 0) {
+      if (itemSetup == I_FRECUENCIA) {
         snprintf(fila, sizeof fila, "Frec %sHz script", frec);
-      } else if (itemSetup == 1) {
+      } else if (itemSetup == I_BATERIA) {
+        if (pasoBat == BAT_ESCOGIENDO) {
+          // Renglón 1: candidato y cómo confirmar; renglón 2: sus voltajes clave.
+          const LimitesBateria &l = LIMITES_BATERIA[candidato];
+          snprintf(fila, sizeof fila, "> %s  OK=3s", perfil_nombre(candidato)); lcd_fila(0, fila);
+          snprintf(fila, sizeof fila, "C%u.%u A%u.%u", l.corte / 10, l.corte % 10, l.alto / 10, l.alto % 10);
+        } else if (pasoBat == BAT_ESPERANDO) {
+          snprintf(fila, sizeof fila, "Bat: %s", perfil_nombre(candidato)); lcd_fila(0, fila);
+          snprintf(fila, sizeof fila, "APLICANDO...");
+        } else if (pasoBat == BAT_RESULTADO) {
+          snprintf(fila, sizeof fila, "Bat: %s", perfil_nombre(candidato)); lcd_fila(0, fila);
+          snprintf(fila, sizeof fila, "%s", resultadoBat);
+        } else {
+          snprintf(fila, sizeof fila, "Bat: %s  OK", hayFoto ? perfil_nombre(foto.perfilBateria) : "-----");
+        }
+      } else if (itemSetup == I_LUZ) {
         snprintf(fila, sizeof fila, "Luz fondo: %s", luzEncendida ? "SI" : "NO");
       } else {
         snprintf(fila, sizeof fila, "A7 = %4u cuent", botonera_adc());
@@ -131,21 +167,38 @@ static void reporteEvento(const __FlashStringHelper *nombre) {
 static void atender(EventoBoton e) {
   switch (e) {
     case EV_ATRAS:  reporteEvento(F("B1 ATRAS"));
-      if (vista == V_SETUP || vista == V_FALLA) vista = V_INVERSOR;
+      if (vista == V_SETUP && pasoBat == BAT_ESCOGIENDO) { pasoBat = BAT_VIENDO; Serial.println(F("Cambio de bateria CANCELADO")); }
+      else if (vista == V_SETUP || vista == V_FALLA) { vista = V_INVERSOR; pasoBat = BAT_VIENDO; }
       break;
     case EV_ARRIBA: reporteEvento(F("B2 ARRIBA"));
-      if (vista == V_SETUP) itemSetup = (itemSetup + ITEMS_SETUP - 1) % ITEMS_SETUP;
+      if (vista == V_SETUP && pasoBat == BAT_ESCOGIENDO) candidato = (candidato + PERFILES - 1) % PERFILES;
+      else if (vista == V_SETUP) { itemSetup = (itemSetup + ITEMS_SETUP - 1) % ITEMS_SETUP; pasoBat = BAT_VIENDO; }
       else if (vista < VISTAS_NORMALES) vista = (Vista)((vista + VISTAS_NORMALES - 1) % VISTAS_NORMALES);
       break;
     case EV_ABAJO:  reporteEvento(F("B3 ABAJO"));
-      if (vista == V_SETUP) itemSetup = (itemSetup + 1) % ITEMS_SETUP;
+      if (vista == V_SETUP && pasoBat == BAT_ESCOGIENDO) candidato = (candidato + 1) % PERFILES;
+      else if (vista == V_SETUP) { itemSetup = (itemSetup + 1) % ITEMS_SETUP; pasoBat = BAT_VIENDO; }
       else if (vista < VISTAS_NORMALES) vista = (Vista)((vista + 1) % VISTAS_NORMALES);
       break;
     case EV_OK:     reporteEvento(F("B4 OK"));
-      if (vista == V_SETUP && itemSetup == 1) { luzEncendida = !luzEncendida; lcd_luz(luzEncendida); }
+      if (vista == V_SETUP && itemSetup == I_LUZ) { luzEncendida = !luzEncendida; lcd_luz(luzEncendida); }
+      else if (vista == V_SETUP && itemSetup == I_BATERIA && pasoBat != BAT_ESCOGIENDO && pasoBat != BAT_ESPERANDO) {
+        FotoCritico f;
+        if (enlace_aux_foto(&f)) candidato = f.perfilBateria;   // empieza en la activa
+        pasoBat = BAT_ESCOGIENDO;
+      }
       break;
-    case EV_SETUP:  reporteEvento(F("B4 sostenido 3 s -> SETUP"));
-      vista = V_SETUP; itemSetup = 0;
+    case EV_SETUP:
+      if (vista == V_SETUP && itemSetup == I_BATERIA && pasoBat == BAT_ESCOGIENDO) {
+        reporteEvento(F("B4 sostenido 3 s -> CONFIRMA bateria"));
+        seqPerfil = enlace_aux_pedir_perfil(candidato);
+        tPerfil = millis();
+        pasoBat = BAT_ESPERANDO;
+        Serial.print(F("Pidiendo al CRITICO bateria ")); Serial.println(perfil_nombre(candidato));
+        break;
+      }
+      reporteEvento(F("B4 sostenido 3 s -> SETUP"));
+      vista = V_SETUP; itemSetup = 0; pasoBat = BAT_VIENDO;
       break;
     case EV_FALLA:  reporteEvento(F("FALLA: A7 en corto a GND"));
       vista = V_FALLA;
@@ -175,8 +228,25 @@ void setup() {
   dibujar();
 }
 
+// Espera la respuesta del CRÍTICO al cambio de tecnología.
+static void vigilarCambioBateria() {
+  if (pasoBat != BAT_ESPERANDO) return;
+  FotoCritico f;
+  const bool hay = enlace_aux_foto(&f);
+  if (hay && f.eco == seqPerfil && millis() - tPerfil >= MS_ASENTAR) {
+    if (f.perfilBateria == candidato && !f.perfilRechazado) resultadoBat = "ACEPTADO";
+    else                                                    resultadoBat = "RECHAZADO V/BAT";
+  } else if (millis() - tPerfil >= MS_ESPERA_RESPUESTA) {
+    resultadoBat = "SIN RESPUESTA";
+  } else return;
+  pasoBat = BAT_RESULTADO;
+  Serial.print(F("Cambio de bateria: ")); Serial.println(resultadoBat);
+  dibujar();
+}
+
 void loop() {
   atender(botonera_evento());
+  vigilarCambioBateria();
   if (enlace_aux_atender()) {
     Serial.print(F(">>> [")); Serial.print(millis()); Serial.print(F(" ms] "));
     Serial.println(enlace_aux_texto(enlace_aux_estado()));

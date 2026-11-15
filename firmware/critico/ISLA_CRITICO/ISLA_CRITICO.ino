@@ -20,9 +20,12 @@
  *      6) cada 10 s imprime los ciclos generados y la lectura de P9;
  *      7) mide la batería en A3 (DC_FB_A3) cada 50 ms y la manda en la foto
  *         I2C (protocolo v2); cada 2 s la imprime por serie;
- *      8) límites de la batería (config_bateria.h): con corte bajo o alto
+ *      8) límites de la batería (perfiles_bateria.h; la tecnología se escoge
+ *         en el SETUP del panel y se guarda en EEPROM): con corte bajo o alto
  *         detiene la SPWM (D12 = 0 primero) y la vuelve a arrancar, desde
- *         amplitud 0, cuando la batería pasa la reconexión.
+ *         amplitud 0, cuando la batería pasa la reconexión;
+ *      9) cambio de tecnología: comando PERFIL del AUX por I2C, o "P0" (plomo),
+ *         "P1" (LFP15), "P2" (LFP16) por el Monitor Serie.
  *
  *    D12 SE QUEDA EN 0 TODO EL TIEMPO: las señales se ven en los pines del Nano
  *    pero la compuerta AND (74HC08) de la tarjeta de control no las deja pasar
@@ -105,14 +108,34 @@ static uint16_t amplitudRampa = 0;     // rampa de banco; vuelve a 0 en cada arr
 static uint32_t tVentana = 0;
 static uint16_t cVentana = 0;
 
+static bool perfilRechazado = false;
+
+static void reporteLimites();
+// Cambio de tecnología: detiene la SPWM, revisa, guarda y reevalúa desde cero.
+// La SPWM vuelve sola (desde amplitud 0) si la batería cabe en los límites nuevos.
+static void aplicarPerfil(uint8_t p) {
+  Serial.print(F(">>> [")); Serial.print(millis()); Serial.print(F(" ms] Cambio de bateria a "));
+  Serial.println(perfil_nombre(p));
+  if (spwm_activo()) { spwm_detener(); Serial.println(F("SPWM DETENIDA para cambiar la tecnologia.")); }
+  const RechazoPerfil r = bateria_cambiar_perfil(p);
+  perfilRechazado = (r != PERFIL_OK);
+  if (r == PERFIL_INVALIDO) Serial.println(F("RECHAZADO: tecnologia invalida"));
+  else if (r == PERFIL_NO_CABE) Serial.println(F("RECHAZADO: el voltaje medido no cabe en esa tecnologia (bateria equivocada?)"));
+  else Serial.println(F("ACEPTADO y guardado en EEPROM."));
+  reporteLimites();
+  reporteBateria();
+}
+
 static void reporteLimites() {
-  Serial.print(F("Bateria: ")); Serial.println(F(BAT_NOMBRE));
-  Serial.print(F("  aviso < ")); imprimirFijo(BAT_AVISO_DV, 10);
-  Serial.print(F(" V | corte < ")); imprimirFijo(BAT_CORTE_DV, 10);
-  Serial.print(F(" V (10 s) | emergencia < ")); imprimirFijo(BAT_EMERGENCIA_DV, 10);
-  Serial.print(F(" V (0.5 s)\n  reconexion >= ")); imprimirFijo(BAT_RECONEXION_DV, 10);
-  Serial.print(F(" V (30 s) | corte alto > ")); imprimirFijo(BAT_ALTO_CORTE_DV, 10);
-  Serial.print(F(" V (2 s), vuelve <= ")); imprimirFijo(BAT_ALTO_RECONEXION_DV, 10); Serial.println(F(" V"));
+  const LimitesBateria &l = bateria_limites();
+  Serial.print(F("Bateria: ")); Serial.print(perfil_nombre(bateria_perfil()));
+  Serial.println(F("  (se cambia en el SETUP del panel, o por serie: P0 plomo, P1 LFP15, P2 LFP16)"));
+  Serial.print(F("  aviso < ")); imprimirFijo(l.aviso, 10);
+  Serial.print(F(" V | corte < ")); imprimirFijo(l.corte, 10);
+  Serial.print(F(" V (10 s) | emergencia < ")); imprimirFijo(l.emergencia, 10);
+  Serial.print(F(" V (0.5 s)\n  reconexion >= ")); imprimirFijo(l.reconexion, 10);
+  Serial.print(F(" V (30 s) | corte alto > ")); imprimirFijo(l.alto, 10);
+  Serial.print(F(" V (2 s), vuelve <= ")); imprimirFijo(l.altoVuelta, 10); Serial.println(F(" V"));
 }
 static EstadoP9 p9Actual = P9_AMBOS_ABIERTOS;   // lo último leído, para el enlace I2C
 static uint16_t adcP9Actual = 0;
@@ -140,6 +163,7 @@ void setup() {
     return;
   }
   // 4) Batería: se lee ANTES de arrancar (sin esperar los 50 ms).
+  bateria_iniciar();                  // tecnología guardada en la EEPROM
   bateria_leer_ahora();
   reporteLimites();
   reporteBateria();
@@ -161,7 +185,19 @@ void loop() {
     Serial.println(F("SPWM DETENIDA. Reinicie el Nano para volver a leer P9."));
   }
   bateria_atender();                  // A3 cada 50 ms (también con la SPWM detenida)
-  enlace_atender(p9Actual, adcP9Actual, detenidoPorP9, bateria_dv(), bateria_estado());   // I2C: comandos y foto nueva
+  enlace_atender(p9Actual, adcP9Actual, detenidoPorP9, bateria_dv(), bateria_estado(),
+                 bateria_perfil(), perfilRechazado);   // I2C: comandos y foto nueva
+  // Cambio de tecnología de batería: del panel (I2C) o por serie ("P0".."P2").
+  uint8_t perfilNuevo;
+  bool pedido = enlace_pedido_perfil(&perfilNuevo);
+  if (!pedido && Serial.available() >= 2 && Serial.peek() == 'P') {
+    Serial.read();
+    perfilNuevo = (uint8_t)(Serial.read() - '0');
+    pedido = true;
+  } else if (!pedido && Serial.available() && Serial.peek() != 'P') {
+    Serial.read();                    // basura (fin de línea, etc.)
+  }
+  if (pedido) aplicarPerfil(perfilNuevo);
   static EstadoBateria batAnterior = bateria_estado();
   if (bateria_estado() != batAnterior) {
     batAnterior = bateria_estado();

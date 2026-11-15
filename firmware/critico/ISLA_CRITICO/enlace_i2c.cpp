@@ -19,6 +19,8 @@ static uint8_t  secuencia = 0, eco = 0;
 static uint16_t ok = 0, malos = 0;
 static uint32_t tUltimoPing = 0;
 static bool     auxPresente = false, auxCambio = false;
+static bool     hayPerfil = false;
+static uint8_t  perfilPedido = 0;
 
 // ---- Interrupciones de I2C: sólo copian ----
 static void alPedir() { Wire.write((const uint8_t *)tx, ENLACE_LARGO_ESTADO); }
@@ -39,7 +41,8 @@ void enlace_iniciar() {
   Wire.onReceive(alRecibir);
 }
 
-void enlace_atender(uint8_t estadoP9, uint16_t adcP9, bool detenidoPorP9, uint16_t bateriaDv, uint8_t estadoBateria) {
+void enlace_atender(uint8_t estadoP9, uint16_t adcP9, bool detenidoPorP9, uint16_t bateriaDv, uint8_t estadoBateria,
+                    uint8_t perfilBateria, bool perfilRechazado) {
   // 1) Comando pendiente: se valida aquí, no en la interrupción.
   if (hayComando) {
     uint8_t c[ENLACE_LARGO_COMANDO];
@@ -47,7 +50,10 @@ void enlace_atender(uint8_t estadoP9, uint16_t adcP9, bool detenidoPorP9, uint16
       for (uint8_t i = 0; i < ENLACE_LARGO_COMANDO; i++) c[i] = rx[i];
       hayComando = false;
     }
-    if (enlace_crc8(c, 3) == c[3] && c[0] == ENLACE_CMD_PING) {
+    if (enlace_crc8(c, 3) == c[3] && (c[0] == ENLACE_CMD_PING || c[0] == ENLACE_CMD_PERFIL)) {
+      // Sólo se acepta un comando de perfil NUEVO (secuencia distinta): un
+      // reenvío del mismo no vuelve a escribir la EEPROM.
+      if (c[0] == ENLACE_CMD_PERFIL && c[1] != eco) { perfilPedido = c[2]; hayPerfil = true; }
       eco = c[1]; ok++; tUltimoPing = millis();
       if (!auxPresente) { auxPresente = true; auxCambio = true; }
     }
@@ -70,7 +76,8 @@ void enlace_atender(uint8_t estadoP9, uint16_t adcP9, bool detenidoPorP9, uint16
   uint8_t f[ENLACE_LARGO_ESTADO];
   const uint16_t ciclos = spwm_ciclos(), amax = spwm_amplitud_max();
   f[0] = ENLACE_VERSION;  f[1] = ++secuencia;  f[2] = eco;
-  f[3] = (spwm_activo() ? 1 : 0) | (detenidoPorP9 ? 2 : 0) | (spwm_frecuencia_hz() == LINEA_50_HZ ? 4 : 0);
+  f[3] = (spwm_activo() ? 1 : 0) | (detenidoPorP9 ? 2 : 0) | (spwm_frecuencia_hz() == LINEA_50_HZ ? 4 : 0)
+         | ((perfilBateria & 3) << 4) | (perfilRechazado ? 0x40 : 0);
   f[4] = estadoP9;  f[5] = spwm_dt_cuentas();
   f[6] = ciclos & 0xFF;  f[7] = ciclos >> 8;
   f[8] = adcP9 & 0xFF;   f[9] = adcP9 >> 8;
@@ -87,4 +94,8 @@ uint16_t enlace_comandos_ok()    { return ok; }
 uint16_t enlace_comandos_malos() { return malos; }
 uint8_t  enlace_ultimo_seq()     { return eco; }
 bool enlace_aux_presente() { return auxPresente; }
+bool enlace_pedido_perfil(uint8_t *p) {
+  if (!hayPerfil) return false;
+  hayPerfil = false; *p = perfilPedido; return true;
+}
 bool enlace_aux_cambio() { const bool c = auxCambio; auxCambio = false; return c; }

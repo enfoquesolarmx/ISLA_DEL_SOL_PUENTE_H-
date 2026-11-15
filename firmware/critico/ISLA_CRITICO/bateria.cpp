@@ -6,6 +6,11 @@
 #include <Arduino.h>
 #include "bateria.h"
 #include "config_bateria.h"
+#include "enlace_protocolo.h"     // enlace_crc8()
+#include <avr/eeprom.h>
+
+static uint8_t perfil = PERFIL_FABRICA;
+static const LimitesBateria *lim = &LIMITES_BATERIA[PERFIL_FABRICA];
 
 static uint16_t cuentas = 0;
 static EstadoBateria estado = BAT_NORMAL;
@@ -30,19 +35,19 @@ static void evaluar() {
     case BAT_FUERA_DE_RANGO:
       return;                                       // sólo con reinicio
     case BAT_CORTE_BAJO:
-      if (sostenida(cVuelta, v >= BAT_RECONEXION_DV, BAT_RETARDO_RECONEXION_MS)) estado = BAT_NORMAL;
+      if (sostenida(cVuelta, v >= lim->reconexion, BAT_RETARDO_RECONEXION_MS)) estado = BAT_NORMAL;
       return;
     case BAT_CORTE_ALTO:
-      if (sostenida(cVuelta, v <= BAT_ALTO_RECONEXION_DV, BAT_RETARDO_RECONEXION_MS)) estado = BAT_NORMAL;
+      if (sostenida(cVuelta, v <= lim->altoVuelta, BAT_RETARDO_RECONEXION_MS)) estado = BAT_NORMAL;
       return;
     default: {                                      // NORMAL o AVISO: vigilar
-      const bool emergencia = sostenida(cEmergencia, v < BAT_EMERGENCIA_DV, BAT_RETARDO_EMERGENCIA_MS);
-      const bool bajo       = sostenida(cBajo,       v < BAT_CORTE_DV,      BAT_RETARDO_CORTE_MS);
-      const bool alto       = sostenida(cAlto,       v > BAT_ALTO_CORTE_DV, BAT_RETARDO_ALTO_MS);
+      const bool emergencia = sostenida(cEmergencia, v < lim->emergencia, BAT_RETARDO_EMERGENCIA_MS);
+      const bool bajo       = sostenida(cBajo,       v < lim->corte,      BAT_RETARDO_CORTE_MS);
+      const bool alto       = sostenida(cAlto,       v > lim->alto, BAT_RETARDO_ALTO_MS);
       cVuelta.activo = false;
       if (emergencia || bajo) estado = BAT_CORTE_BAJO;
       else if (alto)          estado = BAT_CORTE_ALTO;
-      else                    estado = (v < BAT_AVISO_DV) ? BAT_AVISO : BAT_NORMAL;
+      else                    estado = (v < lim->aviso) ? BAT_AVISO : BAT_NORMAL;
       if (estado == BAT_CORTE_BAJO || estado == BAT_CORTE_ALTO)
         cEmergencia.activo = cBajo.activo = cAlto.activo = false;
     }
@@ -61,9 +66,9 @@ void bateria_leer_ahora() {
   // se arranca en corte (y el bajo necesitará la reconexión completa).
   const uint16_t v = bateria_cuentas_a_dv(cuentas);
   if (cuentas >= BAT_CUENTAS_R4_ABIERTA) estado = BAT_FUERA_DE_RANGO;
-  else if (v < BAT_CORTE_DV)             estado = BAT_CORTE_BAJO;
-  else if (v > BAT_ALTO_CORTE_DV)        estado = BAT_CORTE_ALTO;
-  else                                   estado = (v < BAT_AVISO_DV) ? BAT_AVISO : BAT_NORMAL;
+  else if (v < lim->corte)             estado = BAT_CORTE_BAJO;
+  else if (v > lim->alto)        estado = BAT_CORTE_ALTO;
+  else                                   estado = (v < lim->aviso) ? BAT_AVISO : BAT_NORMAL;
 }
 
 void bateria_atender() {
@@ -76,6 +81,35 @@ void bateria_atender() {
 
 EstadoBateria bateria_estado()   { return estado; }
 bool bateria_permite_trabajar()  { return estado == BAT_NORMAL || estado == BAT_AVISO; }
+void bateria_iniciar() {
+  uint8_t e[3];
+  eeprom_read_block(e, (const void *)BAT_EEPROM_DIR, 3);
+  if (e[0] == 'B' && e[1] < PERFILES && enlace_crc8(e, 2) == e[2]) perfil = e[1];
+  else perfil = PERFIL_FABRICA;            // EEPROM vacía o dañada
+  lim = &LIMITES_BATERIA[perfil];
+}
+
+uint8_t bateria_perfil() { return perfil; }
+const LimitesBateria &bateria_limites() { return *lim; }
+
+RechazoPerfil bateria_cambiar_perfil(uint8_t p) {
+  if (p >= PERFILES) return PERFIL_INVALIDO;
+  leer();
+  const uint16_t v = bateria_cuentas_a_dv(cuentas);
+  const LimitesBateria &n = LIMITES_BATERIA[p];
+  if (v < n.emergencia || v > n.alto) return PERFIL_NO_CABE;
+  perfil = p;
+  lim = &LIMITES_BATERIA[perfil];
+  uint8_t e[3] = { 'B', perfil, 0 };
+  e[2] = enlace_crc8(e, 2);
+  eeprom_update_block(e, (void *)BAT_EEPROM_DIR, 3);   // sólo escribe lo que cambia
+  cEmergencia.activo = cBajo.activo = cAlto.activo = cVuelta.activo = false;
+  const bool fuera = (estado == BAT_FUERA_DE_RANGO);
+  bateria_leer_ahora();                    // estado nuevo desde cero
+  if (fuera) estado = BAT_FUERA_DE_RANGO;  // la falla del divisor sólo se borra con reinicio
+  return PERFIL_OK;
+}
+
 uint16_t bateria_cuentas()       { return cuentas; }
 uint16_t bateria_dv()            { return bateria_cuentas_a_dv(cuentas); }
 bool     bateria_fuera_de_rango() { return estado == BAT_FUERA_DE_RANGO; }

@@ -30,6 +30,9 @@ struct FotoCritico {
   uint16_t bateriaDv;      // batería en décimas de V (protocolo v2)
   uint8_t  estadoBateria;  // 0 normal, 1 aviso, 2 corte bajo, 3 corte alto, 4 fuera de rango
   uint8_t  seq;
+  uint8_t  eco;            // secuencia del último comando que el CRÍTICO aceptó
+  uint8_t  perfilBateria;  // PerfilBateria activo en el CRÍTICO
+  bool     perfilRechazado;// el último cambio de tecnología fue rechazado
 };
 
 void enlace_aux_iniciar();
@@ -38,6 +41,10 @@ bool enlace_aux_atender();
 EstadoEnlace enlace_aux_estado();
 // true y copia la foto si hay una válida de menos de 300 ms.
 bool enlace_aux_foto(FotoCritico *f);
+// Manda (en el siguiente turno, en lugar del PING) el comando para cambiar la
+// tecnología de batería. Devuelve la secuencia con la que sale, para
+// reconocer la respuesta en FotoCritico::eco.
+uint8_t enlace_aux_pedir_perfil(uint8_t perfil);
 const __FlashStringHelper *enlace_aux_texto(EstadoEnlace e);
 uint32_t enlace_aux_tramas_ok();
 uint32_t enlace_aux_tramas_total();

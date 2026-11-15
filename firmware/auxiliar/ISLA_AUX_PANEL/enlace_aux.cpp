@@ -15,6 +15,8 @@ static uint8_t  seq = 0, seqCritico = 0, fallas = 0;
 static uint8_t  f[ENLACE_LARGO_ESTADO];
 static uint32_t tFoto = 0, tSeqCambio = 0, ok = 0, total = 0;
 static EstadoEnlace estado = ENLACE_NUNCA;
+static bool    hayPerfil = false;
+static uint8_t perfilAEnviar = 0;
 
 static void iniciarWire() {
   Wire.begin();
@@ -45,6 +47,7 @@ bool enlace_aux_atender() {
   t = millis();
   total++;
   uint8_t c[ENLACE_LARGO_COMANDO] = { ENLACE_CMD_PING, ++seq, 0, 0 };
+  if (hayPerfil) { c[0] = ENLACE_CMD_PERFIL; c[2] = perfilAEnviar; hayPerfil = false; }
   c[3] = enlace_crc8(c, 3);
   Wire.beginTransmission(ENLACE_DIRECCION_CRITICO);
   Wire.write(c, ENLACE_LARGO_COMANDO);
@@ -73,6 +76,11 @@ bool enlace_aux_atender() {
 
 EstadoEnlace enlace_aux_estado() { return estado; }
 
+uint8_t enlace_aux_pedir_perfil(uint8_t perfil) {
+  perfilAEnviar = perfil; hayPerfil = true;
+  return (uint8_t)(seq + 1);              // sale en el siguiente turno
+}
+
 bool enlace_aux_foto(FotoCritico *p) {
   if (estado == ENLACE_NUNCA || millis() - tFoto > MS_FOTO_VIEJA) return false;
   p->spwmActiva    = f[3] & 1;
@@ -86,6 +94,9 @@ bool enlace_aux_foto(FotoCritico *p) {
   p->bateriaDv     = f[12] | (f[13] << 8);
   p->estadoBateria = f[14];
   p->seq           = f[1];
+  p->eco           = f[2];
+  p->perfilBateria = (f[3] >> 4) & 3;
+  p->perfilRechazado = f[3] & 0x40;
   return true;
 }
 

@@ -58,7 +58,18 @@ La pantalla va en su propio bus por software (D4/D5). A4/A5 son sólo del enlace
   - Sin enlace dice `SIN ENLACE`.
 - **SETUP:** se entra con B4 sostenido 3 s.
   - B2 y B3 mueven entre opciones, B4 cambia el valor y B1 sale.
-  - Opciones: la frecuencia (sólo se muestra; se cambia en `config_portadora.h` del CRÍTICO), la luz de fondo (sólo PCF8574) y la lectura cruda de A7.
+  - Opciones:
+    1. la frecuencia (sólo se muestra; se cambia en `config_portadora.h` del CRÍTICO);
+    2. la **tecnología de batería** (PLOMO, LFP15, LFP16);
+    3. la luz de fondo (sólo PCF8574);
+    4. la lectura cruda de A7.
+- **Cambio de tecnología de batería (SETUP 2/4):**
+  - B4 para escoger; B2 y B3 recorren PLOMO / LFP15 / LFP16. Se ven el corte y el alto de cada una (`C46.4 A58.4`).
+  - B4 sostenido 3 s confirma; B1 cancela.
+  - El AUX sólo **propone** por I2C (comando `0x02`). El CRÍTICO detiene la SPWM, revisa que el voltaje medido quepa en esa tecnología, la guarda en su EEPROM y vuelve a arrancar si la batería está en límites.
+  - La pantalla muestra `ACEPTADO`, `RECHAZADO V/BAT` (el voltaje no cabe: ¿batería equivocada?) o `SIN RESPUESTA` (sin enlace; en SimulIDE siempre sale así).
+  - En el banco también se puede cambiar por el Monitor Serie del CRÍTICO: `P0` plomo, `P1` LFP15, `P2` LFP16.
+  - Los límites de cada tecnología, con sus fuentes, están en `perfiles_bateria.h` (idéntico en los dos sketches).
 - **A7 por debajo de 102 cuentas** (corto a GND): pantalla FALLA BOTONERA.
 - **Monitor Serie a 115200:**
   - qué pantalla se escogió y si contestó ACK;
