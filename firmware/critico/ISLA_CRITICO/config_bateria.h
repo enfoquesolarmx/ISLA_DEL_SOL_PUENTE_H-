@@ -8,7 +8,8 @@
  *  desde el panel puede matar una batería).
  *
  *    QUIMICA_BATERIA = BAT_PLOMO_ACIDO  ->  24 celdas de 2 V (48 V nominal)
- *    QUIMICA_BATERIA = BAT_LIFEPO4      ->  16 celdas de 3.2 V (51.2 V nominal)
+ *    QUIMICA_BATERIA = BAT_LIFEPO4      ->  16 o 17 celdas de 3.2 V (CELDAS_LIFEPO4):
+ *                                          51.2 V o 54.4 V nominal
  *
  *  CÓMO SE USAN LOS LÍMITES (bateria.cpp)
  *    AVISO       : por debajo, aviso en el panel. El inversor sigue.
@@ -63,18 +64,40 @@ constexpr uint16_t BAT_ALTO_RECONEXION_DV = 640; // 2.67 V/celda
 #define BAT_NOMBRE "Plomo-acido 24 celdas"
 
 #elif QUIMICA_BATERIA == BAT_LIFEPO4
-// ---------- LiFePO4, 16 celdas ----------
-// PROVISIONAL: sale del rango de diseño del proyecto (40–58.4 V = 2.5–3.65
-// V/celda, DC-001). Antes de usarlo en campo se revisa contra la hoja del
-// fabricante de la batería y los cortes de SU BMS: el inversor debe cortar
-// ANTES que el BMS, nunca después.
-constexpr uint16_t BAT_AVISO_DV        = 480;  // 3.00 V/celda
-constexpr uint16_t BAT_CORTE_DV        = 448;  // 2.80 V/celda
-constexpr uint16_t BAT_EMERGENCIA_DV   = 400;  // 2.50 V/celda (mínimo absoluto)
-constexpr uint16_t BAT_RECONEXION_DV   = 512;  // 3.20 V/celda
-constexpr uint16_t BAT_ALTO_CORTE_DV   = 592;  // 3.70 V/celda (arriba de 58.4 V de carga completa)
-constexpr uint16_t BAT_ALTO_RECONEXION_DV = 576; // 3.60 V/celda
-#define BAT_NOMBRE "LiFePO4 16 celdas (PROVISIONAL)"
+// ---------- LiFePO4, 16 o 17 celdas en serie ----------
+#define CELDAS_LIFEPO4 16      // 16 (51.2 V nominal) o 17 (54.4 V nominal)
+static_assert(CELDAS_LIFEPO4 == 16 || CELDAS_LIFEPO4 == 17, "LiFePO4: 16 o 17 celdas");
+// Fuentes (por celda):
+//  - Victron, Lithium Battery Smart 12.8 V (hoja de datos) y smallBMS:
+//    pre-alarma < 3.1 V, desconexión de carga < 2.8 V, paro de carga > 3.75 V.
+//  - Hojas de celda EVE (LF280K / LF105): carga hasta 3.65 V, descarga hasta 2.5 V.
+// El inversor ve el PROMEDIO del paquete; el BMS ve cada celda. Una celda
+// desbalanceada llega a 2.8 V antes que el promedio, por eso el corte del
+// inversor va 0.1 V arriba del corte del BMS: el inversor corta PRIMERO.
+// Antes de usarlo en campo, revisar contra la hoja de TU batería y TU BMS.
+constexpr uint16_t BAT_MV_AVISO      = 3100;   // pre-alarma de Victron
+constexpr uint16_t BAT_MV_CORTE      = 2900;   // 0.1 V arriba del corte del BMS
+constexpr uint16_t BAT_MV_EMERGENCIA = 2800;   // corte de carga del BMS (Victron)
+constexpr uint16_t BAT_MV_RECONEXION = 3200;   // nominal: ya no es rebote
+constexpr uint16_t BAT_MV_ALTO       = 3750;   // paro de carga de Victron (> 3.65 de EVE)
+constexpr uint16_t BAT_MV_ALTO_VUELTA = 3600;
+// mV por celda × celdas / 100 = décimas de V del paquete
+constexpr uint16_t BAT_AVISO_DV        = (uint32_t)BAT_MV_AVISO      * CELDAS_LIFEPO4 / 100;
+constexpr uint16_t BAT_CORTE_DV        = (uint32_t)BAT_MV_CORTE      * CELDAS_LIFEPO4 / 100;
+constexpr uint16_t BAT_EMERGENCIA_DV   = (uint32_t)BAT_MV_EMERGENCIA * CELDAS_LIFEPO4 / 100;
+constexpr uint16_t BAT_RECONEXION_DV   = (uint32_t)BAT_MV_RECONEXION * CELDAS_LIFEPO4 / 100;
+constexpr uint16_t BAT_ALTO_CORTE_DV   = (uint32_t)BAT_MV_ALTO       * CELDAS_LIFEPO4 / 100;
+constexpr uint16_t BAT_ALTO_RECONEXION_DV = (uint32_t)BAT_MV_ALTO_VUELTA * CELDAS_LIFEPO4 / 100;
+//   16S: aviso 49.6 | corte 46.4 | emergencia 44.8 | reconexión 51.2 | alto 60.0 | vuelve 57.6
+//   17S: aviso 52.7 | corte 49.3 | emergencia 47.6 | reconexión 54.4 | alto 63.7 | vuelve 61.2
+// ⚠ HARDWARE con 17S: cargada llega a 62.05 V (17 × 3.65). El TVS D1 SMBJ58A
+//   (58 V de trabajo) conduciría: con 17S va el SMBJ64A, igual que con plomo
+//   en ecualización (hardware/control §2, DC-003).
+#if CELDAS_LIFEPO4 == 16
+#define BAT_NOMBRE "LiFePO4 16S"
+#else
+#define BAT_NOMBRE "LiFePO4 17S (D1 = SMBJ64A)"
+#endif
 
 #else
 #error "QUIMICA_BATERIA debe ser BAT_PLOMO_ACIDO o BAT_LIFEPO4"
