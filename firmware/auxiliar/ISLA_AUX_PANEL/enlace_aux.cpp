@@ -84,6 +84,7 @@ bool enlace_aux_foto(FotoCritico *p) {
   p->adcP9         = f[8] | (f[9] << 8);
   p->amplitudMax   = f[10] | (f[11] << 8);
   p->bateriaDv     = f[12] | (f[13] << 8);
+  p->estadoBateria = f[14];
   p->seq           = f[1];
   return true;
 }

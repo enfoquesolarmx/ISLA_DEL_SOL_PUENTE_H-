@@ -29,10 +29,13 @@
  *  FILTRO: promedio de 8 lecturas cada 50 ms. C1 ya filtra el rizo de 120 Hz
  *  (τ ≈ 10 ms); el promedio quita el ruido de conmutación de la SPWM.
  *
- *  FALLA SEGURA: si R4 se abre, A3 sube a ~5 V: la lectura sale ≥ 72 V,
- *  muy por arriba de cualquier batería de 48 V. Se reporta como FUERA DE
- *  RANGO. (Qué hacer con ella lo decide el módulo de protecciones, pendiente;
- *  este módulo sólo mide y reporta.)
+ *  LÍMITES DE CORTE: config_bateria.h (química y voltajes, con fuentes).
+ *  bateria_estado() dice si el inversor puede trabajar; el .ino detiene o
+ *  rearranca la SPWM según eso.
+ *
+ *  FALLA SEGURA: si R4 se abre, A3 sube a ~5 V: la lectura sale ≥ 71.4 V,
+ *  muy por arriba de cualquier batería de 48 V -> FUERA DE RANGO: se corta y
+ *  NO se reconecta sola (hay que revisar la tarjeta y reiniciar).
  *
  *  RECURSOS: A3 con analogRead() (provisional, como P9: cuando exista el
  *  ADC disparado por la portadora, la lectura se moverá ahí).
@@ -53,6 +56,21 @@ uint16_t bateria_cuentas_a_dv(uint16_t cuentas);
 
 // Llamar seguido desde loop(); cada BAT_PERIODO_MS promedia BAT_LECTURAS.
 void bateria_atender();
+
+// Lee ya (sin esperar el periodo). Llamar en setup() antes de arrancar.
+void bateria_leer_ahora();
+
+class __FlashStringHelper;
+enum EstadoBateria : uint8_t {
+  BAT_NORMAL,         // trabajar
+  BAT_AVISO,          // trabajar, avisar en el panel
+  BAT_CORTE_BAJO,     // NO trabajar: espera la reconexión
+  BAT_CORTE_ALTO,     // NO trabajar: espera bajar del alto
+  BAT_FUERA_DE_RANGO  // NO trabajar: falla del divisor, sólo con reinicio
+};
+EstadoBateria bateria_estado();
+bool bateria_permite_trabajar();   // NORMAL o AVISO
+const __FlashStringHelper *bateria_texto(EstadoBateria e);
 
 uint16_t bateria_dv();         // último voltaje en décimas de V (0 hasta la 1a lectura)
 uint16_t bateria_cuentas();    // último promedio crudo

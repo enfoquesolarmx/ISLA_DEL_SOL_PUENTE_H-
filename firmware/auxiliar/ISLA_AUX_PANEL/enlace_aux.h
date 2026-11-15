@@ -28,6 +28,7 @@ struct FotoCritico {
   uint16_t adcP9;
   uint16_t amplitudMax;
   uint16_t bateriaDv;      // batería en décimas de V (protocolo v2)
+  uint8_t  estadoBateria;  // 0 normal, 1 aviso, 2 corte bajo, 3 corte alto, 4 fuera de rango
   uint8_t  seq;
 };
 

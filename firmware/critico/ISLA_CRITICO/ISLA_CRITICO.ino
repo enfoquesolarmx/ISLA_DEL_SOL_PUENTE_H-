@@ -19,8 +19,10 @@
  *         SPWM y no vuelve a arrancar hasta reiniciar el Nano;
  *      6) cada 10 s imprime los ciclos generados y la lectura de P9;
  *      7) mide la batería en A3 (DC_FB_A3) cada 50 ms y la manda en la foto
- *         I2C (protocolo v2); cada 2 s la imprime por serie. Sólo mide:
- *         todavía NO protege por bajo o sobre voltaje.
+ *         I2C (protocolo v2); cada 2 s la imprime por serie;
+ *      8) límites de la batería (config_bateria.h): con corte bajo o alto
+ *         detiene la SPWM (D12 = 0 primero) y la vuelve a arrancar, desde
+ *         amplitud 0, cuando la batería pasa la reconexión.
  *
  *    D12 SE QUEDA EN 0 TODO EL TIEMPO: las señales se ven en los pines del Nano
  *    pero la compuerta AND (74HC08) de la tarjeta de control no las deja pasar
@@ -35,6 +37,7 @@
 #include "dt_p9.h"
 #include "enlace_i2c.h"
 #include "bateria.h"
+#include "config_bateria.h"
 
 // Rampa de prueba de banco: cuentas que sube la amplitud en cada ciclo de línea.
 // 313–316 cuentas / 5 por ciclo = 63 ciclos ≈ 1 s a 60 Hz (1.3 s a 50 Hz). NO es el arranque suave final
@@ -92,10 +95,21 @@ static void reporteBateria() {
   Serial.print(F("BAT en A3: ")); Serial.print(c); Serial.print(F(" cuentas = "));
   imprimirFijo((uint32_t)c * 5000UL / 1023UL, 1000); Serial.print(F(" V  -> bateria "));
   imprimirFijo(bateria_dv(), 10); Serial.print(F(" V"));
-  Serial.println(bateria_fuera_de_rango() ? F("  FUERA DE RANGO (R4 abierta?)") : F(""));
+  Serial.print(F("  [")); Serial.print(bateria_texto(bateria_estado())); Serial.println(']');
 }
 
 static bool detenidoPorP9 = false;
+static uint16_t amplitudRampa = 0;     // rampa de banco; vuelve a 0 en cada arranque
+
+static void reporteLimites() {
+  Serial.print(F("Bateria: ")); Serial.println(F(BAT_NOMBRE));
+  Serial.print(F("  aviso < ")); imprimirFijo(BAT_AVISO_DV, 10);
+  Serial.print(F(" V | corte < ")); imprimirFijo(BAT_CORTE_DV, 10);
+  Serial.print(F(" V (10 s) | emergencia < ")); imprimirFijo(BAT_EMERGENCIA_DV, 10);
+  Serial.print(F(" V (0.5 s)\n  reconexion >= ")); imprimirFijo(BAT_RECONEXION_DV, 10);
+  Serial.print(F(" V (30 s) | corte alto > ")); imprimirFijo(BAT_ALTO_CORTE_DV, 10);
+  Serial.print(F(" V (2 s), vuelve <= ")); imprimirFijo(BAT_ALTO_RECONEXION_DV, 10); Serial.println(F(" V"));
+}
 static EstadoP9 p9Actual = P9_AMBOS_ABIERTOS;   // lo último leído, para el enlace I2C
 static uint16_t adcP9Actual = 0;
 
@@ -121,7 +135,12 @@ void setup() {
     detenidoPorP9 = true;
     return;
   }
-  spwm_arrancar();                    // 4) SPWM con amplitud 0
+  // 4) Batería: se lee ANTES de arrancar (sin esperar los 50 ms).
+  bateria_leer_ahora();
+  reporteLimites();
+  reporteBateria();
+  if (bateria_permite_trabajar()) spwm_arrancar();   // SPWM con amplitud 0
+  else Serial.println(F("SPWM NO arranca: bateria fuera de limites"));
 }
 
 void loop() {
@@ -138,7 +157,13 @@ void loop() {
     Serial.println(F("SPWM DETENIDA. Reinicie el Nano para volver a leer P9."));
   }
   bateria_atender();                  // A3 cada 50 ms (también con la SPWM detenida)
-  enlace_atender(p9Actual, adcP9Actual, detenidoPorP9, bateria_dv());   // I2C: comandos y foto nueva
+  enlace_atender(p9Actual, adcP9Actual, detenidoPorP9, bateria_dv(), bateria_estado());   // I2C: comandos y foto nueva
+  static EstadoBateria batAnterior = bateria_estado();
+  if (bateria_estado() != batAnterior) {
+    batAnterior = bateria_estado();
+    Serial.print(F(">>> [")); Serial.print(millis()); Serial.print(F(" ms] "));
+    reporteBateria();
+  }
   static uint32_t tBat = 0;
   if (millis() - tBat >= 2000UL) {
     tBat = millis();
@@ -151,15 +176,25 @@ void loop() {
   }
   if (detenidoPorP9) return;
 
+  // Límites de batería: detener o volver a arrancar.
+  if (spwm_activo() && !bateria_permite_trabajar()) {
+    spwm_detener();                   // D12 = 0 primero, salidas en bajo
+    Serial.println(F("SPWM DETENIDA por bateria."));
+  } else if (!spwm_activo() && bateria_permite_trabajar()) {
+    amplitudRampa = 0;
+    spwm_arrancar();                  // desde amplitud 0, con la rampa
+    Serial.println(F("SPWM ARRANCA: bateria dentro de limites."));
+  }
+  if (!spwm_activo()) return;
+
   // Rampa de banco: sube la amplitud una vez por ciclo de línea.
   static uint16_t cicloAnterior = 0;
-  static uint16_t amplitud = 0;
   const uint16_t c = spwm_ciclos();
   if (c != cicloAnterior) {
     cicloAnterior = c;
-    if (amplitud < spwm_amplitud_max()) {
-      amplitud += RAMPA_BANCO_CUENTAS_POR_CICLO;
-      spwm_fijar_amplitud(amplitud);   // se recorta solo al máximo
+    if (amplitudRampa < spwm_amplitud_max()) {
+      amplitudRampa += RAMPA_BANCO_CUENTAS_POR_CICLO;
+      spwm_fijar_amplitud(amplitudRampa);   // se recorta solo al máximo
     }
   }
 

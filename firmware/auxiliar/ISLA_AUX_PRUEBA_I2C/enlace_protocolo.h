@@ -15,10 +15,11 @@
  *    [4]  estado de P9 (EstadoP9)       [5]  tiempo muerto en cuentas
  *    [6-7]   ciclos de línea            [8-9]   lectura de A7 (P9)
  *    [10-11] amplitud máxima            [12-13] batería en décimas de V
- *    [14] reservado (0)                 [15] CRC-8 de 0..14
- *  Versión 2 (2026-11-15): [12-13] era "comandos con CRC malo" en la v1;
- *  ahora es el voltaje de batería (A3 del CRÍTICO). Los comandos malos
- *  siguen saliendo en el reporte serie del CRÍTICO.
+ *    [14] estado de la batería (EstadoBateria: 0 normal, 1 aviso,
+ *         2 corte bajo, 3 corte alto, 4 fuera de rango)
+ *    [15] CRC-8 de 0..14
+ *  Versión 2 (2026-11-15): en la v1, [12-13] era "comandos con CRC malo"
+ *  y [14] estaba reservado. Los comandos malos siguen en el serie del CRÍTICO.
  *  Números de 16 bits: byte bajo primero.
  *  CRC-8 SMBus: polinomio 0x07, valor inicial 0x00.
  *

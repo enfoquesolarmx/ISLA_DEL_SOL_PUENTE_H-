@@ -81,7 +81,13 @@ static void dibujar() {
       break;
     case V_BATERIA:
       snprintf(fila, sizeof fila, "BAT %sV SOC--%%", bat); lcd_fila(0, fila);   // SOC: del BMS (pendiente)
-      lcd_fila(1, "CARGA  +8.0A");
+      // Renglón 2: estado de la batería que decide el CRÍTICO (config_bateria.h).
+      // En SimulIDE no llega (sin enlace): se deja el dato de muestra.
+      if (!hayFoto || foto.estadoBateria == 0) lcd_fila(1, "CARGA  +8.0A");   // muestra
+      else if (foto.estadoBateria == 1)       lcd_fila(1, "AVISO BAT BAJA");
+      else if (foto.estadoBateria == 2)       lcd_fila(1, "CORTE BAT BAJA");
+      else if (foto.estadoBateria == 3)       lcd_fila(1, "CORTE BAT ALTA");
+      else                                    lcd_fila(1, "FALLA DIVISOR");
       break;
     case V_TEMPERATURA:
       snprintf(fila, sizeof fila, "T %uC  15V OK", 42 + s % 2); lcd_fila(0, fila);
