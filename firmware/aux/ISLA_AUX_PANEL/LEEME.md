@@ -41,6 +41,7 @@ SimulIDE no toma en cuenta las pull-up internas del ATmega en I2C.
 Validado en SimulIDE 1.1-SR2 (2026-11-15):
 - AIP31068 contesta y muestra la pantalla 1.
 - Botonera: B1 197, B2 414, B3 613; sin botón 1022.
+- B4 sostenido 3 s: entra a SETUP (A7 = 814); muestra `SETUP 1/3` / `Frec --Hz script`.
 
 ## Prueba de enlace en SimulIDE 1.1 (dos Arduino Nano)
 
