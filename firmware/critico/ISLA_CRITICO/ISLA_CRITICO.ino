@@ -17,7 +17,10 @@
  *         en rampa hasta el máximo en ~1 s;
  *      5) vigila P9 cada 50 ms: si cambia (módulo flojo o cambiado), detiene la
  *         SPWM y no vuelve a arrancar hasta reiniciar el Nano;
- *      6) cada 10 s imprime los ciclos generados y la lectura de P9.
+ *      6) cada 10 s imprime los ciclos generados y la lectura de P9;
+ *      7) mide la batería en A3 (DC_FB_A3) cada 50 ms y la manda en la foto
+ *         I2C (protocolo v2); cada 2 s la imprime por serie. Sólo mide:
+ *         todavía NO protege por bajo o sobre voltaje.
  *
  *    D12 SE QUEDA EN 0 TODO EL TIEMPO: las señales se ven en los pines del Nano
  *    pero la compuerta AND (74HC08) de la tarjeta de control no las deja pasar
@@ -31,6 +34,7 @@
 #include "spwm.h"
 #include "dt_p9.h"
 #include "enlace_i2c.h"
+#include "bateria.h"
 
 // Rampa de prueba de banco: cuentas que sube la amplitud en cada ciclo de línea.
 // 313–316 cuentas / 5 por ciclo = 63 ciclos ≈ 1 s a 60 Hz (1.3 s a 50 Hz). NO es el arranque suave final
@@ -82,6 +86,15 @@ static void reporteP9(uint16_t adc, EstadoP9 e) {
   Serial.println(p9_texto(e));
 }
 
+// Batería: cuentas, voltaje en A3 y voltaje de la batería.
+static void reporteBateria() {
+  const uint16_t c = bateria_cuentas();
+  Serial.print(F("BAT en A3: ")); Serial.print(c); Serial.print(F(" cuentas = "));
+  imprimirFijo((uint32_t)c * 5000UL / 1023UL, 1000); Serial.print(F(" V  -> bateria "));
+  imprimirFijo(bateria_dv(), 10); Serial.print(F(" V"));
+  Serial.println(bateria_fuera_de_rango() ? F("  FUERA DE RANGO (R4 abierta?)") : F(""));
+}
+
 static bool detenidoPorP9 = false;
 static EstadoP9 p9Actual = P9_AMBOS_ABIERTOS;   // lo último leído, para el enlace I2C
 static uint16_t adcP9Actual = 0;
@@ -124,7 +137,13 @@ void loop() {
     reporteP9(adcP9, p9);
     Serial.println(F("SPWM DETENIDA. Reinicie el Nano para volver a leer P9."));
   }
-  enlace_atender(p9Actual, adcP9Actual, detenidoPorP9);   // I2C: comandos y foto nueva
+  bateria_atender();                  // A3 cada 50 ms (también con la SPWM detenida)
+  enlace_atender(p9Actual, adcP9Actual, detenidoPorP9, bateria_dv());   // I2C: comandos y foto nueva
+  static uint32_t tBat = 0;
+  if (millis() - tBat >= 2000UL) {
+    tBat = millis();
+    reporteBateria();
+  }
   if (enlace_aux_cambio()) {
     Serial.print(F(">>> [")); Serial.print(millis()); Serial.print(F(" ms] "));
     Serial.println(enlace_aux_presente() ? F("AUX conectado: primer PING valido recibido")

@@ -5,7 +5,10 @@
  *  ESTADO: prueba de pantalla 16x2 + botonera + ENLACE I2C con el CRÍTICO.
  *  - La pantalla 4 (CRITICO) y la frecuencia de la pantalla 1 son DATOS
  *    REALES de la foto que manda el CRÍTICO (sketch ISLA_CRITICO, 0x20).
- *  - Voltajes, corrientes, batería y temperatura siguen siendo de MUESTRA:
+ *  - La batería (pantalla 2) es REAL: la mide el CRÍTICO en A3 y llega en
+ *    la foto (protocolo v2). Con SIMULIDE = 1 (config_panel.h) se lee de una
+ *    copia del divisor en A3 del AUX, sólo para el simulador.
+ *  - Voltajes AC, corrientes y temperatura siguen siendo de MUESTRA:
  *    el CRÍTICO todavía no los mide (módulos ADC pendientes).
  *  - Sin enlace, la frecuencia sale "--" y la pantalla 4 dice SIN ENLACE.
  *
@@ -42,25 +45,42 @@ constexpr uint8_t ITEMS_SETUP = 3;
 
 static char fila[17];
 
+#if SIMULIDE
+// Misma conversión que bateria.cpp del CRÍTICO (divisor 68k + 68k + 10k):
+// 1023 cuentas = 73.0 V = 730 décimas. Promedio de 8 lecturas.
+static uint16_t bateriaSimulide() {
+  uint16_t suma = 0;
+  for (uint8_t i = 0; i < 8; i++) suma += analogRead(PIN_BAT_SIMULIDE);
+  const uint16_t c = (suma + 4) / 8;
+  return (uint16_t)(((uint32_t)c * 730 + 511) / 1023);
+}
+#endif
+
 static void dibujar() {
   // Datos de muestra que cambian poco a poco (sin float).
   const uint16_t s = (millis() / 1000) % 20;
   const uint16_t vInv = 1265 + (s % 5);           // décimas de V
   const uint16_t iAc  = 50 + s;                   // décimas de A
   const uint16_t pot  = (uint32_t)vInv * iAc / 100;
-  const uint16_t vBat = 512 - (s % 3);            // décimas de V
-  const uint8_t  soc  = 78;
   FotoCritico foto;
   const bool hayFoto = enlace_aux_foto(&foto);
   char frec[4] = "--";
   if (hayFoto) snprintf(frec, sizeof frec, "%u", foto.frecuenciaHz);
+  // Batería: del CRÍTICO por el enlace (o de A3 del AUX en SimulIDE).
+  char bat[8] = "--.-";
+#if SIMULIDE
+  const uint16_t vBat = bateriaSimulide();
+  snprintf(bat, sizeof bat, "%u.%u", vBat / 10, vBat % 10);
+#else
+  if (hayFoto) snprintf(bat, sizeof bat, "%u.%u", foto.bateriaDv / 10, foto.bateriaDv % 10);
+#endif
   switch (vista) {
     case V_INVERSOR:
       snprintf(fila, sizeof fila, "INV %3uV  %s.0Hz", vInv / 10, frec); lcd_fila(0, fila);
       snprintf(fila, sizeof fila, "%u.%uA  %uW  CASA", iAc / 10, iAc % 10, pot);         lcd_fila(1, fila);
       break;
     case V_BATERIA:
-      snprintf(fila, sizeof fila, "BAT %u.%uV SOC%u%%", vBat / 10, vBat % 10, soc); lcd_fila(0, fila);
+      snprintf(fila, sizeof fila, "BAT %sV SOC--%%", bat); lcd_fila(0, fila);   // SOC: del BMS (pendiente)
       lcd_fila(1, "CARGA  +8.0A");
       break;
     case V_TEMPERATURA:
@@ -169,8 +189,14 @@ void loop() {
       Serial.print(p.dtCuentas == 8 ? F("500 ns") : F("1 us"));
       Serial.print(F(" | P9 ")); Serial.print(p.adcP9);
       Serial.print(F(" | ciclos ")); Serial.print(p.ciclos);
-      Serial.print(F(" | seq ")); Serial.println(p.seq);
+      Serial.print(F(" | BAT ")); Serial.print(p.bateriaDv / 10); Serial.print('.');
+      Serial.print(p.bateriaDv % 10); Serial.print(F(" V | seq ")); Serial.println(p.seq);
     } else Serial.println(F(" | sin foto valida"));
+#if SIMULIDE
+    const uint16_t v = bateriaSimulide();
+    Serial.print(F("SIMULIDE: BAT en A3 del AUX = ")); Serial.print(v / 10); Serial.print('.');
+    Serial.print(v % 10); Serial.println(F(" V (copia del divisor, no viene del CRITICO)"));
+#endif
   }
   static uint32_t t = 0;
   if (millis() - t >= REFRESCO_MS) { t = millis(); dibujar(); }

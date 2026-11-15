@@ -27,6 +27,15 @@
 // ======================== LA PERILLA =========================================
 #define LCD_TIPO 1          // 1 = AIP31068 (SimulIDE / Grove), 0 = PCF8574 16x2
 
+// ======================== PERILLA DE SIMULADOR ================================
+// SIMULIDE = 1 SÓLO para SimulIDE 1.1: ahí el enlace I2C no funciona (el
+// CRÍTICO simulado no suelta SDA al transmitir), así que el AUX lee la batería
+// de una COPIA del divisor de DC-007 dibujada en su A3 (libre en el AUX).
+// SIMULIDE = 0 en el firmware real: la batería llega del CRÍTICO por el enlace
+// y A3 del AUX no se usa (en la tarjeta está sin conectar).
+#define SIMULIDE 0
+constexpr uint8_t PIN_BAT_SIMULIDE = A3;
+
 // ======================== DIRECCIONES (7 bits) ===============================
 constexpr uint8_t LCD_DIR_AIP31068 = 0x3E;
 constexpr uint8_t LCD_DIR_PCF8574  = 0x27;  // si tu mochila es PCF8574A: 0x3F

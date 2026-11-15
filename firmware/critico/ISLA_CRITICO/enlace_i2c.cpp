@@ -39,7 +39,7 @@ void enlace_iniciar() {
   Wire.onReceive(alRecibir);
 }
 
-void enlace_atender(uint8_t estadoP9, uint16_t adcP9, bool detenidoPorP9) {
+void enlace_atender(uint8_t estadoP9, uint16_t adcP9, bool detenidoPorP9, uint16_t bateriaDv) {
   // 1) Comando pendiente: se valida aquí, no en la interrupción.
   if (hayComando) {
     uint8_t c[ENLACE_LARGO_COMANDO];
@@ -75,7 +75,7 @@ void enlace_atender(uint8_t estadoP9, uint16_t adcP9, bool detenidoPorP9) {
   f[6] = ciclos & 0xFF;  f[7] = ciclos >> 8;
   f[8] = adcP9 & 0xFF;   f[9] = adcP9 >> 8;
   f[10] = amax & 0xFF;   f[11] = amax >> 8;
-  f[12] = malos & 0xFF;  f[13] = malos >> 8;
+  f[12] = bateriaDv & 0xFF;  f[13] = bateriaDv >> 8;   // protocolo v2
   f[14] = 0;
   f[15] = enlace_crc8(f, 15);
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {          // la interrupción nunca ve media foto
