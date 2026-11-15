@@ -415,7 +415,7 @@ Con resistencias de ±5 % las cuentas pueden variar: 383–436, 484–539, 657�
 
 ### 7.3 Prueba de banco del enlace I2C CRÍTICO ↔ AUX (validada, 2026-11-13)
 
-Dos Nanos: el **CRÍTICO** con `ISLA_CRITICO.ino` (paso 3 + enlace) y el **AUX** con [`firmware/aux/ISLA_AUX_PRUEBA_I2C`](../aux/ISLA_AUX_PRUEBA_I2C/ISLA_AUX_PRUEBA_I2C.ino). **Sin potencia.**
+Dos Nanos: el **CRÍTICO** con `ISLA_CRITICO.ino` (paso 3 + enlace) y el **AUX** con [`firmware/auxiliar/ISLA_AUX_PRUEBA_I2C`](../auxiliar/ISLA_AUX_PRUEBA_I2C/ISLA_AUX_PRUEBA_I2C.ino). **Sin potencia.**
 
 #### Por qué dos microcontroladores y un enlace entre ellos
 
