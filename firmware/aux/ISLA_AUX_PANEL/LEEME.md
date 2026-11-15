@@ -21,7 +21,7 @@ Cualquier otro valor no compila (`#error`).
 |---|---|
 | D4 | SDA de la pantalla + 4.7 kΩ a 5 V |
 | D5 | SCL de la pantalla + 4.7 kΩ a 5 V |
-| A7 | escalera de botones: 10 kΩ a 5 V; cada botón une A7 con GND por su resistencia |
+| A7 | escalera de botones: **R42 = 10 kΩ a 5 V** (en la tarjeta de control, no en el panel); cada botón une A7 con GND por su resistencia |
 | B1 → 2.4 kΩ · B2 → 6.8 kΩ · B3 → 15 kΩ · B4 → 39 kΩ | |
 
 | A4 | A4 del CRÍTICO (SDA del enlace) + 4.7 kΩ a 5 V |
@@ -30,6 +30,17 @@ Cualquier otro valor no compila (`#error`).
 
 La pantalla va en su propio bus por software (D4/D5); A4/A5 son sólo del
 enlace con el CRÍTICO.
+
+**En SimulIDE hay que dibujar lo que en el hardware real ya está en otras tarjetas:**
+- R42 de 10 kΩ de A7 a 5 V. Sin ella, A7 lee 0 y sale FALLA BOTONERA.
+- 4.7 kΩ a 5 V en D4 y D5. Sin ellas, la pantalla AIP31068 no enciende.
+- 4.7 kΩ a 5 V en A4 y A5 del enlace (R10/R11 de la tarjeta de control).
+
+SimulIDE no toma en cuenta las pull-up internas del ATmega en I2C.
+
+Validado en SimulIDE 1.1-SR2 (2026-11-15):
+- AIP31068 contesta y muestra la pantalla 1.
+- Botonera: B1 197, B2 414, B3 613; sin botón 1022.
 
 ## Prueba de enlace en SimulIDE 1.1 (dos Arduino Nano)
 
