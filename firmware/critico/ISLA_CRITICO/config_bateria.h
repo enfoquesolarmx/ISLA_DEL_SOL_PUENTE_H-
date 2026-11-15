@@ -8,8 +8,8 @@
  *  desde el panel puede matar una batería).
  *
  *    QUIMICA_BATERIA = BAT_PLOMO_ACIDO  ->  24 celdas de 2 V (48 V nominal)
- *    QUIMICA_BATERIA = BAT_LIFEPO4      ->  16 o 17 celdas de 3.2 V (CELDAS_LIFEPO4):
- *                                          51.2 V o 54.4 V nominal
+ *    QUIMICA_BATERIA = BAT_LIFEPO4      ->  15 o 16 celdas de 3.2 V (CELDAS_LIFEPO4):
+ *                                          48.0 V o 51.2 V nominal
  *
  *  CÓMO SE USAN LOS LÍMITES (bateria.cpp)
  *    AVISO       : por debajo, aviso en el panel. El inversor sigue.
@@ -64,9 +64,9 @@ constexpr uint16_t BAT_ALTO_RECONEXION_DV = 640; // 2.67 V/celda
 #define BAT_NOMBRE "Plomo-acido 24 celdas"
 
 #elif QUIMICA_BATERIA == BAT_LIFEPO4
-// ---------- LiFePO4, 16 o 17 celdas en serie ----------
-#define CELDAS_LIFEPO4 16      // 16 (51.2 V nominal) o 17 (54.4 V nominal)
-static_assert(CELDAS_LIFEPO4 == 16 || CELDAS_LIFEPO4 == 17, "LiFePO4: 16 o 17 celdas");
+// ---------- LiFePO4, 15 o 16 celdas en serie (los dos estándar de "48 V") ----------
+#define CELDAS_LIFEPO4 16      // 15 (48.0 V nominal) o 16 (51.2 V nominal)
+static_assert(CELDAS_LIFEPO4 == 15 || CELDAS_LIFEPO4 == 16, "LiFePO4: 15 o 16 celdas");
 // Fuentes (por celda):
 //  - Victron, Lithium Battery Smart 12.8 V (hoja de datos) y smallBMS:
 //    pre-alarma < 3.1 V, desconexión de carga < 2.8 V, paro de carga > 3.75 V.
@@ -88,15 +88,13 @@ constexpr uint16_t BAT_EMERGENCIA_DV   = (uint32_t)BAT_MV_EMERGENCIA * CELDAS_LI
 constexpr uint16_t BAT_RECONEXION_DV   = (uint32_t)BAT_MV_RECONEXION * CELDAS_LIFEPO4 / 100;
 constexpr uint16_t BAT_ALTO_CORTE_DV   = (uint32_t)BAT_MV_ALTO       * CELDAS_LIFEPO4 / 100;
 constexpr uint16_t BAT_ALTO_RECONEXION_DV = (uint32_t)BAT_MV_ALTO_VUELTA * CELDAS_LIFEPO4 / 100;
+//   15S: aviso 46.5 | corte 43.5 | emergencia 42.0 | reconexión 48.0 | alto 56.2 | vuelve 54.0
 //   16S: aviso 49.6 | corte 46.4 | emergencia 44.8 | reconexión 51.2 | alto 60.0 | vuelve 57.6
-//   17S: aviso 52.7 | corte 49.3 | emergencia 47.6 | reconexión 54.4 | alto 63.7 | vuelve 61.2
-// ⚠ HARDWARE con 17S: cargada llega a 62.05 V (17 × 3.65). El TVS D1 SMBJ58A
-//   (58 V de trabajo) conduciría: con 17S va el SMBJ64A, igual que con plomo
-//   en ecualización (hardware/control §2, DC-003).
-#if CELDAS_LIFEPO4 == 16
-#define BAT_NOMBRE "LiFePO4 16S"
+// Las dos cargadas (54.75 V y 58.4 V) caben con el TVS D1 SMBJ58A (DC-003).
+#if CELDAS_LIFEPO4 == 15
+#define BAT_NOMBRE "LiFePO4 15S"
 #else
-#define BAT_NOMBRE "LiFePO4 17S (D1 = SMBJ64A)"
+#define BAT_NOMBRE "LiFePO4 16S"
 #endif
 
 #else
