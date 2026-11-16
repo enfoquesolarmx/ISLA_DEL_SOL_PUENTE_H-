@@ -1035,6 +1035,81 @@ Lo validado hasta hoy es **la temporización de las señales de compuerta**, sin
 
 ---
 
+## 16. Otros caminos: cómo lo resuelven otros proyectos
+
+**Esta receta no es la única manera, ni la "correcta".** Hay proyectos abiertos de inversor de onda pura con Arduino que llegan a una senoidal perfectamente buena por otro camino, y vale la pena estudiarlos. Este documento puede comparar alternativas sólo porque otros publicaron la suya primero, con su tiempo y su trabajo, y la dejaron a la vista para que cualquiera la revise. De ahí salen las variantes, incluida la nuestra.
+
+El caso que usamos aquí es el de **Yopie DIY**: [*Arduino Nano and ATmega328P SPWM Driver Card code optimization up to 24 kHz PWM frequency*](https://yopiemaker.com/arduino-nano-atmega328p-spwm-code-optimization-up-to-24-khz-pwm-frequency/). Es un trabajo de optimización: lleva la interrupción de **44 µs a 19.4 µs** para poder subir la portadora de 10 kHz a 24 kHz, y explica cada paso.
+
+### Cuánto coincidimos sin habernos copiado
+
+Son dos proyectos independientes que llegan a las mismas conclusiones. Eso les da más peso que si uno solo las afirmara:
+
+| Decisión | Yopie DIY | Este proyecto |
+| --- | --- | --- |
+| Portadora | 24 kHz | 24 kHz |
+| Tope del timer | `(16000000 / f_port) / 2` | `f_reloj / (2 × f_port)` |
+| Tiempo muerto de la rama rápida | Desfase entre los dos comparadores (`dtA`/`dtB`) | Lo mismo: `OCR1B = OCR1A + DT` (sección 8) |
+| Rama de la frecuencia de línea | Se conmuta dentro de la interrupción, con una bandera de semiciclo | Lo mismo (modulación híbrida) |
+| Salidas | Escritura directa a PORTB y PORTD, no `digitalWrite()` | Lo mismo |
+| El diagnóstico del `float` | *"ATmega328P has no FPU… Each float multiplication costs hundreds of cycles"* | La razón de que todo vaya en enteros |
+
+Incluso el paso angular coincide: 180° entre las muestras del semiciclo da los mismos 0.9°.
+
+### Dónde se separan los caminos
+
+La diferencia está en **qué se hace con esa multiplicación por el índice de modulación**.
+
+- **Yopie DIY la optimiza:** reduce de dos multiplicaciones `float` a una y reporta un ahorro de unos **20 µs** en la interrupción. Ese dato es valioso y es medido en hardware: confirma que una sola multiplicación de punto flotante, con sus conversiones, cuesta del orden de 300 ciclos en este chip.
+- **Nosotros la quitamos:** la tabla se guarda normalizada en Q16 y la amplitud es un entero, así que el cálculo es `(tabla[q] × amplitud) >> 16`, una multiplicación de enteros y un corrimiento.
+
+El resultado en la interrupción:
+
+| | Yopie DIY | Este proyecto |
+| --- | --- | --- |
+| Duración de la interrupción | **19.4 µs** (~310 ciclos), medido en hardware | **169–180 ciclos** (~11 µs), medido en simulación |
+| Del presupuesto de 41.6 µs | ~47 % | ~27 % |
+
+Ojo con la comparación: **su número está medido en el chip y el nuestro no.** Falta medirlo con un pin de prueba (sección 13). Y el margen que a nosotros nos sobra no es lujo: el CRÍTICO tiene que cargar además el ADC, las protecciones y el enlace I2C en esos mismos ciclos.
+
+### Lo que cada quien aporta
+
+**De su trabajo nos sirve:**
+
+- **Haberlo medido en hardware.** Nosotros todavía no, y ésa es la parte que a nuestro documento le falta.
+- **El tiempo muerto de la rama de línea con dos `nop`** (~125 ns). Es la solución más apretada posible. Nosotros usamos un periodo completo de portadora (41.6 µs), mucho más conservador. Lo suyo rinde más onda; lo nuestro aguanta drivers lentos sin pensarlo. Cuál conviene depende del gate driver, y por eso aquí ese dato lo declara cada módulo con su pin P9.
+- **El método.** Optimizar midiendo, no suponiendo.
+
+**De nuestro lado quedan dos cosas que su artículo no desarrolla:**
+
+- **Por qué 24 kHz exactamente.** Él lo plantea como un buen equilibrio entre conmutación y carga del CPU, que es cierto. La receta de aquí agrega que debe ser **múltiplo entero de 60 y de 50 Hz**: así cada ciclo tiene 400 o 480 pulsos exactos y no aparecen subarmónicos por deriva (sección 3).
+- **El muestreo en el centro del periodo** (`k + 0.5`) y el **cuarto de onda en flash**, que dejan las dos mitades del semiciclo idénticas y la RAM libre (secciones 5 y 11).
+
+### Pros y contras, sin maquillaje
+
+| | Tabla en RAM, calculada al arrancar | Cuarto de onda en flash (este proyecto) |
+| --- | --- | --- |
+| **Flexibilidad** | Cambias la frecuencia y se ajusta sola al encender | Hay que correr `genera_tabla_seno.py` y recompilar |
+| **Simplicidad** | Todo en un archivo, sin herramienta externa | Script aparte y tabla generada |
+| **Legibilidad** | `LUT[i] * idxMod` se lee de corrido | `(tabla[q] * amplitud) >> 16` hay que explicarlo, y por eso existe este documento |
+| **RAM** | 400 B de los 2048 a 60 Hz | **0 B** |
+| **Flash** | `sin()` arrastra la biblioteca de punto flotante | 200 B de tabla, sin esa biblioteca |
+| **Ciclos en la interrupción** | Cientos, por el `float` | Decenas |
+| **Simetría del semiciclo** | Depende de dónde se muestree | Idéntica por construcción |
+
+Ninguna está mal: son dos puntos distintos del mismo intercambio. Para aprender, prototipar o cambiar de frecuencia a cada rato, el camino de la tabla en RAM es mejor. Para un micro que además tiene que proteger el puente, el nuestro deja el margen que hace falta.
+
+### Dos detalles que conviene cuidar, venga el código de donde venga
+
+1. **Una variable compartida entre `loop()` y la interrupción tiene que ser atómica.** Un `float` son 4 bytes y el AVR no los escribe de un golpe: si la interrupción entra a la mitad, lee dos bytes viejos y dos nuevos, un valor que nunca existió. Aquí la amplitud es un entero de 16 bits y **se aplica sólo al inicio de cada ciclo**, dentro de la propia interrupción, para que además no quede corriente directa en el transformador.
+2. **El tiempo muerto tiene que estar en alguna parte.** Si el código no lo pone, tiene que ponerlo el gate driver: algunos lo traen interno y otros no (el IR2110 no). Aquí lo hace el hardware del timer con dos comparadores separados (sección 8), y cada módulo declara cuánto necesita por su pin P9.
+
+### El punto
+
+Las matemáticas de bachillerato —la simetría del seno, una multiplicación entera y un corrimiento— bastan para sacarle a un micro de 8 bits lo que parecería que pide un DSP. Eso no lo descubrimos nosotros: lo aprendimos comparando caminos que otros ya habían recorrido y publicado. **Gracias a ese esfuerzo existen alternativas para escenarios donde hay que exprimir cada recurso, que es justo el caso de la trinchera. Si esta receta sirve, que también quede publicada y que alguien la mejore.**
+
+---
+
 ## Referencias dentro del repositorio
 
 - [`docs/modulacion_spwm.md`](modulacion_spwm.md): por qué modulación híbrida y por qué 24 kHz sincronizados con la línea (sección 4.3).
@@ -1043,3 +1118,10 @@ Lo validado hasta hoy es **la temporización de las señales de compuerta**, sin
 - [`firmware/critico/README.md`](../firmware/critico/README.md): pruebas de banco con capturas (secciones 7.0, 7.0b y 7.0c).
 - `firmware/critico/ISLA_CRITICO/spwm_328p.cpp`: cómo se usan estos números en el Timer1.
 - `firmware/critico/pruebas/prueba_spwm.cpp`: la prueba en la PC que verifica tiempo muerto, pulso mínimo y traslapes cuenta por cuenta.
+
+## Referencias fuera del repositorio
+
+- Yopie DIY, [*Arduino Nano and ATmega328P SPWM Driver Card code optimization up to 24 kHz PWM frequency*](https://yopiemaker.com/arduino-nano-atmega328p-spwm-code-optimization-up-to-24-khz-pwm-frequency/): optimización de la interrupción de un driver SPWM de 44 µs a 19.4 µs. Comparado en la sección 16.
+- Hoja de datos del **ATmega328P** (Microchip): modos del Timer1, doble búfer de los comparadores y nivel de la salida en BOTTOM.
+- D. G. Holmes y T. A. Lipo, *Pulse Width Modulation for Power Converters: Principles and Practice* (Wiley–IEEE Press, 2003): muestreo regular contra natural, simetría de cuarto de onda y efecto del tiempo muerto.
+- Infineon/International Rectifier, nota **AN-978**, *HV Floating MOS-Gate Driver ICs*: recarga del bootstrap y por qué hace falta un pulso mínimo del lado bajo.
