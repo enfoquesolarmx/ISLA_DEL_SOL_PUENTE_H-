@@ -19,6 +19,7 @@ Este documento junta **en un solo orden** todo lo que el proyecto tiene pendient
 - **Se anota el resultado aunque salga bien.** Un resultado sin anotar es un resultado perdido: el documento no sirve para presumir, sirve para que el siguiente que lo lea no repita la medición.
 - Las corridas están en orden de dependencia. La **parte A** es la que desbloquea el PCB; la **parte B** son los pendientes acumulados que ya no bloquean nada pero que conviene cerrar en el mismo viaje.
 - Cada corrida dice si el firmware **ya existe** o **falta escribirlo**. Las que faltan hay que escribirlas *antes* de salir, no en el banco.
+- **Las tres corridas del ADC (A6, A7, A8) corren con un solo sketch**, [`ISLA_CRITICO_PRUEBA_ADC_AC`](../firmware/critico/ISLA_CRITICO_PRUEBA_ADC_AC/ISLA_CRITICO_PRUEBA_ADC_AC.ino), y su aritmética ya está validada contra una senoidal sintética en la PC.
 
 ---
 
@@ -243,7 +244,7 @@ Dos unidades no son una muestra estadística, pero una diferencia grande entre d
 
 ## A6. ADC contra multímetro — calibración
 
-**Firmware:** ⚠️ **falta escribirlo** (`ISLA_CRITICO_PRUEBA_ADC_AC`: lee A0 y A6, calcula RMS, lo saca por serie).
+**Firmware:** ✅ ya existe — [`ISLA_CRITICO_PRUEBA_ADC_AC`](../firmware/critico/ISLA_CRITICO_PRUEBA_ADC_AC/ISLA_CRITICO_PRUEBA_ADC_AC.ino). Antes de cargar, llenar las perillas `VCC_MV` (el riel de 5 V medido) y `DIVISOR_X100` (la relación del divisor elegido en A3).
 
 **Objetivo.** Que el número que reporta el ATmega coincida con el multímetro.
 
@@ -261,7 +262,7 @@ Dos unidades no son una muestra estadística, pero una diferencia grande entre d
 
 ## A7. Simetría entre canales — la prueba estrella
 
-**Firmware:** ⚠️ **falta escribirlo** (el mismo sketch de A6, reportando el instante del cruce por cero de cada canal).
+**Firmware:** ✅ ya existe — el mismo sketch de A6. La perilla `ORDEN_INVERTIDO` cambia el orden de lectura para el diagnóstico.
 
 **Objetivo.** Validar de un golpe **dos** cosas: que el sesgo de DC-020 es el calculado, y que los filtros de los dos canales son simétricos como supone DC-006.
 
@@ -275,13 +276,20 @@ Dos unidades no son una muestra estadística, pero una diferencia grande entre d
 3. Anotar la diferencia medida entre los dos cruces.
 4. **Invertir el orden de lectura** (A6 primero) y repetir.
 
-**Criterio de aceptación.**
-- Diferencia medida: **124.9 µs ± 23 µs** (23 µs = 0.5° a 60 Hz, la décima parte de la ventana de sincronía de 5°).
-- Al invertir el orden, la diferencia debe **cambiar de signo y conservar la magnitud**.
+**El sketch ya descuenta el sesgo**, porque ubica cada cruce con la cuenta de portadora de su propio disparo. Así que lo que reporta **no son 124.9 µs: es lo que sobra después de descontarlo, y debe salir cero.** Los 124.875 µs son lo que saldría si el firmware tratara las dos muestras como simultáneas — justo el error que DC-020 manda corregir.
 
-**El diagnóstico, si falla.** Los dos pasos de arriba separan las dos causas posibles:
-- Cambia de signo y conserva magnitud, pero la magnitud no es 124.9 µs → **el modelo del sesgo está mal** (revisar DC-020).
-- No cambia de signo, o cambia con otra magnitud → **los filtros no son simétricos** (hay un offset fijo que no viene del multiplexado). Eso sí toca el cobre.
+**Criterio de aceptación.**
+- Sesgo reportado con 1 s de promedio: **|sesgo| < 2 µs** (0.043° a 60 Hz). Validado en la PC con el mismo código entero: la aritmética sola da **0.39 µs** en 1 s y menos de 10 ns pasados los 5 s, así que todo lo que pase de 2 µs **es hardware, no es la cuenta**.
+- Contador `desc` (pares de cruces descartados): unos pocos por segundo es normal. Si son la mayoría, la señal está muy sucia o muy chica.
+- Al invertir el orden de lectura (`ORDEN_INVERTIDO 1`), el sesgo debe **quedar igual, con el mismo signo y la misma magnitud**.
+
+**El diagnóstico, si falla.** Invertir el orden separa las dos causas posibles:
+- El sesgo **conserva signo y magnitud** al invertir el orden → es una propiedad de los canales, no del muestreo: **los filtros no son simétricos.** Eso toca el cobre.
+- El sesgo **cambia de signo** al invertir el orden → el error está en la contabilidad del tiempo, no en el hardware. Avisar, porque sería un error del sketch.
+
+> **Lo que la validación en la PC ya le ahorró al banco.** Al correr la aritmética del sketch contra una senoidal sintética apareció un error que habría arruinado la medición: **los dos canales no siempre agarran el mismo cruce.** Si la ventana empieza encima de un cruce, un canal lo atrapa y el otro agarra el del ciclo siguiente, y la diferencia salta un periodo entero de línea. El promedio de 1 s salía con **1.7 ms** de error en lugar de 0.39 µs — y en el banco se habría visto como "los filtros están asimétricos", mandando a cambiar cobre que estaba bien.
+>
+> Hay un candado exacto, y ya está en el sketch: como las dos rejillas de muestreo están corridas 3 periodos de portadora, para un mismo cruce la diferencia de cuentas **sólo puede ser +3 o −3**. Cualquier otro valor es un par mal emparejado y se descarta: eso es el contador `desc`.
 
 **Qué desbloquea.** La cancelación de los ~2° del filtro que DC-006 da por hecha, y el constante que el PLL va a restar.
 
@@ -289,7 +297,7 @@ Dos unidades no son una muestra estadística, pero una diferencia grande entre d
 
 ## A8. DC-020: frecuencia de muestreo e instante del disparo
 
-**Firmware:** ⚠️ **falta escribirlo** (el mismo sketch, levantando un pin libre al disparar la conversión y bajándolo en la ISR de fin de conversión).
+**Firmware:** ✅ ya existe — el mismo sketch. La perilla `PIN_TRAZA_ADC` (D8 por omisión) sube al disparar la conversión y baja al terminarla. La perilla `CARGA_FALSA_CICLOS` quema en la ISR los mismos ciclos que gasta la del SPWM, para ver si le deja espacio al ADC.
 
 **Objetivo.** Confirmar con el analizador que el ADC corre como dice DC-020.
 
