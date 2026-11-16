@@ -1037,65 +1037,76 @@ Lo validado hasta hoy es **la temporización de las señales de compuerta**, sin
 
 ## 16. Otros caminos: cómo lo resuelven otros proyectos
 
-**Esta receta no es la única manera, ni la "correcta".** Hay varios proyectos abiertos de inversor de onda pura con Arduino que llegan a una senoidal perfectamente buena por otro camino. Vale la pena conocerlos: este documento puede comparar alternativas sólo porque otros publicaron la suya primero, con su tiempo y su trabajo, y la dejaron a la vista para que cualquiera la estudie. De ahí salen las variantes, incluida la nuestra.
+**Esta receta no es la única manera, ni la "correcta".** Hay proyectos abiertos de inversor de onda pura con Arduino que llegan a una senoidal perfectamente buena por otro camino, y vale la pena estudiarlos. Este documento puede comparar alternativas sólo porque otros publicaron la suya primero, con su tiempo y su trabajo, y la dejaron a la vista para que cualquiera la revise. De ahí salen las variantes, incluida la nuestra.
 
-Cada camino optimiza algo distinto. El nuestro está apretado para un caso concreto: **sacarle el máximo a un micro de 8 bits sin coprocesador matemático, que además tiene que cargar con el ADC, las protecciones y el enlace I2C en los mismos 666 ciclos.** Para otros escenarios, el camino de ellos es mejor.
+El caso que usamos aquí es el de **Yopie DIY**: [*Arduino Nano and ATmega328P SPWM Driver Card code optimization up to 24 kHz PWM frequency*](https://yopiemaker.com/arduino-nano-atmega328p-spwm-code-optimization-up-to-24-khz-pwm-frequency/). Es un trabajo de optimización: lleva la interrupción de **44 µs a 19.4 µs** para poder subir la portadora de 10 kHz a 24 kHz, y explica cada paso.
 
-### Lo que coincide, y por eso no es capricho
+### Cuánto coincidimos sin habernos copiado
 
-El enfoque más común calcula el tope del timer así:
+Son dos proyectos independientes que llegan a las mismas conclusiones. Eso les da más peso que si uno solo las afirmara:
 
-```c
-icr = (16000000 / f_portadora) / 2;
-```
-
-Es la misma cuenta de nuestro paso 1, escrita en dos pasos. **Proyectos independientes llegan a la misma fórmula**, porque es la que obliga la doble pendiente (sección 6). Igual el paso angular: 180° entre el número de muestras del semiciclo da los mismos 0.9°.
-
-### Cuidado con los dos "+0.5", que no son lo mismo
-
-| Dónde aparece | Qué hace |
-| --- | --- |
-| `int(sen(...) * icr + 0.5)` | Redondea el **valor** al entero más cercano, en vez de truncarlo. Nuestro generador también lo hace, con `round()` |
-| `sen((k + 0.5) × 180° / S)` | Corre el **ángulo** medio periodo, para muestrear al centro del pulso (sección 5) |
-
-Se escriben parecido y resuelven cosas distintas. El primero es aritmética; el segundo es la fase del muestreo.
-
-### Las dos recetas, lado a lado
-
-| | Tabla en RAM calculada al arrancar | Cuarto de onda en flash (este proyecto) |
+| Decisión | Yopie DIY | Este proyecto |
 | --- | --- | --- |
-| Qué guarda la tabla | Medio ciclo: 200 valores a 60 Hz | Un cuarto: 100 valores |
-| Dónde vive | **RAM:** 400 B de los 2048 del ATmega328P | **Flash** (PROGMEM): 200 B, **0 B de RAM** |
-| Cómo se construye | Con `sin()` al encender, en el propio chip | Con un script de Python, antes de compilar |
-| Escala de los valores | Ya en cuentas del timer (0–333) | Q16 normalizado (0–65 535) |
-| Fase del muestreo | En el borde del periodo | Al centro (k + 0.5) |
-| Índice de modulación | Un `float` que multiplica en la interrupción | Un entero de 16 bits y un `>> 16` |
+| Portadora | 24 kHz | 24 kHz |
+| Tope del timer | `(16000000 / f_port) / 2` | `f_reloj / (2 × f_port)` |
+| Tiempo muerto de la rama rápida | Desfase entre los dos comparadores (`dtA`/`dtB`) | Lo mismo: `OCR1B = OCR1A + DT` (sección 8) |
+| Rama de la frecuencia de línea | Se conmuta dentro de la interrupción, con una bandera de semiciclo | Lo mismo (modulación híbrida) |
+| Salidas | Escritura directa a PORTB y PORTD, no `digitalWrite()` | Lo mismo |
+| El diagnóstico del `float` | *"ATmega328P has no FPU… Each float multiplication costs hundreds of cycles"* | La razón de que todo vaya en enteros |
+
+Incluso el paso angular coincide: 180° entre las muestras del semiciclo da los mismos 0.9°.
+
+### Dónde se separan los caminos
+
+La diferencia está en **qué se hace con esa multiplicación por el índice de modulación**.
+
+- **Yopie DIY la optimiza:** reduce de dos multiplicaciones `float` a una y reporta un ahorro de unos **20 µs** en la interrupción. Ese dato es valioso y es medido en hardware: confirma que una sola multiplicación de punto flotante, con sus conversiones, cuesta del orden de 300 ciclos en este chip.
+- **Nosotros la quitamos:** la tabla se guarda normalizada en Q16 y la amplitud es un entero, así que el cálculo es `(tabla[q] × amplitud) >> 16`, una multiplicación de enteros y un corrimiento.
+
+El resultado en la interrupción:
+
+| | Yopie DIY | Este proyecto |
+| --- | --- | --- |
+| Duración de la interrupción | **19.4 µs** (~310 ciclos), medido en hardware | **169–180 ciclos** (~11 µs), medido en simulación |
+| Del presupuesto de 41.6 µs | ~47 % | ~27 % |
+
+Ojo con la comparación: **su número está medido en el chip y el nuestro no.** Falta medirlo con un pin de prueba (sección 13). Y el margen que a nosotros nos sobra no es lujo: el CRÍTICO tiene que cargar además el ADC, las protecciones y el enlace I2C en esos mismos ciclos.
+
+### Lo que cada quien aporta
+
+**De su trabajo nos sirve:**
+
+- **Haberlo medido en hardware.** Nosotros todavía no, y ésa es la parte que a nuestro documento le falta.
+- **El tiempo muerto de la rama de línea con dos `nop`** (~125 ns). Es la solución más apretada posible. Nosotros usamos un periodo completo de portadora (41.6 µs), mucho más conservador. Lo suyo rinde más onda; lo nuestro aguanta drivers lentos sin pensarlo. Cuál conviene depende del gate driver, y por eso aquí ese dato lo declara cada módulo con su pin P9.
+- **El método.** Optimizar midiendo, no suponiendo.
+
+**De nuestro lado quedan dos cosas que su artículo no desarrolla:**
+
+- **Por qué 24 kHz exactamente.** Él lo plantea como un buen equilibrio entre conmutación y carga del CPU, que es cierto. La receta de aquí agrega que debe ser **múltiplo entero de 60 y de 50 Hz**: así cada ciclo tiene 400 o 480 pulsos exactos y no aparecen subarmónicos por deriva (sección 3).
+- **El muestreo en el centro del periodo** (`k + 0.5`) y el **cuarto de onda en flash**, que dejan las dos mitades del semiciclo idénticas y la RAM libre (secciones 5 y 11).
 
 ### Pros y contras, sin maquillaje
 
-**El camino de la tabla en RAM gana en:**
+| | Tabla en RAM, calculada al arrancar | Cuarto de onda en flash (este proyecto) |
+| --- | --- | --- |
+| **Flexibilidad** | Cambias la frecuencia y se ajusta sola al encender | Hay que correr `genera_tabla_seno.py` y recompilar |
+| **Simplicidad** | Todo en un archivo, sin herramienta externa | Script aparte y tabla generada |
+| **Legibilidad** | `LUT[i] * idxMod` se lee de corrido | `(tabla[q] * amplitud) >> 16` hay que explicarlo, y por eso existe este documento |
+| **RAM** | 400 B de los 2048 a 60 Hz | **0 B** |
+| **Flash** | `sin()` arrastra la biblioteca de punto flotante | 200 B de tabla, sin esa biblioteca |
+| **Ciclos en la interrupción** | Cientos, por el `float` | Decenas |
+| **Simetría del semiciclo** | Depende de dónde se muestree | Idéntica por construcción |
 
-- **Flexibilidad.** Cambias la frecuencia de línea o la portadora y el firmware se ajusta solo al arrancar. En el nuestro hay que volver a correr `genera_tabla_seno.py` y recompilar: amarra al que quiera experimentar.
-- **Simplicidad.** Todo está en un archivo, sin herramienta externa ni tabla pegada a mano. Para aprender y para prototipar, eso vale mucho.
-- **Legibilidad.** `LUT[idx] * idxMod` se lee de corrido; `(tabla[q] * amplitud) >> 16` hay que explicarlo, y por eso existe este documento.
+Ninguna está mal: son dos puntos distintos del mismo intercambio. Para aprender, prototipar o cambiar de frecuencia a cada rato, el camino de la tabla en RAM es mejor. Para un micro que además tiene que proteger el puente, el nuestro deja el margen que hace falta.
 
-**El camino del cuarto de onda en flash gana en:**
-
-- **RAM.** 400 B es una quinta parte de la memoria del chip, y el ADC, el enlace I2C y las protecciones también la necesitan.
-- **Flash.** Calcular la tabla con `sin()` arrastra la biblioteca de punto flotante.
-- **Ciclos en la interrupción.** El AVR no tiene unidad de punto flotante: una multiplicación por `float`, con sus conversiones de ida y vuelta, cuesta del orden de cientos de ciclos de los 666 disponibles. Con enteros son unas decenas. *(Estimación: no lo hemos medido.)*
-- **Simetría.** Muestrear al centro deja las dos mitades del semiciclo idénticas y evita armónicas pares (sección 5).
-
-Ninguna de las dos está mal. Son dos puntos distintos del mismo intercambio.
-
-### Dos detalles que sí conviene cuidar, venga el código de donde venga
+### Dos detalles que conviene cuidar, venga el código de donde venga
 
 1. **Una variable compartida entre `loop()` y la interrupción tiene que ser atómica.** Un `float` son 4 bytes y el AVR no los escribe de un golpe: si la interrupción entra a la mitad, lee dos bytes viejos y dos nuevos, un valor que nunca existió. Aquí la amplitud es un entero de 16 bits y **se aplica sólo al inicio de cada ciclo**, dentro de la propia interrupción, para que además no quede corriente directa en el transformador.
-2. **El tiempo muerto tiene que estar en alguna parte.** Si el código no lo pone, tiene que ponerlo el gate driver: algunos lo traen interno y otros no (el IR2110 no). Aquí lo hace el hardware del timer con dos comparadores separados (sección 8), y además cada módulo declara el suyo por el pin P9.
+2. **El tiempo muerto tiene que estar en alguna parte.** Si el código no lo pone, tiene que ponerlo el gate driver: algunos lo traen interno y otros no (el IR2110 no). Aquí lo hace el hardware del timer con dos comparadores separados (sección 8), y cada módulo declara cuánto necesita por su pin P9.
 
 ### El punto
 
-Las matemáticas de bachillerato —la simetría del seno, una multiplicación entera y un corrimiento— bastan para sacarle a un micro de 8 bits lo que parecería que pide un DSP. Eso no lo descubrimos nosotros: lo aprendimos comparando caminos que otros ya habían recorrido y publicado. **Si esta receta sirve, que también quede publicada y que alguien la mejore.**
+Las matemáticas de bachillerato —la simetría del seno, una multiplicación entera y un corrimiento— bastan para sacarle a un micro de 8 bits lo que parecería que pide un DSP. Eso no lo descubrimos nosotros: lo aprendimos comparando caminos que otros ya habían recorrido y publicado. **Gracias a ese esfuerzo existen alternativas para escenarios donde hay que exprimir cada recurso, que es justo el caso de la trinchera. Si esta receta sirve, que también quede publicada y que alguien la mejore.**
 
 ---
 
