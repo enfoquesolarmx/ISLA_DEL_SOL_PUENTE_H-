@@ -50,8 +50,8 @@ Cada archivo hace una sola cosa y empieza con un bloque que dice qué hace, qué
 | Archivo | Qué hace | Estado |
 | --- | --- | --- |
 | `ISLA_CRITICO.ino` | `setup()` y `loop()`: solo llama a los módulos | ✅ Paso 2: reporte + SPWM con rampa de banco (D12 = 0) |
-| `config_portadora.h` | Portadora, muestras, TOP y tiempo muerto en cuentas. Solo constantes, sin registros | ✅ |
-| `config_spwm.h` | Pulso mínimo y amplitud máxima | ✅ Valores iniciales, por validar en banco |
+| `config_portadora.h` | Portadora, muestras, TOP y tiempo muerto en cuentas. Solo constantes, sin registros. **Explicado línea por línea** en [la base de tiempo del SPWM](../../docs/base_de_tiempo_spwm.md) | ✅ |
+| `config_spwm.h` | Pulso mínimo y amplitud máxima. Explicado en [la base de tiempo del SPWM](../../docs/base_de_tiempo_spwm.md) | ✅ Temporización validada; el pulso mínimo falta validarlo con potencia |
 | `tabla_seno.h` | Dos cuartos de onda Q16 en flash: 100 muestras (60 Hz) y 120 (50 Hz). **Generado** por `herramientas/genera_tabla_seno.py` | ✅ |
 | `spwm.h` + `spwm_328p.cpp` | SPWM híbrida: Timer1, ISR de portadora, pierna B en el cruce por cero, apagado | ✅ 328P |
 | `spwm_4809.cpp` | La misma SPWM con TCA0 | Pendiente: hoy da error al compilar, a propósito |
@@ -612,3 +612,4 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-13 | **Paso 3: lectura de P9** (`dt_p9.h/.cpp`): 16 lecturas de A7 al encender, 500 ns solo con las dos ramas a GND, mixto o inestable → 1 µs, fuera de rango → no arranca, vigilancia cada 50 ms (3 lecturas distintas → SPWM detenida). Prueba en la PC (`pruebas/prueba_p9.cpp`): todo correcto. Compila: 7.3 KB de flash, 253 B de RAM. Prueba de banco pendiente (7.2) |
 | 2026-11-13 | **Enlace I2C CRÍTICO ↔ AUX validado en banco** (sección 7.3): CRÍTICO esclavo 0x20, PING + foto de 16 bytes con CRC-8, avisos y recuperación en los dos lados, liberación del bus en el AUX. Más de 1 700 PING sin pérdidas, CRC 0. No afecta al tiempo muerto (1 µs) ni a la pierna B (~42 µs). Advertencia de las dos laptops (lazo de tierra) |
 | 2026-11-15 | **Batería en A3** (`bateria.h/.cpp`) y **límites de corte** para **3 tecnologías** (`perfiles_bateria.h`: plomo-ácido, LiFePO4 15S y 16S, con fuentes), escogidas desde el SETUP del panel y guardadas en EEPROM; corte, emergencia, reconexión y corte alto con retardos. **Protocolo v2** (batería, estado y tecnología en la foto; comando `0x02`). Prueba en la PC: todo correcto. **Validado en SimulIDE** (sección 7.4); banco pendiente. Corregido el reporte de ciclos tras rearrancar la SPWM |
+| 2026-11-15 | Documento **[La base de tiempo del SPWM, línea por línea](../../docs/base_de_tiempo_spwm.md)**: cada constante de `config_portadora.h` y `config_spwm.h` con su fórmula, sus candados y lo medido; la receta paso a paso y su aplicación a otros micros. Corregido el comentario del presupuesto de la interrupción (169–180 ciclos en simulación, no 80–120) |

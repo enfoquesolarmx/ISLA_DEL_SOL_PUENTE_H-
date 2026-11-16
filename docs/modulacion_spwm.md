@@ -170,6 +170,8 @@ En modo cargador, el puente trabaja como rectificador activo: toma corriente de 
 
 ### 4.3 Portadora sincronizada
 
+> **Ver también:** [La base de tiempo del SPWM, línea por línea](base_de_tiempo_spwm.md): cómo estos 24 kHz se convierten en TOP, muestras, tiempo muerto y amplitud en el firmware.
+
 f_sw = 24 kHz = **400 × 60 Hz**. Cada ciclo de 60 Hz tiene exactamente 400 periodos de portadora, así que:
 - la tabla de senos es de 400 muestras (o 200 por semiciclo);
 - no aparecen subarmónicos por deriva entre la portadora y la senoidal;

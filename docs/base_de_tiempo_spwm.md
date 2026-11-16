@@ -1,4 +1,4 @@
-# La portadora del SPWM, línea por línea
+# La base de tiempo del SPWM, línea por línea
 
 **Proyecto:** Isla del Sol: inversor 48 V → 127 V / 60 Hz, 1000 W
 
@@ -514,7 +514,7 @@ La salida está en alto mientras el contador va por debajo del comparador. Como 
 - **De dónde sale:** 2 × 333 = **666**. En tiempo: 666 × 62.5 ns = 41.6 µs.
 - **Cuánto se usa:** la interrupción del SPWM tarda **169–180 ciclos** (medido en el simulador del chip, 🖥), alrededor del 27 % del presupuesto. El resto queda para `loop()`: leer sensores, atender el enlace I2C, vigilar la batería.
 
-  > El comentario de la línea 183 dice "DC-017 estima 80–120 ciclos". Esa fue la estimación inicial; el valor medido en simulación es 169–180. **Falta medirlo en el chip real** con un pin de prueba (D7 está reservado para eso).
+  > La estimación inicial (DC-017) era de 80–120 ciclos; el valor medido en simulación es 169–180. **Falta medirlo en el chip real** con un pin de prueba (D7 está reservado para eso).
 
 - **Por qué importa:** si la interrupción tardara más que el periodo, se perdería un pulso y la onda se deformaría. Es la razón por la que el inversor usa **dos** microcontroladores: el CRÍTICO sólo genera la onda y protege; la pantalla, el CAN y los mensajes van en el AUX.
 
@@ -674,7 +674,7 @@ constexpr uint8_t  PULSO_MIN_CUENTAS = ISLA_NS_A_CUENTAS(PULSO_MIN_NS);   // 8 /
 - **De dónde sale el 500:** es un valor **inicial**, igual al tiempo muerto moderno. La lógica: si el driver necesita 500 ns para conmutar con seguridad, un pulso más corto que eso no alcanza a hacer nada útil.
 - **Si lo subes:** se pierde un poco más de onda cerca del cruce por cero (más distorsión) y baja la amplitud máxima.
 - **Si lo bajas:** pulsos que calientan sin entregar energía, y menos margen para el bootstrap.
-- **Estado:** 🖥 la prueba en la PC confirma que nunca sale un pulso de menos de 500 ns. ⏳ **El valor en sí falta validarlo con osciloscopio y los gate drivers reales** (¿enciende completo el MOSFET en 500 ns?, ¿se recarga el bootstrap?). El encabezado del archivo lo dice: "valores INICIALES, POR VALIDAR EN BANCO".
+- **Estado:** 🖥 la prueba en la PC confirma que nunca sale un pulso de menos de 500 ns. ⏳ **El valor en sí falta validarlo con osciloscopio y los gate drivers reales** (¿enciende completo el MOSFET en 500 ns?, ¿se recarga el bootstrap?). El encabezado del archivo lo dice: el pulso mínimo es un valor inicial, por validar con potencia.
 
 ### `PULSO_MIN_CUENTAS` (8 en el 328P; 10 en el 4809)
 
