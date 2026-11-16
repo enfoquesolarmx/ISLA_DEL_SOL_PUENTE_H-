@@ -46,6 +46,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809) | Presupuesto de CPU y memoria de los ATmega328P, y alternativa en el mismo socket: Nano Every (ATmega4809) | Control | 2026-11-08 | Vigente (V1) / alternativa abierta |
 | [DC-018](#dc-018-modulación-híbrida-a-24-khz-también-en-el-cargador-y-socket-multimodelo-atmega328p--atmega4809) | Modulación híbrida a 24 kHz también en el cargador, y socket multimodelo ATmega328P / ATmega4809 | Control | 2026-11-08 | Vigente (V1, por validar en banco) |
 | [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo) | Transferencia red / inversor / cargador: tres estados y ninguna falla de un relé forma paralelo | Tarjeta de relés | 2026-11-08 | Vigente (V1, por validar en banco) |
+| [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad) | Reloj del ADC a /128 y muestreo amarrado a la portadora: precisión antes que velocidad | Control | 2026-11-16 | Vigente (V1, por validar en banco) |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -236,7 +237,7 @@ Se necesitan dos lecturas AC: la salida del inversor (para el lazo de amplitud) 
 
 **Consecuencias**
 
-- ⚠️ **Firmware:** el ADC lee un canal a la vez (~104 µs por conversión). Eso equivale a **~2.25° de desfase** entre las dos lecturas, casi la mitad de la ventana de sincronía de 5°. El firmware debe restarlo o alternar el orden de las lecturas.
+- ⚠️ **Firmware:** el ADC lee un canal a la vez (~104 µs por conversión). Eso equivale a **~2.25° de desfase** entre las dos lecturas, casi la mitad de la ventana de sincronía de 5°. El firmware debe restarlo o alternar el orden de las lecturas. → **Resuelto en [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad):** el instante de la medición es determinista, así que el desfase entre canales deja de ser un error y pasa a ser una constante conocida (2.70° a 60 Hz) que se resta.
 - **Calibración en trinchera:** se mide la salida con el multímetro y se gira el trimmer hasta que el ATmega reporte el mismo valor. La corrección fina va por software, en la EEPROM.
 
 ---
@@ -1103,6 +1104,59 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 
 ---
 
+## DC-020. Reloj del ADC a /128 y muestreo amarrado a la portadora: precisión antes que velocidad
+
+> **En resumen: al ADC no se le pide velocidad, se le pide exactitud y un instante conocido.** Lo rápido ya está resuelto en hardware ([DC-014](#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado)); lo que el PLL necesita no es llegar pronto, es saber *exactamente cuándo* midió.
+
+**Contexto**
+
+[DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc) fijó el cobre de los dos canales AC — A0 (red) y A6 (inversor), transformador de 12 VAC, bias de 2.5 V — y dejó el firmware abierto, con una advertencia: el ADC lee un canal a la vez, y eso mete desfase entre las dos lecturas.
+
+Al llegar al PLL y al cruce por cero hay que decidir dos cosas que parecen independientes y no lo son:
+
+1. **A qué velocidad corre el ADC** (el preescalador `ADPS`).
+2. **En qué instante del periodo de portadora se toma la muestra.**
+
+El reflejo es pedirle velocidad al ADC: más muestras por ciclo, mejor cruce por cero. **Es el reflejo equivocado**, y la hoja de datos lo dice sin ambigüedad.
+
+**Alternativas consideradas**
+
+Con el CPU a 16 MHz, la hoja de datos exige un reloj de ADC **entre 50 kHz y 200 kHz para obtener la resolución máxima**; por arriba de 200 kHz se puede muestrear más rápido, pero con menos de 10 bits útiles [6], [26].
+
+| `ADPS` | Reloj ADC | ¿En especificación? | 1 conversión | Muestras / ciclo 60 Hz | Por qué sí o por qué no |
+| --- | --- | --- | --- | --- | --- |
+| **/128** | **125 kHz** | **sí** | 104 µs | 160 | ✅ **Elegido:** único valor con 10 bits plenos, y aun así sobran muestras |
+| /64 | 250 kHz | ❌ no (25 % arriba) | 52 µs | 321 | ❌ Compra muestras pagando con los bits que el cruce por cero necesita |
+| /32 | 500 kHz | ❌ no | 26 µs | 641 | ❌ ~9 bits |
+| /16 | 1 MHz | ❌ no | 13 µs | 1282 | ❌ ~8 bits |
+
+La tentación de los preescaladores rápidos nace de suponer que la sincronía es una carrera. No lo es: **el PLL engancha en segundos**, no en un ciclo. En 1 s caben 60 ciclos de red, así que la parte aleatoria del error de fase baja ×√60 ≈ 7.7. Lo que no se recupera promediando son los bits que el ADC dejó de resolver.
+
+**Decisión y valores**
+
+- **`ADPS` = /128 (125 kHz), fijo.** No es negociable mientras el CPU corra a 16 MHz: es el único valor dentro de la ventana de la hoja de datos.
+- **Conversión normal: 13 ciclos de ADC = 104 µs.** La primera después de habilitar el ADC toma 25 ciclos = 200 µs (inicializa la parte analógica): **se descarta**.
+- **El valor no se captura al final de la conversión.** El *sample-and-hold* ocurre **1.5 ciclos de ADC después del disparo = 12 µs**, que son **192 cuentas del Timer1** [26]. Ese, y no el final, es el instante de la medición — y es determinista.
+- **Disparo desde la ISR de desborde del Timer1** (modo 8: el desborde es en BOTTOM), **una conversión cada 3 desbordes**: 3 × 41.625 µs = **124.875 µs > 104 µs**, así que la conversión siempre termina antes del siguiente disparo. `fs` = 8008 Hz.
+- **Multiplexado alternado A0 / A6:** 66.7 muestras por canal por ciclo de 60 Hz (80.1 a 50 Hz). Entre muestra y muestra del mismo canal hay 5.39°.
+- **Sesgo entre canales: 124.875 µs = 2.70° a 60 Hz** (2.25° a 50 Hz). **Constante y conocido: se resta en firmware.** Esto cierra el pendiente de DC-006.
+- **Rechazo de muestras sucias.** La muestra cae siempre en la cuenta 192 del Timer1; el flanco de conmutación está en la cuenta `d`, que el firmware acaba de escribir. Cuando `|d − 192|` cae dentro de una ventana de guarda, **esa muestra se descarta**: el firmware sabe cuáles salieron sucias porque él mismo puso el flanco ahí. Son ~2 de cada 67 por medio ciclo (**3 %**), y cuesta una comparación.
+
+**Por qué el disparo es por software y no con el auto-trigger del ADC.** De las fuentes de `ADTS`, la de comparación con OC1B no está disponible porque **`OCR1B` es el tiempo muerto** de este diseño, y la de captura tampoco porque **`ICR1` es el TOP del modo 8**. Queda el desborde del Timer1, que dispara cada 41.6 µs — demasiado seguido para una conversión de 104 µs. Por eso la conversión se arranca contando a 3 dentro de la ISR de desborde **que ya existe** para actualizar el SPWM: el costo es un contador y un `ADSC`, y el jitter es la latencia de la ISR (unos pocos microsegundos, repetible mientras ninguna otra interrupción la retrase).
+
+**Consecuencias**
+
+- **El motivo para amarrar el ADC a la portadora es el ruido, no la velocidad.** Si el ADC muestrea libre, tarde o temprano cae encima de un flanco del puente y esa muestra sale sucia sin que nadie lo sepa. Amarrado, cae siempre en el mismo punto del periodo, y las pocas que coinciden con el flanco se identifican y se tiran.
+- **La protección rápida no depende del ADC:** vive en hardware (DC-014 y [`corte_por_hardware.md`](corte_por_hardware.md)). El ADC mide para el PLL, para el RMS y para la pantalla, y las tres cosas toleran decenas de milisegundos. El ADC nunca tiene que llegar a tiempo a nada.
+- **Resuelve la advertencia de DC-006:** el desfase entre canales deja de ser un error que hay que acotar y pasa a ser una constante que se resta.
+- ⚠️ **El techo de exactitud de fase ya no lo pone el ADC.** Lo pone el desfase propio del transformador de 12 VAC más los 10 nF del pin (~2° según DC-006). Para **transferencia** se cancela, porque es igual en los dos canales. Para **inyección a red** (V3) hay que calibrarlo contra un patrón: queda apuntado como pendiente de esa versión.
+- ⚠️ **Nada de esto está medido en banco.** Es aritmética sobre la hoja de datos. Pendiente, el día que haya los dos Nano, un transformador de 12 VAC y el analizador: verificar `fs` real, el instante de muestreo (12 µs después del desborde), el ruido con el puente conmutando, y que el rechazo del 3 % se comporte como se calculó.
+- ⚠️ **Si se cambia de micro** (Nano Every, ESP32, Blue Pill), lo que se conserva **no es el /128**: es la metodología — el reloj del ADC dentro de la ventana que pida *su* hoja de datos, el instante de muestreo conocido, y la muestra amarrada a un punto fijo del periodo de portadora. Misma regla que en [`base_de_tiempo_spwm.md`](base_de_tiempo_spwm.md) para la base de tiempo del SPWM.
+
+**Referencias:** [6], [26].
+
+---
+
 ## Críticas esperadas y preguntas abiertas
 
 Lo que sabemos que se puede discutir. Se deja escrito a propósito:
@@ -1144,6 +1198,7 @@ Quien tenga datos (mediciones, una alternativa probada, una falla documentada) p
 23. EC&M, *Transfer Switches Simplified*: el interruptor de transferencia básico es de dos polos y dos tiros; con él es imposible que las dos fuentes alimenten la carga a la vez. <https://www.ecmweb.com/basics/transfer-switches-simplified>
 24. Rayex, *L90 / L90S Power Relay*: 1 Form C, 30 A (NO) / 20 A (NC) a 240 VAC, bobina de 12 V con 160 Ω y 0.9 W, 2500 VAC (L90S). <https://manualmachine.com/datasheet/l9005w/27845111-specification>
 25. OutBack Power Systems, *GVFX/GTFX Series Inverter/Charger Installation Manual*, puesta a tierra: neutros comunes en todo el sistema, unión N–PE en un solo punto y retiro de las demás (incluida la de la planta). <https://manualsdir.com/manuals/407161/outback-power-systems-gvfx-series-inverter_charger-installation-manual-gtfx-series-inverter_charger-installation-manual.html?page=74>
+26. Microchip, *Prescaling and Conversion Timing* (mismo periférico ADC que el ATmega328P): «the successive approximation circuitry requires an input clock frequency between 50kHz and 200kHz to get maximum resolution»; conversión normal de 13 ciclos de ADC, primera conversión de 25 ciclos, *sample-and-hold* a 1.5 ciclos de ADC del inicio de una conversión normal (13.5 en la primera). <https://onlinedocs.microchip.com/oxy/GUID-EC8D3BAB-0B5E-454F-AB6E-6A7C91C6F103-en-US-3/GUID-6E3CE6D6-C382-4489-A654-C4664BA15691.html>
 
 ---
 
