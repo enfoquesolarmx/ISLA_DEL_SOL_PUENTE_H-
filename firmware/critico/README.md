@@ -326,6 +326,17 @@ Arduino Nano (ATmega328P) por USB, **sin etapa de potencia**, analizador lógico
   - **El modelo de la PC no lo predecía:** suponía que una salida solo cambia al coincidir el comparador. Se agregó la regla del nivel en BOTTOM a `pruebas/prueba_spwm.cpp`. El modelo reproduce el pulso con los mismos tiempos (83.25 → 103.06 µs, 2 µs abajo, vuelve a subir) y **todas las verificaciones siguen pasando**: tiempo muerto de 8 / 16 cuentas, sin traslapes, pulso mínimo respetado.
   - **Lección:** el banco encontró un comportamiento del chip que la simulación no tenía. Por eso cada paso se valida en hardware real.
 
+- **El primer ciclo de línea sale en amplitud 0, a propósito:**
+
+  ![Primer ciclo en amplitud 0, visto en GTKWave](img/primer_ciclo_amplitud_cero.png)
+
+  *Tres ciclos de 60 Hz de la onda ideal del firmware, vistos en GTKWave. El primer ciclo completo (0–16.6 ms) corre con amplitud 0: HA plana y LA encendida casi todo el semiciclo +, y al revés en el semiciclo −. Desde el segundo ciclo entra la modulación normal.*
+
+  - **Por qué:** `spwm_fijar_amplitud()` guarda el valor pedido, pero la ISR lo aplica **sólo al inicio de un ciclo de línea**, para que los dos semiciclos queden iguales y no meter corriente directa en el transformador.
+  - **Qué se ve con amplitud 0:** el pulso de potencia vale cero, así que el complementario queda encendido casi todo el tiempo. En el semiciclo + conducen los **dos lados bajos** (LA 96 %, LB 99.5 %); en el semiciclo −, los **dos lados altos** (HA 96 %, HB 99.5 %). En los dos casos la salida es 0 V, que es lo que pide el seno.
+  - **Comprobación:** ya modulando, HA queda encendida 60.5 % del semiciclo; el promedio teórico de medio seno con m = 0.949 es m × 2/π = 60.4 %.
+  - **Pendiente que esto destapa:** en el semiciclo − con amplitud baja, **LA sólo conduce 0.5 %** durante los 8.3 ms. El capacitor de bootstrap de la **pierna A** tiene que aguantar casi lo mismo que el de la pierna B, y el cálculo de los módulos gate driver sólo contempla la pierna B. Falta revisarlo antes de conectar potencia.
+
 - **No verificado todavía en hardware** (solo en la prueba de la PC): el pulso más angosto (≥ 500 ns), la forma senoidal en todos los pulsos, la amplitud real en el pico y que D12 nunca suba (D12 no se conectó al analizador). Se puede hacer con `analiza_captura.py` sobre un `.sr` completo (sección 7.1), o a mano con cursores en PulseView.
 
 ![Monitor Serie](img/banco_paso2_monitor_serie.png)
