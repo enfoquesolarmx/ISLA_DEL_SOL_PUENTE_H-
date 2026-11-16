@@ -1035,6 +1035,70 @@ Lo validado hasta hoy es **la temporización de las señales de compuerta**, sin
 
 ---
 
+## 16. Otros caminos: cómo lo resuelven otros proyectos
+
+**Esta receta no es la única manera, ni la "correcta".** Hay varios proyectos abiertos de inversor de onda pura con Arduino que llegan a una senoidal perfectamente buena por otro camino. Vale la pena conocerlos: este documento puede comparar alternativas sólo porque otros publicaron la suya primero, con su tiempo y su trabajo, y la dejaron a la vista para que cualquiera la estudie. De ahí salen las variantes, incluida la nuestra.
+
+Cada camino optimiza algo distinto. El nuestro está apretado para un caso concreto: **sacarle el máximo a un micro de 8 bits sin coprocesador matemático, que además tiene que cargar con el ADC, las protecciones y el enlace I2C en los mismos 666 ciclos.** Para otros escenarios, el camino de ellos es mejor.
+
+### Lo que coincide, y por eso no es capricho
+
+El enfoque más común calcula el tope del timer así:
+
+```c
+icr = (16000000 / f_portadora) / 2;
+```
+
+Es la misma cuenta de nuestro paso 1, escrita en dos pasos. **Proyectos independientes llegan a la misma fórmula**, porque es la que obliga la doble pendiente (sección 6). Igual el paso angular: 180° entre el número de muestras del semiciclo da los mismos 0.9°.
+
+### Cuidado con los dos "+0.5", que no son lo mismo
+
+| Dónde aparece | Qué hace |
+| --- | --- |
+| `int(sen(...) * icr + 0.5)` | Redondea el **valor** al entero más cercano, en vez de truncarlo. Nuestro generador también lo hace, con `round()` |
+| `sen((k + 0.5) × 180° / S)` | Corre el **ángulo** medio periodo, para muestrear al centro del pulso (sección 5) |
+
+Se escriben parecido y resuelven cosas distintas. El primero es aritmética; el segundo es la fase del muestreo.
+
+### Las dos recetas, lado a lado
+
+| | Tabla en RAM calculada al arrancar | Cuarto de onda en flash (este proyecto) |
+| --- | --- | --- |
+| Qué guarda la tabla | Medio ciclo: 200 valores a 60 Hz | Un cuarto: 100 valores |
+| Dónde vive | **RAM:** 400 B de los 2048 del ATmega328P | **Flash** (PROGMEM): 200 B, **0 B de RAM** |
+| Cómo se construye | Con `sin()` al encender, en el propio chip | Con un script de Python, antes de compilar |
+| Escala de los valores | Ya en cuentas del timer (0–333) | Q16 normalizado (0–65 535) |
+| Fase del muestreo | En el borde del periodo | Al centro (k + 0.5) |
+| Índice de modulación | Un `float` que multiplica en la interrupción | Un entero de 16 bits y un `>> 16` |
+
+### Pros y contras, sin maquillaje
+
+**El camino de la tabla en RAM gana en:**
+
+- **Flexibilidad.** Cambias la frecuencia de línea o la portadora y el firmware se ajusta solo al arrancar. En el nuestro hay que volver a correr `genera_tabla_seno.py` y recompilar: amarra al que quiera experimentar.
+- **Simplicidad.** Todo está en un archivo, sin herramienta externa ni tabla pegada a mano. Para aprender y para prototipar, eso vale mucho.
+- **Legibilidad.** `LUT[idx] * idxMod` se lee de corrido; `(tabla[q] * amplitud) >> 16` hay que explicarlo, y por eso existe este documento.
+
+**El camino del cuarto de onda en flash gana en:**
+
+- **RAM.** 400 B es una quinta parte de la memoria del chip, y el ADC, el enlace I2C y las protecciones también la necesitan.
+- **Flash.** Calcular la tabla con `sin()` arrastra la biblioteca de punto flotante.
+- **Ciclos en la interrupción.** El AVR no tiene unidad de punto flotante: una multiplicación por `float`, con sus conversiones de ida y vuelta, cuesta del orden de cientos de ciclos de los 666 disponibles. Con enteros son unas decenas. *(Estimación: no lo hemos medido.)*
+- **Simetría.** Muestrear al centro deja las dos mitades del semiciclo idénticas y evita armónicas pares (sección 5).
+
+Ninguna de las dos está mal. Son dos puntos distintos del mismo intercambio.
+
+### Dos detalles que sí conviene cuidar, venga el código de donde venga
+
+1. **Una variable compartida entre `loop()` y la interrupción tiene que ser atómica.** Un `float` son 4 bytes y el AVR no los escribe de un golpe: si la interrupción entra a la mitad, lee dos bytes viejos y dos nuevos, un valor que nunca existió. Aquí la amplitud es un entero de 16 bits y **se aplica sólo al inicio de cada ciclo**, dentro de la propia interrupción, para que además no quede corriente directa en el transformador.
+2. **El tiempo muerto tiene que estar en alguna parte.** Si el código no lo pone, tiene que ponerlo el gate driver: algunos lo traen interno y otros no (el IR2110 no). Aquí lo hace el hardware del timer con dos comparadores separados (sección 8), y además cada módulo declara el suyo por el pin P9.
+
+### El punto
+
+Las matemáticas de bachillerato —la simetría del seno, una multiplicación entera y un corrimiento— bastan para sacarle a un micro de 8 bits lo que parecería que pide un DSP. Eso no lo descubrimos nosotros: lo aprendimos comparando caminos que otros ya habían recorrido y publicado. **Si esta receta sirve, que también quede publicada y que alguien la mejore.**
+
+---
+
 ## Referencias dentro del repositorio
 
 - [`docs/modulacion_spwm.md`](modulacion_spwm.md): por qué modulación híbrida y por qué 24 kHz sincronizados con la línea (sección 4.3).
