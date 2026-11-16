@@ -6,7 +6,7 @@
 
 **Licencia:** MIT ([LICENSE.md](../../LICENSE.md))
 
-**Estado:** ✅ **ETAPA BASE COMPLETADA (2026-11-12): generación de la SPWM híbrida validada en hardware real a 50 Hz y 60 Hz, con tiempo muerto de 1 µs y de 500 ns.** Etiqueta git `critico-etapa-base`. Prueba de banco **sin potencia**: D12 (EN_HW) queda en 0 y las señales no pasan de la compuerta AND a los gate drivers.
+**Estado:** ✅ **ETAPA BASE COMPLETADA (2026-11-12): generación de la SPWM híbrida validada en hardware real a 50 Hz y 60 Hz, con tiempo muerto de 1 µs y de 500 ns.** Commit `44079a5`. Prueba de banco **sin potencia**: D12 (EN_HW) queda en 0 y las señales no pasan de la compuerta AND a los gate drivers.
 
 ### Etapa base: qué quedó validado
 
@@ -604,7 +604,7 @@ El borrador de 4400 líneas (sin probar, derivado de un código GPL v3) se usó 
 | 2026-11-12 | **Primera prueba real en un Nano: validada.** Pierna A, pierna B (40.44–42.19 µs en 5 cruces) y frecuencia (60.04 Hz estable en 7.5 ciclos). Analizador lógico a 16 MHz: pierna B a 16.656 ms (60.040 Hz), LB 49.7476 % (predicho 49.75 %), tiempo muerto de la pierna A = 1000 ns, 600–601 ciclos en 10 s. Capturas en `img/`. Sección 7.0 |
 | 2026-11-12 | **Pulso solitario de HA** en la muestra 1 del semiciclo − (~20 µs), encontrado en banco: el chip fija el nivel de la salida en BOTTOM al cambiar OCR1A de 0. Es seguro (HA + HB = 0 V, LA apagada). El modelo de la PC se corrigió con esa regla y lo reproduce; todas las verificaciones pasan. Nota en `spwm_328p.cpp` |
 | 2026-11-12 | **Prueba real a 50 Hz: validada.** 19.987 ms (50.033 Hz), LB 49.79 %, tiempo muerto de la pierna A 1000 ns, pierna B 41.8–42 µs, 501 ciclos en 10 s. Sección 7.0b |
-| 2026-11-12 | ✅ **ETAPA BASE COMPLETADA:** generación de la SPWM híbrida validada en hardware real a 50 y 60 Hz. Etiqueta `critico-etapa-base` |
+| 2026-11-12 | ✅ **ETAPA BASE COMPLETADA:** generación de la SPWM híbrida validada en hardware real a 50 y 60 Hz. Commit `44079a5` |
 | 2026-11-12 | Aclarado el **método de validación**: la etapa base se midió a mano en la interfaz gráfica de PulseView (decodificadores PWM y Timing, cursores) y en el Monitor Serie. `analiza_captura.py` es opcional y aún no se ha usado con capturas reales |
 | 2026-11-12 | **Tiempo muerto de 500 ns validado en hardware real a 60 Hz:** 500 ns en los dos flancos de la pierna A, amplitud 316 (m 0.948), 601 ciclos en 10 s. Sección 7.0c. El `.ino` del repo sigue en 1 µs |
 | 2026-11-13 | Enlace al nuevo **mapa de pines** de la tarjeta de control (sección 1.1). D7 del CRÍTICO para medir la duración real de la ISR |
