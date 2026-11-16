@@ -7,8 +7,8 @@
  *    Fija el pulso más angosto que se permite y la amplitud máxima de la
  *    senoidal, en cuentas del timer. Sólo constantes.
  *
- *  ESTADO: valores INICIALES, POR VALIDAR EN BANCO con el osciloscopio
- *          (ver README.md, prueba de banco del paso 2).
+ *  ESTADO: temporización medida en banco (README.md, 7.0). El PULSO MÍNIMO es un
+ *          valor INICIAL, por validar con potencia. Ver docs/base_de_tiempo_spwm.md
  *
  *  Licencia: MIT (ver LICENSE.md del repositorio).
  * =============================================================================

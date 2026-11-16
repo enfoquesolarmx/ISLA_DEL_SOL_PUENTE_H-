@@ -25,7 +25,7 @@
  *    ATmega328P a 16 MHz (Nano):        Timer1 phase-correct, TOP = 333
  *    ATmega4809 a 20 MHz (Nano Every):  TCA0 dual-slope,      PER = 416
  *
- *  RECURSOS: ninguno (sólo constantes).
+ *  RECURSOS: ninguno (sólo constantes). Explicado en docs/base_de_tiempo_spwm.md
  *
  *  Licencia: MIT (ver LICENSE.md del repositorio). Escrito desde cero.
  * =============================================================================
@@ -179,8 +179,8 @@ static_assert(MUESTRAS_SEMICICLO_50 <= 255 && MUESTRAS_SEMICICLO_60 <= 255,
 constexpr uint16_t TOP_CUENTAS = (uint16_t)(RELOJ_HZ / (2UL * FSW_OBJETIVO_HZ));
 
 // Ciclos de CPU disponibles en cada periodo de portadora (presupuesto de la ISR).
-// 328P: 666 ciclos; 4809: 832 ciclos. La ISR del SPWM debe usar una fracción
-// pequeña (DC-017 estima 80–120 ciclos). Medir en banco con un pin de prueba.
+// 328P: 666 ciclos; 4809: 832 ciclos. La ISR del SPWM usa 169–180 (~27 %, medido
+// en simulación; DC-017 estimaba 80–120). Falta medirla en el chip real (pin D7).
 constexpr uint16_t CICLOS_CPU_PERIODO = (uint16_t)(2UL * TOP_CUENTAS);
 
 // ======================== FRECUENCIAS REALES =================================
