@@ -80,6 +80,145 @@ amplitud máxima = la menor de:  95 % × 333 = 316      (techo)
                 → 316 con tiempo muerto de 500 ns, 313 con 1 µs
 ```
 
+### La receta: las fórmulas, paso a paso
+
+Como en una receta: primero los ingredientes, luego los pasos en orden. Cada paso usa lo que salió en los anteriores. Los números son los del ATmega328P a 16 MHz y 60 Hz.
+
+**Símbolos:** `⌊x⌋` = quitar los decimales (truncar); `⌈x⌉` = subir al entero siguiente; `mín(a, b)` = el menor de los dos.
+
+**Ingredientes** (lo que se elige o lo que pone la placa):
+
+| Símbolo | Qué es | Valor |
+| --- | --- | --- |
+| `f_reloj` | Reloj del chip | 16 000 000 Hz |
+| `f_línea` | Frecuencia de la salida | 60 Hz |
+| `f_port` | Portadora deseada | 24 000 Hz |
+| `t_DT` | Tiempo muerto que pide P9 | 500 ns o 1000 ns |
+| `t_mín` | Pulso mínimo | 500 ns |
+| `techo` | Modulación máxima permitida | 95 % |
+
+**Paso 1. El tick y el TOP**
+
+```
+t_cuenta = 1 / f_reloj                    = 1 / 16 000 000         = 62.5 ns
+TOP      = ⌊ f_reloj / (2 × f_port) ⌋     = ⌊ 16 000 000 / 48 000 ⌋ = ⌊333.33⌋ = 333
+```
+
+**Paso 2. La portadora real y su periodo**
+
+```
+f_port_real = f_reloj / (2 × TOP)         = 16 000 000 / 666       = 24 024.02 Hz
+T_periodo   = 2 × TOP × t_cuenta          = 666 × 62.5 ns          = 41.625 µs
+ticks por periodo = 2 × TOP               = 666
+```
+
+**Paso 3. Las muestras**
+
+```
+N (por ciclo)      = f_port / f_línea     = 24 000 / 60            = 400
+S (por semiciclo)  = N / 2                                         = 200
+Q (cuarto, tabla)  = N / 4                                         = 100
+```
+
+**Paso 4. La frecuencia de salida y su error**
+
+```
+f_salida  = f_port_real / N               = 24 024.02 / 400        = 60.060 Hz
+error_ppm = (f_salida − f_línea) / f_línea × 1 000 000
+          = (60.060 − 60) / 60 × 1 000 000                         = 1000 ppm (+0.1 %)
+```
+
+**Paso 5. La tabla de seno** (la calcula `genera_tabla_seno.py`, no el chip)
+
+```
+tabla[k] = redondear( 65 535 × sen( (k + 0.5) × 180° / S ) )       para k = 0 … Q − 1
+
+ejemplo, k = 10:   65 535 × sen(10.5 × 0.9°) = 65 535 × sen(9.45°) = 10 760
+```
+
+El 65 535 es la escala: 65 535 representa 1.0 (formato Q16), para guardar fracciones como enteros de 2 bytes.
+
+**Paso 6. Leer la tabla con el espejo** (k = número de muestra dentro del semiciclo, 0 … S − 1)
+
+```
+si k < S/2:   valor = tabla[k]              (subida, 0° a 90°)
+si k ≥ S/2:   valor = tabla[S − 1 − k]      (bajada, 90° a 180°: la misma tabla al revés)
+```
+
+**Paso 7. Los tiempos en ticks** (siempre hacia arriba)
+
+```
+DT_cuentas   = ⌈ t_DT × f_reloj ⌉         = ⌈ 500 ns × 16 MHz ⌉    = 8      (1000 ns → 16)
+mín_cuentas  = ⌈ t_mín × f_reloj ⌉        = ⌈ 500 ns × 16 MHz ⌉    = 8
+fracción del periodo que se lleva el tiempo muerto
+             = DT_cuentas / (2 × TOP)     = 8 / 666                = 1.2 %  (16 → 2.4 %)
+```
+
+**Paso 8. La amplitud máxima**
+
+```
+A_techo  = ⌊ TOP × techo / 100 ⌋          = ⌊ 333 × 95 / 100 ⌋     = 316
+A_física = TOP − DT_cuentas − mín_cuentas / 2
+         = 333 −  8 − 4                                            = 321   (con 500 ns)
+         = 333 − 16 − 4                                            = 313   (con 1 µs)
+A_máx    = mín( A_techo, A_física )       = mín(316, 321)          = 316   (con 500 ns)
+                                          = mín(316, 313)          = 313   (con 1 µs)
+m        = A / TOP                        = 313 / 333              = 0.940
+```
+
+**Paso 9. El ancho de cada pulso** (esto lo hace la interrupción, 24 024 veces por segundo, en `spwm_328p.cpp`)
+
+```
+d = ( valor × A ) / 65 536                 A = amplitud actual (0 … A_máx)
+si d < mín_cuentas:  d = 0                 pulso demasiado angosto: no se genera
+
+ancho del pulso de potencia = 2 × d × t_cuenta
+voltaje promedio de ese periodo = ± V_batería × d / TOP
+```
+
+**Paso 10. Los dos comparadores del timer** (aquí aparece el tiempo muerto)
+
+```
+semiciclo positivo:   lado alto  = d                  lado bajo = d + DT_cuentas
+semiciclo negativo:   lado bajo  = TOP − d            lado alto = TOP − d − DT_cuentas
+tope del comparador del lado alto = TOP − DT_cuentas (peor caso) = 333 − 16 = 317
+```
+
+**Un ejemplo completo: la muestra 10, con amplitud máxima y tiempo muerto de 1 µs**
+
+```
+ángulo         = (10 + 0.5) × 0.9°                    = 9.45°
+valor          = tabla[10]                            = 10 760
+d              = 10 760 × 313 / 65 536                = 51 cuentas     (51 ≥ 8: sí se genera)
+lado alto      = 51            lado bajo = 51 + 16    = 67
+pulso          = 2 × 51 × 62.5 ns                     = 6.375 µs de los 41.625 µs del periodo
+voltaje        = 48 V × 51 / 333                      = 7.4 V en promedio en ese periodo
+comprobación   = 48 V × 0.940 × sen(9.45°)            = 7.4 V   ✓
+```
+
+Y la misma cuenta en otros puntos del semiciclo:
+
+| Muestra k | Ángulo | `tabla` | d (cuentas) | Pulso | Comentario |
+| --- | --- | --- | --- | --- | --- |
+| 0 | 0.45° | 515 | 2 → **0** | no se genera | menor que el pulso mínimo |
+| 1 | 1.35° | 1 544 | 7 → **0** | no se genera | menor que el pulso mínimo |
+| 3 | 3.15° | 3 601 | 17 | 2.1 µs | primer pulso del semiciclo |
+| 10 | 9.45° | 10 760 | 51 | 6.4 µs | el del ejemplo |
+| 50 | 45.45° | 46 703 | 223 | 27.9 µs | a media subida |
+| 99 | 89.55° | 65 533 | 312 | 39.0 µs | el pico: quedan 2.6 µs para tiempo muerto y bootstrap |
+
+**Paso 11. Lo que se puede medir para comprobar la receta**
+
+```
+periodo de la salida       = N × T_periodo        = 400 × 41.625 µs  = 16.650 ms  (medido: 16.656 ms)
+hueco de la pierna B       = T_periodo                               = 41.625 µs  (medido: 40.4–42.2 µs)
+lado bajo de la pierna B en alto = (S − 1) / N    = 199 / 400        = 49.75 %    (medido: 49.7476 %)
+tiempo muerto de la pierna A = DT_cuentas × t_cuenta = 16 × 62.5 ns  = 1000 ns    (medido: 1000 ns)
+voltaje de pico ideal      = m × V_batería        = 0.940 × 48 V     = 45 V       (sin medir: falta potencia)
+```
+
+Para 50 Hz sólo cambian los pasos 3 a 6: N = 480, S = 240, Q = 120 y f_salida = 50.050 Hz. Para el ATmega4809 cambia el paso 1: t_cuenta = 50 ns y TOP = 416.
+
 ### La ficha de cada constante
 
 Cada constante lleva la misma ficha de cinco renglones:
