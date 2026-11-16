@@ -1118,3 +1118,10 @@ Las matemáticas de bachillerato —la simetría del seno, una multiplicación e
 - [`firmware/critico/README.md`](../firmware/critico/README.md): pruebas de banco con capturas (secciones 7.0, 7.0b y 7.0c).
 - `firmware/critico/ISLA_CRITICO/spwm_328p.cpp`: cómo se usan estos números en el Timer1.
 - `firmware/critico/pruebas/prueba_spwm.cpp`: la prueba en la PC que verifica tiempo muerto, pulso mínimo y traslapes cuenta por cuenta.
+
+## Referencias fuera del repositorio
+
+- Yopie DIY, [*Arduino Nano and ATmega328P SPWM Driver Card code optimization up to 24 kHz PWM frequency*](https://yopiemaker.com/arduino-nano-atmega328p-spwm-code-optimization-up-to-24-khz-pwm-frequency/): optimización de la interrupción de un driver SPWM de 44 µs a 19.4 µs. Comparado en la sección 16.
+- Hoja de datos del **ATmega328P** (Microchip): modos del Timer1, doble búfer de los comparadores y nivel de la salida en BOTTOM.
+- D. G. Holmes y T. A. Lipo, *Pulse Width Modulation for Power Converters: Principles and Practice* (Wiley–IEEE Press, 2003): muestreo regular contra natural, simetría de cuarto de onda y efecto del tiempo muerto.
+- Infineon/International Rectifier, nota **AN-978**, *HV Floating MOS-Gate Driver ICs*: recarga del bootstrap y por qué hace falta un pulso mínimo del lado bajo.
