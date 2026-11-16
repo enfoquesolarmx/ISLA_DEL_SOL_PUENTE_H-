@@ -20,6 +20,80 @@ Todo lo del **ATmega4809** (Nano Every) es 🖥 calculado: ese chip todavía no 
 
 ---
 
+## Antes de empezar
+
+### Qué necesitas saber y qué puedes saltarte
+
+No hace falta saber ensamblador. Según lo que quieras hacer, lees una parte u otra:
+
+| Quieres… | Te basta con… | Necesitas saber |
+| --- | --- | --- |
+| **Armar y cargar** el firmware | La sección 14 ("Si quiero cambiar…") y la tabla resumen (sección 11) | Usar el Arduino IDE |
+| **Entender** por qué funciona | La sección 0: la frase, el reparto de ticks y la receta | Aritmética y qué es un seno |
+| **Modificar** el firmware o llevarlo a otro micro | Todo el documento | Timers, interrupciones y registros de un microcontrolador |
+
+Si una palabra no te suena, está en el glosario.
+
+### Glosario de trinchera
+
+**El reloj y el contador**
+
+| Palabra | Qué es, en palabras de taller |
+| --- | --- |
+| **Reloj (cristal)** | El metrónomo del chip. El Nano trae un cristal que marca 16 millones de golpes por segundo (16 MHz). Todo en el chip avanza a ese ritmo |
+| **Tick (o ciclo de reloj)** | Un golpe de ese metrónomo. En el Nano dura 62.5 ns. Es la unidad de tiempo más pequeña que el chip puede manejar |
+| **ns, µs, ms** | Nanosegundo, microsegundo y milisegundo: una milmillonésima, una millonésima y una milésima de segundo. 1 µs = 1000 ns |
+| **Timer** | Un contador dentro del chip que avanza uno con cada tick, como un odómetro. Cuenta solo, sin que el programa lo empuje |
+| **Cuenta** | El número que lleva el timer en un momento dado. Una cuenta de diferencia = un tick de tiempo |
+| **TOP** | Hasta dónde cuenta el timer antes de regresar. Fija cuánto dura un periodo |
+| **Doble pendiente** | El timer sube de 0 al TOP y luego **baja** de regreso a 0, como un columpio. Los pulsos quedan centrados |
+| **Comparador** | Una marca en el recorrido del timer. Cuando la cuenta cruza la marca, la salida cambia sola, sin esperar al programa |
+| **Registro** | Una casilla de memoria dentro del chip que controla una parte del hardware. Escribir un número ahí es como mover una perilla |
+| **ppm** | Partes por millón. 1000 ppm = 0.1 %. Se usa para errores muy pequeños |
+
+**La onda**
+
+| Palabra | Qué es, en palabras de taller |
+| --- | --- |
+| **PWM** | Prender y apagar muy rápido. Cuanto más tiempo dura prendido cada pulso, más voltaje promedio sale. Como abrir y cerrar una llave de agua muy rápido para regular el chorro |
+| **SPWM** | Un PWM donde el ancho de los pulsos va siguiendo la forma de un seno: angostos cerca del cero, anchos en el pico. Después del filtro queda una senoidal |
+| **Portadora** | El ritmo fijo al que se prende y apaga: aquí, 24 000 veces por segundo |
+| **Periodo** | Lo que dura un pulso completo de portadora: 41.6 µs |
+| **Muestra** | El valor del seno que le toca a un pulso. Hay una muestra por cada periodo: 400 en un ciclo de 60 Hz |
+| **Tabla de seno (LUT)** | Una lista de valores del seno ya calculados y guardados en el chip. El chip no calcula senos: los busca en la lista, que es mucho más rápido |
+| **Cuarto de onda** | El tramo del seno de 0° a 90°. Con ese pedazo se arma la onda completa, leyéndolo al derecho y al revés |
+| **Amplitud** | Qué tan ancho es el pulso en el pico de la onda. Es el "volumen" de la senoidal |
+| **Índice de modulación (m)** | La amplitud como fracción del máximo posible. m = 0.94 significa que el pulso más ancho ocupa el 94 % del periodo |
+| **Armónicas / subarmónicos** | Deformaciones de la onda: componentes a frecuencias más altas (armónicas) o más bajas (subarmónicos) que los 60 Hz. Calientan el transformador y hacen ruido |
+
+**La potencia**
+
+| Palabra | Qué es, en palabras de taller |
+| --- | --- |
+| **Puente H** | Los cuatro MOSFET que conectan la batería a la salida en un sentido o en el otro. Tiene dos piernas |
+| **Pierna** | Dos MOSFET en serie entre +48 V y tierra. La pierna A conmuta a 24 kHz; la pierna B, sólo 120 veces por segundo, para cambiar la polaridad |
+| **Lado alto / lado bajo** | El MOSFET de arriba (hacia +48 V) y el de abajo (hacia tierra) de una pierna. HA y LA son los de la pierna A; HB y LB, los de la pierna B |
+| **Tiempo muerto** | La pausa con los dos MOSFET de una pierna apagados, entre apagar uno y prender el otro. Sin ella habría un corto directo a la batería |
+| **Conducción cruzada** | Lo que el tiempo muerto evita: los dos MOSFET de una pierna prendidos a la vez |
+| **Gate driver** | El circuito que recibe la señal débil del micro (5 V) y maneja con fuerza la compuerta del MOSFET |
+| **Bootstrap** | El capacitor que alimenta la compuerta del MOSFET de arriba. Se recarga cada vez que conduce el de abajo; si el de abajo nunca conduce, se descarga |
+| **P9** | El pin con el que cada módulo gate driver avisa qué tiempo muerto necesita: a tierra, 500 ns; abierto, 1 µs |
+
+**El programa**
+
+| Palabra | Qué es, en palabras de taller |
+| --- | --- |
+| **Interrupción (ISR)** | Un timbre. Cuando suena, el chip deja lo que estaba haciendo, atiende lo urgente y regresa. Aquí suena una vez por periodo para calcular el pulso siguiente |
+| **Flash** | El cuaderno donde está escrito el programa. No se borra al apagar. El Nano tiene 32 KB |
+| **RAM** | El pizarrón donde el chip hace sus cuentas. Se borra al apagar. El Nano tiene sólo 2 KB |
+| **Constante (`constexpr`)** | Un número con nombre que la computadora calcula **al compilar**. En el chip ya llega resuelto: no gasta tiempo ni RAM |
+| **Candado (`static_assert`, `#error`)** | Una revisión que hace la computadora antes de generar el programa. Si un número rompe una regla, no compila y dice por qué |
+| **Compilar** | Traducir el programa escrito a las instrucciones que entiende el chip. Lo hace el Arduino IDE al dar "Verificar" o "Subir" |
+| **Truncar / redondear hacia arriba** | Truncar es quitar los decimales (333.33 → 333). Redondear hacia arriba es subir al entero siguiente (8.2 → 9) |
+| **Q16** | Una forma de guardar fracciones como enteros: 65 535 representa 1.0. Así el chip trabaja con enteros, que le cuestan mucho menos que los decimales |
+
+---
+
 ## 0. Cómo leer este documento
 
 ### La idea en una frase
