@@ -202,7 +202,7 @@ Y la misma cuenta en otros puntos del semiciclo:
 | --- | --- | --- | --- | --- | --- |
 | 0 | 0.45° | 515 | 2 → **0** | no se genera | menor que el pulso mínimo |
 | 1 | 1.35° | 1 544 | 7 → **0** | no se genera | menor que el pulso mínimo |
-| 3 | 3.15° | 3 601 | 17 | 2.1 µs | primer pulso del semiciclo |
+| 2 | 2.25° | 2 573 | 12 | 1.5 µs | primer pulso del semiciclo |
 | 10 | 9.45° | 10 760 | 51 | 6.4 µs | el del ejemplo |
 | 50 | 45.45° | 46 703 | 223 | 27.9 µs | a media subida |
 | 99 | 89.55° | 65 533 | 312 | 39.0 µs | el pico: quedan 2.6 µs para tiempo muerto y bootstrap |
