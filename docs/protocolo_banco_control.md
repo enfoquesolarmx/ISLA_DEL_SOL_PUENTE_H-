@@ -45,7 +45,8 @@ Derivada de las corridas de abajo, no de un catálogo. Si algo ya está en el ca
 | 2 | Resistencia 8.2 kΩ | Divisor AC, rama de abajo (parte fija) | |
 | 2 | Trimmer 2 kΩ multivuelta (Bourns 3296W o equivalente) | Ajuste del divisor AC | Se conecta **como reóstato**: cursor unido a un extremo (DC-006) |
 | 6 | Resistencia 10 kΩ | Bias de 2.5 V (2 por canal) + P9 | |
-| 2 | Capacitor electrolítico 10 µF | Bias de 2.5 V | |
+| 2 | Capacitor electrolítico 10 µF | Bias de 2.5 V, valor de DC-006 | |
+| 2 | **Capacitor electrolítico 100 µF** | Bias de 2.5 V, **la alternativa buena** | Ver "Alternativas del bias" abajo |
 | 6 | Capacitor cerámico 100 nF | Bias y desacoplo | |
 | 2 | Capacitor cerámico 10 nF | Filtro pegado al pin (A0 y A6) | |
 | 2 | Resistencia 68 kΩ | Divisor de batería (DC-007) | |
@@ -56,6 +57,54 @@ Derivada de las corridas de abajo, no de un catálogo. Si algo ya está en el ca
 | 1 | Juego de alambre puente | | |
 | 1 | Módulo LCD 16×2 con PCF8574 | B4 (`LCD_TIPO 0`) | Si no está en el cajón |
 | 4 | Botón push + resistencias de la escalera | B4, botonera física en A7 | Valores en `botonera.cpp` |
+
+### Repuestos: los 5 USD que evitan los 50 USD de volver
+
+El viaje cuesta más que los materiales. Todo lo de esta tabla se compra **estando ahí**, aunque probablemente no se use, porque la alternativa es otra vuelta completa.
+
+| Cant. | Pieza | Qué falla previene | Prioridad |
+| --- | --- | --- | --- |
+| 1 | **Segundo transformador 120 → 12 VAC, mismo modelo** | **A5 no se puede contestar con uno solo.** La pregunta es si ±10 % de trimmer cubre la dispersión entre unidades, y eso exige dos unidades | **Alta** |
+| 1 | **Nano de repuesto** | Un Nano muerto termina la corrida en seco, con todo armado | **Alta** |
+| 2 c/u | Resistencias 110 kΩ, 120 kΩ, 150 kΩ | A3 puede pedir cualquiera de ellas y no se sabe cuál hasta medir A2 | **Alta** |
+| 2 | Electrolítico 220 µF | Si 100 µF no alcanza para el bias | Media |
+| 2 | Trimmer 5 kΩ multivuelta | Si el rango de ±10 % del de 2 kΩ no cubre la dispersión (A5) | Media |
+| 1 | LM358 (DIP-8) + socket | Último recurso del bias, si el capacitor no basta. **Un LM358 trae dos canales: uno por cada bias** | Media |
+| 2 c/u | Cerámicos 1 nF, 4.7 nF, 22 nF | Si los 10 nF del pin dan un desfase distinto al esperado (A7) | Media |
+| 1 | Surtido de resistencias ¼ W | Cubre A3, A7 y todo lo que no se previó | **Alta si no hay uno en el cajón** |
+
+> **El criterio de compra en la tienda:** si la pieza cuesta menos que un litro de gasolina y puede detener la corrida, se compra. No hay nada en esta tabla que no cumpla eso.
+
+---
+
+## Alternativas del bias de 2.5 V
+
+Se mide en **A1**, y hay que llegar con las tres opciones en la bolsa porque la decisión se toma en el banco.
+
+**La impedancia del nodo, calculada:**
+
+| Alternativa | 60 Hz | 1 kHz | 24 kHz (portadora) | Costo |
+| --- | --- | --- | --- | --- |
+| **Opción 1** — DC-006: 10k/10k + 10 µF + 100 nF | 265 Ω | 15.9 Ω | 0.66 Ω | lo que ya está |
+| **Opción 2** — bajar el divisor a 2.2k/2.2k | 258 Ω | 15.9 Ω | 0.66 Ω | centavos |
+| **Opción 3** — el mismo divisor con **100 µF** | **26.5 Ω** | **1.6 Ω** | **0.07 Ω** | centavos |
+| **Opción 4** — seguidor LM358 + 10 Ω en serie | 10 Ω | 10 Ω | **10 Ω** | ~0.60 USD |
+
+**Lo que dicen los números, y no es lo que uno esperaría:**
+
+- **Bajar las resistencias del divisor no compra nada** (258 contra 265 Ω). A 60 Hz el que manda es el capacitor, no el divisor. La opción 2 se descarta.
+- **El capacitor le gana al operacional en la frecuencia que importa.** El seguidor necesita los 10 Ω en serie para no oscilar con la carga capacitiva, y esos 10 Ω son 15 veces peor que lo que ya da un simple 10 µF a 24 kHz, que es donde está el ruido del puente. La opción 4 solo gana en DC y a baja frecuencia.
+- **La opción 3 es la buena:** diez veces menos impedancia en *todas* las frecuencias, por el precio de un capacitor más grande.
+
+**Lo que el bias tiene que aguantar de verdad.** La corriente de señal que pasa por el divisor AC es de **206 µA pico** (22.6 V de pico sobre 110 kΩ). Con la opción 1 eso mueve el bias **54.5 mV a 60 Hz**, un 2.6 % de la señal. **No es un error:** ese movimiento está en fase con la señal, así que solo cambia un poco la relación de atenuación, y el trimmer lo absorbe al calibrar.
+
+Donde sí sería un error es **si los dos canales compartieran el bias**: entonces los 54.5 mV de un canal se le aparecen al otro como señal ajena. Por eso DC-006 pide **un bias por canal**, y por eso A1 incluye la prueba de acoplamiento. Esa prueba es más importante que la de impedancia.
+
+**Orden de decisión en el banco:**
+1. Armar la opción 1 (como está en DC-006) y correr A1.
+2. Si el acoplamiento entre canales pasa y el rizado pasa → **quedarse con la opción 1**, y poner 100 µF de todos modos porque no cuesta nada.
+3. Si el rizado no pasa → opción 3 (100 µF, luego 220 µF).
+4. Si con 220 µF todavía no pasa → el problema no es impedancia, es acoplamiento por el montaje. Ahí sí el LM358, y además hay que revisar por dónde pasan los cables.
 
 ---
 
@@ -178,6 +227,17 @@ Rt ≥ Rb × ( Vsec_max × √2 / 2.10 − 1 )        con Rb = 10.2 kΩ
 - El recorrido cubre al menos **±8 %** alrededor del centro.
 - **Monótono, sin saltos.** Un salto es cursor sucio o mal contacto: ese trimmer se tira.
 - Conectado como reóstato, al levantar el cursor con la pinza la resistencia debe irse a **2 kΩ**, no al aire (es la protección que pidió DC-006).
+
+**La parte que necesita dos transformadores.** El ±10 % no existe para calibrar un transformador: existe para **absorber la diferencia entre unidades**, que es lo que va a pasar cuando alguien más arme esta tarjeta con el transformador de su tienda. Con una sola unidad esa pregunta no se puede contestar.
+
+Por eso el segundo transformador del mismo modelo está en la lista de repuestos:
+
+1. Medir el secundario en vacío de los dos, en el mismo contacto, con pocos minutos de diferencia.
+2. Anotar la diferencia en porcentaje.
+
+**Criterio.** Si la diferencia entre dos unidades del mismo modelo es **menor al 8 %**, el trimmer de 2 kΩ alcanza y DC-006 queda confirmado. Si es mayor, hay que subir a 5 kΩ (el que viene en los repuestos) y **eso cambia el reparto fijo/ajustable del divisor**, o sea que toca el esquemático antes de imprimir.
+
+Dos unidades no son una muestra estadística, pero una diferencia grande entre dos ya basta para descartar el ±10 %. Es lo más que se puede saber por el precio de un transformador.
 
 ---
 
@@ -315,9 +375,12 @@ Se dice aquí para que nadie crea que el módulo quedó cerrado:
 ## Lo que esta corrida le entrega al PCB
 
 1. **El valor definitivo del divisor AC** (A2 + A3).
-2. **La decisión de la protección de A7 al aire** (B1), que puede agregar una resistencia al cobre.
-3. **Confirmación de que el bias por canal se aguanta solo** (A1), o la necesidad de separarlo.
-4. **Recomendación que no depende de ninguna medición:** dejar en el PCB el **footprint del seguidor de bias, puenteado con un jumper**. Es la única prueba de esta lista que no se puede hacer antes de imprimir (el ruido del puente), y así no obliga a una reimpresión: si el 10 µF aguanta, el jumper se queda y el footprint queda vacío; si no aguanta, se quita el jumper y se puebla. Cuesta dos almohadillas.
+2. **El reparto fijo/ajustable del divisor** (A5, con los dos transformadores): si la dispersión pasa del 8 %, el trimmer sube a 5 kΩ y cambia la resistencia fija que lo acompaña.
+3. **La decisión de la protección de A7 al aire** (B1), que puede agregar una resistencia al cobre.
+4. **Confirmación de que el bias por canal se aguanta solo** (A1), o la necesidad de separarlo.
+5. **Recomendaciones que no dependen de ninguna medición**, porque cuestan casi nada y cubren la única prueba que no se puede hacer antes de imprimir (el ruido del puente conmutando):
+   - **Footprint del electrolítico del bias holgado, para 220 µF.** Es la alternativa que la aritmética señaló como la buena, y poblarlo con 100 µF o con 220 µF después no cuesta nada si el espacio ya está. Un footprint para 10 µF cierra esa puerta.
+   - **Footprint del seguidor de bias (LM358, dos canales) presente y puenteado con un jumper.** Es el último recurso, no el primero — el capacitor le gana a 24 kHz — pero son dos almohadillas y un jumper, y evita una reimpresión en el caso de que el problema resulte ser acoplamiento y no impedancia.
 
 ---
 
@@ -331,7 +394,7 @@ Se llena en el banco, con lápiz, y después se pasa aquí.
 | A2 secundario en vacío | | `Vsec` = ___ a `Vlínea` = ___ → `Vsec_max` = ___ | — | marca del transformador: |
 | A3 resistencia elegida | | `Rt` = ___ | — | |
 | A4 atenuador y recorte | | tope ___ V / mínimo ___ V | | |
-| A5 rango del trimmer | | ___ % | | |
+| A5 rango del trimmer | | ___ % | | dispersión entre los dos transformadores: ___ % |
 | A6 ADC vs multímetro | | error ___ % | | |
 | A7 simetría entre canales | | ___ µs (esperado 124.9) | | invertido: ___ µs |
 | A8 fs e instante | | ___ µs / ___ µs | | disparos perdidos: |
