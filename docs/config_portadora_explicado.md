@@ -885,6 +885,56 @@ Lo validado hasta hoy es **la temporización de las señales de compuerta**, sin
 
 ---
 
+## 15. La misma receta en otro micro
+
+> **Estas fórmulas son la base de tiempo de cualquier PWM.** Antes de escribir una sola línea de registros, con cualquier microcontrolador, hay que hacer estas cuentas: cuánto dura un tick, cuántos ticks tiene un periodo y cuántos le tocan al tiempo muerto, al pulso mínimo y al pulso de potencia. Lo que cambia de un micro a otro es el nombre de los registros y cuánto trabajo hace el hardware; la metodología es la misma.
+
+### Los pasos que no cambian
+
+1. Reloj del timer → cuánto dura un tick.
+2. TOP = reloj / (2 × portadora), en doble pendiente (pulsos centrados).
+3. Muestras = portadora / frecuencia de línea, múltiplo de 4.
+4. Tabla de un cuarto de onda, muestreada en k + 0.5.
+5. Tiempo muerto y pulso mínimo en ticks, redondeando hacia arriba.
+6. Amplitud máxima = la menor entre el techo y el límite físico.
+7. Candados al compilar que vigilen cada resultado.
+8. Banco con analizador lógico **antes** de conectar la potencia.
+
+### La receta aplicada a otros micros
+
+**Son ejemplos de cálculo, sin validar:** el reloj del timer depende de cómo se configure cada chip y debe confirmarse con su hoja de datos. De estos, sólo el ATmega328P se ha probado en este proyecto.
+
+| | ATmega328P (Nano) ✅ | ATmega4809 (Nano Every) 🖥 | STM32F103 (Bluepill) 🖥 | ESP32 🖥 |
+| --- | --- | --- | --- | --- |
+| Reloj del timer | 16 MHz | 20 MHz | 72 MHz | 160 MHz (módulo MCPWM) |
+| Tick = 1 / reloj | 62.5 ns | 50 ns | 13.9 ns | 6.25 ns |
+| TOP = ⌊reloj / 48 000⌋ | 333 | 416 | 1500 | 3333 |
+| Portadora real | 24 024.02 Hz | 24 038.46 Hz | 24 000.00 Hz | 24 002.40 Hz |
+| Salida a 60 Hz (400 muestras) | 60.060 Hz | 60.096 Hz | 60.000 Hz | 60.006 Hz |
+| Tiempo muerto de 500 ns | 8 ticks | 10 ticks | 36 ticks | 80 ticks |
+| Tiempo muerto de 1 µs | 16 ticks | 20 ticks | 72 ticks | 160 ticks |
+| Pasos para ajustar el pulso | 333 | 416 | 1500 | 3333 |
+| Modo de doble pendiente | Modo 8 del Timer1 | *Dual-slope* del TCA0 | *Center-aligned* del TIM1 | *Up-down* del MCPWM |
+| Cómo se hace el tiempo muerto | Dos comparadores separados | Dos comparadores separados | Generador de tiempo muerto del propio timer | Módulo de tiempo muerto del MCPWM |
+
+### Qué se gana con más MHz y más memoria
+
+- **Tick más fino:** el ancho del pulso se ajusta en más pasos (1500 o 3333 contra 333). La senoidal sale con menos escalones y el lazo de voltaje puede corregir más fino.
+- **Menos error de frecuencia:** con un TOP más grande, truncarlo pesa menos. Con 72 MHz la división sale exacta: 24 000.00 Hz y 60.000 Hz.
+- **Más presupuesto para la interrupción:** más ciclos de CPU en los mismos 41.6 µs.
+- **Más memoria:** caben tablas más finas, o la tabla completa si se prefiere la lectura directa. El cuarto de onda sigue siendo válido; simplemente deja de ser obligatorio.
+- **Hardware dedicado:** los timers del STM32 y del ESP32 ya traen salidas complementarias con tiempo muerto. En el AVR se logra con el truco de los dos comparadores.
+
+### Qué hay que cuidar al cambiar de familia
+
+- **Lógica de 3.3 V:** las señales hacia los gate drivers y las lecturas del ADC cambian de nivel. La tarjeta de control actual está hecha para un Nano de 5 V.
+- **El tiempo muerto siempre por hardware.** Con más razón en un ESP32, donde el WiFi y el sistema operativo pueden retrasar al programa.
+- **La capa de registros se escribe de nuevo** para cada chip, como `spwm_328p.cpp`. Los archivos de configuración y la lógica son comunes: hay que agregar el chip en "Chip y reloj" (sección 1) con su reloj esperado.
+- **Los candados se conservan.** Son los que avisan si con el reloj nuevo la portadora o la frecuencia se salen de rango.
+- **El banco se repite completo.** El pulso solitario de HA (sección 12) enseñó que cada chip tiene comportamientos que la simulación no trae.
+
+---
+
 ## Referencias dentro del repositorio
 
 - [`docs/modulacion_spwm.md`](modulacion_spwm.md): por qué modulación híbrida y por qué 24 kHz sincronizados con la línea (sección 4.3).
