@@ -41,6 +41,7 @@ Si una palabra no te suena, está en el glosario.
 | Palabra | Qué es, en palabras de taller |
 | --- | --- |
 | **Reloj (cristal)** | El metrónomo del chip. El Nano trae un cristal que marca 16 millones de golpes por segundo (16 MHz). Todo en el chip avanza a ese ritmo |
+| **Preescalador** | Un divisor opcional entre el reloj del chip y el timer, para que cuente más lento. En este firmware está en 1: el timer recibe los 16 MHz completos |
 | **Tick (o ciclo de reloj)** | Un golpe de ese metrónomo. En el Nano dura 62.5 ns. Es la unidad de tiempo más pequeña que el chip puede manejar |
 | **ns, µs, ms** | Nanosegundo, microsegundo y milisegundo: una milmillonésima, una millonésima y una milésima de segundo. 1 µs = 1000 ns |
 | **Timer** | Un contador dentro del chip que avanza uno con cada tick, como un odómetro. Cuenta solo, sin que el programa lo empuje |
@@ -179,8 +180,7 @@ TOP      = ⌊ f_reloj / (2 × f_port) ⌋     = ⌊ 16 000 000 / 48 000 ⌋ = �
 ```
 
 > **El 2 de esa fórmula es la subida y la bajada del contador, no los semiciclos del seno.** Es una confusión fácil: los semiciclos del seno aparecen después, en el paso 3 (400 muestras / 2 = 200 por semiciclo). Son dos escalas distintas que nunca se tocan, y la sección 6 las separa.
->
-> `f_reloj` es el reloj **del timer**, no el del CPU. Aquí son los mismos 16 MHz porque el preescalador es 1; con preescalador de 8 serían 2 MHz y el TOP saldría de 41.
+
 
 **Paso 2. La portadora real y su periodo**
 
@@ -575,7 +575,7 @@ La salida está en alto mientras el contador va por debajo del comparador. Como 
 | 5, 6, 7 | Fast PWM, 8/9/10 bits | fijo | TOP + 1 | — (TOP fijo) |
 | 14, 15 | Fast PWM | ICR1 / OCR1A | TOP + 1 | `f_reloj / f_pwm − 1` |
 
-Los cinco modos de doble pendiente llevan el 2; los de diente de sierra, no. **Esto no es exclusivo del AVR:** el *center-aligned* del STM32 y el *up-down* del MCPWM del ESP32 usan la misma fórmula (sección 15).
+Los cinco modos de doble pendiente llevan el 2; los de diente de sierra, no. En las dos fórmulas, `f_reloj` es **el reloj que le llega al timer**: aquí son los 16 MHz del chip porque el preescalador está en 1 (`CS10`), que es como trabaja todo este firmware. **Esto no es exclusivo del AVR:** el *center-aligned* del STM32 y el *up-down* del MCPWM del ESP32 usan la misma fórmula (sección 15).
 
 **Por qué el modo 8 y no el 10.** Los dos cuentan doble y los dos toman el TOP de ICR1. La diferencia es **cuándo se aplican los comparadores nuevos**:
 
