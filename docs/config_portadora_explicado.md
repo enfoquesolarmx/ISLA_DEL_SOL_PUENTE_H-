@@ -22,6 +22,23 @@ Todo lo del **ATmega4809** (Nano Every) es 🖥 calculado: ese chip todavía no 
 
 ## 0. Cómo leer este documento
 
+### La idea en una frase
+
+> **Estos dos archivos son el reglamento de cómo se reparte cada tick del reloj.**
+
+No generan ninguna señal: dicen cuántos ticks le tocan a cada cosa. Cada periodo de portadora tiene 666 ticks (333 de subida y 333 de bajada del contador), y se reparten así:
+
+| Ticks | Para qué |
+| --- | --- |
+| 8 o 16 en cada flanco | Tiempo muerto: nadie conduce |
+| Al menos 8 | Pulso mínimo: si no alcanza, no se prende |
+| Hasta 316 o 313 por lado | Pulso de potencia, según lo que pida el seno |
+| El resto | Pulso del lado contrario, que recarga el bootstrap |
+
+Hacia arriba, 400 periodos hacen un ciclo de 60 Hz (480 a 50 Hz), sin que sobre ni falte uno.
+
+El reparto se cumple por dos razones: **lo ejecuta el hardware del timer** (por eso el tiempo muerto midió 1000 y 500 ns exactos) y **los candados del compilador** no dejan compilar un reparto que rompa las reglas. Dos cosas no son perfectas: el tick depende del cristal (el del Nano corre 0.03 % lento) y la pierna B la mueve el programa, no el timer (su hueco varía entre 40.4 y 42.2 µs). Las dos se explican en la sección 12.
+
 ### La idea en un párrafo
 
 El inversor fabrica una senoidal de 60 Hz prendiendo y apagando los MOSFET 24 000 veces por segundo. Qué tan ancho es cada pulso decide cuánto voltaje sale en ese instante. Estos dos archivos **no prenden ni apagan nada**: sólo guardan los números con los que trabaja el resto del firmware (cada cuánto se conmuta, cuántos pulsos lleva un ciclo, cuánto se espera entre apagar un MOSFET y prender el otro, qué tan angosto y qué tan ancho puede ser un pulso). Son la "hoja de datos" del SPWM.
