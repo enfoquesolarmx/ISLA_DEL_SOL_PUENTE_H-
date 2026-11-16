@@ -178,6 +178,10 @@ t_cuenta = 1 / f_reloj                    = 1 / 16 000 000         = 62.5 ns
 TOP      = ⌊ f_reloj / (2 × f_port) ⌋     = ⌊ 16 000 000 / 48 000 ⌋ = ⌊333.33⌋ = 333
 ```
 
+> **El 2 de esa fórmula es la subida y la bajada del contador, no los semiciclos del seno.** Es una confusión fácil: los semiciclos del seno aparecen después, en el paso 3 (400 muestras / 2 = 200 por semiciclo). Son dos escalas distintas que nunca se tocan, y la sección 6 las separa.
+>
+> `f_reloj` es el reloj **del timer**, no el del CPU. Aquí son los mismos 16 MHz porque el preescalador es 1; con preescalador de 8 serían 2 MHz y el TOP saldría de 41.
+
 **Paso 2. La portadora real y su periodo**
 
 ```
@@ -560,6 +564,28 @@ La salida está en alto mientras el contador va por debajo del comparador. Como 
 1. **Pulsos centrados:** menos contenido armónico que con pulsos alineados a un borde.
 2. **Tiempo muerto gratis y exacto:** con dos comparadores separados unas cuentas, el hueco aparece en **los dos flancos** de cada pulso y lo hace el hardware del timer, no el programa (sección 8). No depende de que la interrupción llegue a tiempo.
 3. **Actualización limpia:** en el modo 8 los comparadores nuevos se aplican sólo cuando el contador pasa por 0. Nunca cambia un pulso a la mitad.
+
+**La fórmula del TOP depende del modo.** En el Timer1 del ATmega328P hay dos familias, y cada una cuenta distinto:
+
+| Modo (WGM13:0) | Tipo | TOP lo pone | Ticks por periodo | Fórmula del TOP |
+| --- | --- | --- | --- | --- |
+| 1, 2, 3 | PWM Phase Correct, 8/9/10 bits | fijo (0xFF, 0x1FF, 0x3FF) | **2 × TOP** | — (TOP fijo) |
+| 10, 11 | PWM Phase Correct | ICR1 / OCR1A | **2 × TOP** | `f_reloj / (2 × f_pwm)` |
+| **8**, 9 | PWM **Phase and Frequency Correct** | **ICR1** / OCR1A | **2 × TOP** | `f_reloj / (2 × f_pwm)` |
+| 5, 6, 7 | Fast PWM, 8/9/10 bits | fijo | TOP + 1 | — (TOP fijo) |
+| 14, 15 | Fast PWM | ICR1 / OCR1A | TOP + 1 | `f_reloj / f_pwm − 1` |
+
+Los cinco modos de doble pendiente llevan el 2; los de diente de sierra, no. **Esto no es exclusivo del AVR:** el *center-aligned* del STM32 y el *up-down* del MCPWM del ESP32 usan la misma fórmula (sección 15).
+
+**Por qué el modo 8 y no el 10.** Los dos cuentan doble y los dos toman el TOP de ICR1. La diferencia es **cuándo se aplican los comparadores nuevos**:
+
+| | Modo 10 (Phase Correct) | Modo 8 (Phase **and Frequency** Correct) |
+| --- | --- | --- |
+| OCR1A y OCR1B se aplican | en el TOP | en BOTTOM |
+| Con el TOP fijo | misma onda | misma onda |
+| **Si el TOP cambia** | las dos pendientes quedan distintas: medio periodo con el TOP viejo y medio con el nuevo | las dos pendientes siguen simétricas; el periodo cambia limpio |
+
+De ahí el *"and Frequency Correct"* del nombre. Con el TOP fijo da lo mismo, pero **el PLL va a mover el TOP unas cuentas en caliente** para engancharse con la red: en el modo 10, cada ajuste metería un semiciclo asimétrico, o sea un escalón de corriente directa en el transformador. Por eso se eligió el 8 desde el principio, aunque todavía no haya PLL.
 
 ### `TOP_CUENTAS` (333 en el 328P; 416 en el 4809)
 
