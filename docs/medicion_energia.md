@@ -10,11 +10,14 @@
 
 ## 1. Qué ve el usuario
 
-Cuatro pantallas en el LCD de 16×2. Nada más.
+Seis pantallas en el LCD de 16×2. Nada más.
 
 ```
  780 W      78%        CONSUMO DE HOY
 MAX24h  950 W               4.8 kWh
+
+AYER                   PROMEDIO kWh/DIA
+     6.2 kWh           7d  6.2 30d  5.8
 
 HISTORICO              DESPIERTO
      1247 kWh              45d 07h
@@ -29,6 +32,8 @@ HISTORICO              DESPIERTO
 | **MAX24h 950 W** | La potencia **sostenida** más alta de las últimas 24 horas |
 | **CONSUMO DE HOY 4.8 kWh** | Energía consumida en las últimas 24 horas |
 | **HISTORICO 1247 kWh** | Energía consumida desde que se instaló |
+| **AYER 6.2 kWh** | El último día cerrado |
+| **PROMEDIO 7d / 30d** | Consumo diario promedio de la semana y del mes |
 | **DESPIERTO 45d 07h** | Cuánto lleva encendido sin reiniciarse |
 
 ---
@@ -249,9 +254,17 @@ Reservando ~450 B de pila quedan **529 B utilizables**. El módulo pide:
 | Acumulado del día en Wh (32 bits) | 4 |
 | Potencia actual y auxiliares | 20 |
 | DESPIERTO: segundos + marca de `millis()` | 8 |
-| **Total** | **138** |
+| **Total calculado** | **138** |
+| **Medido al compilar `energia.cpp` para AVR** | **136** |
 
-**Quedan 391 B de margen, el 74 % de lo utilizable.** Cabe con holgura.
+**Medido, no estimado.** Compilando `energia.cpp` para el ATmega328P:
+
+```
+codigo (flash)  2449 B
+RAM estatica     136 B
+```
+
+Con el módulo adentro, el auxiliar queda en **17 009 B de flash (55 %)** y **1205 B de RAM (59 %)**. Descontando la pila quedan **393 B utilizables de margen**. Cabe con holgura.
 
 ---
 
