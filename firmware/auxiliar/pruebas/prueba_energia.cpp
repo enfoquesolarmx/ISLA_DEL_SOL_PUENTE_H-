@@ -324,6 +324,84 @@ int main()
        ENER_EE_CABECERA + 18 <= ENER_EE_CONSUMO, "");
   }
 
+  // =========================================================================
+  titulo("15. El lado DC: amperes-hora");
+  reiniciar();
+  {
+    // 10.0 A durante una hora = 10 Ah = 1000 cAh
+    for (uint32_t i = 0; i < 3600; i++) { energia_muestra_dc(100, 1000); T_MS += 1000; energia_atender(T_MS,0); }
+    uint32_t cah = energia_ah_historico_cah();
+    char d[100]; snprintf(d, sizeof d, "dio %u cAh (esperado 1000 = 10.00 Ah)", (unsigned)cah);
+    ok("una hora a 10.0 A = 10 Ah", cah == 1000, d);
+    // A los 3600 s la hora ACABA de cerrarse, asi que se comprueba a la mitad.
+    reiniciar();
+    for (uint32_t i = 0; i < 1800; i++) { energia_muestra_dc(100, 1000); T_MS += 1000; energia_atender(T_MS,0); }
+    snprintf(d, sizeof d, "media hora a 10 A: hora %u, dia %u",
+             (unsigned)energia_ah_hora_cah(), (unsigned)energia_ah_dia_cah());
+    ok("dentro de la hora, la hora y el dia llevan la misma cuenta",
+       energia_ah_hora_cah() == 500 && energia_ah_dia_cah() == 500, d);
+    // Y al cumplirse la hora, el contador de la hora se reinicia solo.
+    for (uint32_t i = 0; i < 1800; i++) { energia_muestra_dc(100, 1000); T_MS += 1000; energia_atender(T_MS,0); }
+    snprintf(d, sizeof d, "al cerrar la hora: hora %u, dia %u",
+             (unsigned)energia_ah_hora_cah(), (unsigned)energia_ah_dia_cah());
+    ok("al cumplirse la hora, el contador de la hora vuelve a cero",
+       energia_ah_hora_cah() == 0 && energia_ah_dia_cah() == 1000, d);
+  }
+
+  // =========================================================================
+  titulo("16. Los Ah tambien cuentan al cargar, y la zona muerta no inventa");
+  reiniciar();
+  {
+    for (uint32_t i = 0; i < 1800; i++) { energia_muestra_dc(-200, 1000); T_MS += 1000; energia_atender(T_MS,0); }
+    char d[100]; snprintf(d, sizeof d, "media hora a 20.0 A cargando dio %u cAh", (unsigned)energia_ah_historico_cah());
+    ok("el contador de Ah cuenta los dos sentidos", energia_ah_historico_cah() == 1000, d);
+  }
+  reiniciar();
+  {
+    // Ruido alrededor de cero: no debe acumular nada.
+    for (uint32_t i = 0; i < 100000; i++) {
+      energia_muestra_dc((i % 2) ? 5 : -5, 100);   // +-0.5 A, dentro de la zona muerta
+      T_MS += 100; energia_atender(T_MS,0);
+    }
+    char d[100]; snprintf(d, sizeof d, "tras 10000 s de ruido quedo en %u cAh", (unsigned)energia_ah_historico_cah());
+    ok("la zona muerta evita que el ruido invente amperes-hora",
+       energia_ah_historico_cah() == 0, d);
+  }
+
+  // =========================================================================
+  titulo("17. El mes, el ano y el promedio diario");
+  reiniciar();
+  {
+    // 35 dias a 24 A constantes: cada dia 576 Ah = 57600 cAh
+    for (uint16_t dia = 0; dia < 35; dia++)
+      for (uint32_t s = 0; s < 86400; s++) { energia_muestra_dc(240, 1000); T_MS += 1000; energia_atender(T_MS,0); }
+    char d[140];
+    snprintf(d, sizeof d, "meses guardados %u, mes en curso %u cAh",
+             energia_meses_guardados(), (unsigned)energia_ah_mes_cah());
+    ok("a los 30 dias se cierra un mes", energia_meses_guardados() == 1, d);
+    // El ano = mes cerrado (30 x 57600) + lo que lleva el actual
+    uint32_t esperado = 30UL*57600UL + energia_ah_mes_cah();
+    snprintf(d, sizeof d, "ano %u cAh, esperado %u", (unsigned)energia_ah_anio_cah(), (unsigned)esperado);
+    ok("el ano es la suma de los meses mas el que corre",
+       energia_ah_anio_cah() == esperado, d);
+    snprintf(d, sizeof d, "promedio diario %u cAh (un dia completo son 57600)",
+             (unsigned)energia_ah_prom_dia_cah());
+    ok("el promedio diario del mes en curso es razonable",
+       energia_ah_prom_dia_cah() > 50000 && energia_ah_prom_dia_cah() < 60000, d);
+  }
+
+  // =========================================================================
+  titulo("18. El historico DC sobrevive un reinicio");
+  {
+    uint32_t antes = energia_ah_historico_cah();
+    uint8_t  m = energia_meses_guardados();
+    energia_guardar(); energia_iniciar();
+    char d[120]; snprintf(d, sizeof d, "%u cAh y %u meses antes; %u y %u despues",
+             (unsigned)antes, m, (unsigned)energia_ah_historico_cah(), energia_meses_guardados());
+    ok("el historico de Ah y los meses se releen de la EEPROM",
+       energia_ah_historico_cah() == antes && energia_meses_guardados() == m, d);
+  }
+
   printf("\n========================================\n");
   printf("  %d de %d pruebas bien, %d mal\n", pruebas - fallos, pruebas, fallos);
   printf("========================================\n");

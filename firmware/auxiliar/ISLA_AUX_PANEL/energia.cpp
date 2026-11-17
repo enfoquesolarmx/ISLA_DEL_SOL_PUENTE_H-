@@ -67,15 +67,27 @@ static uint16_t s_dias;                     // días guardados (tope DIAS_HISTOR
 static bool     s_sucio;                    // hay algo sin guardar
 static uint8_t  s_bat_previo;               // estado de batería de la vuelta anterior
 
+// --- El lado DC, en centésimas de Ah ---------------------------------------
+// Se acumula en (0.1 A)·ms y se normaliza: 1 cAh = 360 000 (0.1A)·ms.
+static uint32_t s_dc_resto;                 // lo que falta para la siguiente cAh
+static uint32_t s_dc_historico_cah;
+static uint32_t s_dc_mes_cah;               // el mes en curso
+static uint32_t s_dc_dia_cah;               // el día en curso
+static uint32_t s_dc_hora_cah;              // la hora en curso
+static uint8_t  s_mes_indice;               // siguiente ranura de meses
+static uint8_t  s_meses;                    // meses guardados
+static uint8_t  s_dia_del_mes;              // días transcurridos del mes en curso
+
 // =========================== CABECERA EN EEPROM ============================
 // [0] firma
 // [1-4]   histórico de consumo    [5-8]   histórico de carga
 // [9-10]  resto de consumo (W·s)  [11-12] resto de carga (W·s)
-// [13-14] índice                  [15-16] días guardados
-// [17] CRC-8 de 0..16
+// [13-14] índice de días          [15-16] días guardados
+// [17-20] histórico DC en cAh     [21] índice de mes   [22] meses guardados
+// [23] CRC-8 de 0..22
 // Números de 16 y 32 bits: byte bajo primero, igual que el protocolo I2C.
 // Ver la trampa 4 del encabezado: nada de structs para lo que se persiste.
-constexpr uint8_t ENER_CAB_LARGO = 18;
+constexpr uint8_t ENER_CAB_LARGO = 24;
 
 static uint8_t crc8(const uint8_t *d, uint8_t n)
 {
@@ -131,22 +143,29 @@ void energia_iniciar()
   s_bloque_min = 0xFFFF; s_bloque_n = 0;
   s_despierto_s = 0; s_ms_previo = 0; s_seg_hora = 0; s_seg_dia = 0;
   s_sucio = false; s_bat_previo = 0;
+  s_dc_resto = 0; s_dc_mes_cah = 0; s_dc_dia_cah = 0; s_dc_hora_cah = 0;
+  s_dia_del_mes = 0;
 
   uint8_t b[ENER_CAB_LARGO];
   ee_leer(ENER_EE_CABECERA, b, ENER_CAB_LARGO);
   uint16_t indice = lee16(b + 13);
   uint16_t dias   = lee16(b + 15);
-  if (b[0] == ENER_EE_FIRMA && b[17] == crc8(b, ENER_CAB_LARGO - 1)
-      && indice < DIAS_HISTORIAL && dias <= DIAS_HISTORIAL) {
+  if (b[0] == ENER_EE_FIRMA && b[23] == crc8(b, ENER_CAB_LARGO - 1)
+      && indice < DIAS_HISTORIAL && dias <= DIAS_HISTORIAL
+      && b[21] < MESES_HISTORIAL && b[22] <= MESES_HISTORIAL) {
     s_a[ENER_CONSUMO].wh_historico = lee32(b + 1);
     s_a[ENER_CARGA].wh_historico   = lee32(b + 5);
     s_a[ENER_CONSUMO].resto_wms    = (uint32_t)lee16(b + 9)  * 1000UL;   // se guardó en W·s
     s_a[ENER_CARGA].resto_wms      = (uint32_t)lee16(b + 11) * 1000UL;
     s_indice = indice;
     s_dias   = dias;
+    s_dc_historico_cah = lee32(b + 17);
+    s_mes_indice = b[21];
+    s_meses      = b[22];
   } else {
     // EEPROM virgen o dañada: se empieza de cero en vez de inventar un número.
     s_indice = 0; s_dias = 0;
+    s_dc_historico_cah = 0; s_mes_indice = 0; s_meses = 0;
   }
 }
 
@@ -181,6 +200,26 @@ void energia_muestra(int16_t watts, uint16_t dt_ms)
   }
 }
 
+// --- El lado DC: los Ah no necesitan voltaje ni enlace ---------------------
+void energia_muestra_dc(int16_t decimas_A, uint16_t dt_ms)
+{
+  // Zona muerta: sin ella el ruido del ADC inventa amperes-hora con el equipo
+  // apagado, y en un año eso se vuelve un número grande y falso.
+  int32_t d = decimas_A;
+  if (d < 0) d = -d;
+  if (d <= (int32_t)DC_ZONA_MUERTA_CUENTAS * DC_MA_POR_CUENTA / 100) return;
+
+  s_dc_resto += (uint32_t)d * dt_ms;
+  while (s_dc_resto >= 360000UL) {           // 360 000 (0.1A)·ms = 1 cAh
+    s_dc_resto -= 360000UL;
+    s_dc_historico_cah++;
+    s_dc_mes_cah++;
+    s_dc_dia_cah++;
+    s_dc_hora_cah++;
+    s_sucio = true;
+  }
+}
+
 void energia_sin_enlace()
 {
   // El bloque a medias no vale: se tira entero.
@@ -202,6 +241,16 @@ static void cerrar_dia()
   energia_guardar();
 }
 
+static void cerrar_mes()
+{
+  uint8_t b[4]; pon32(b, s_dc_mes_cah);
+  ee_escribir(ENER_EE_MESES + (uint16_t)s_mes_indice * 4, b, 4);
+  s_mes_indice = (uint8_t)((s_mes_indice + 1) % MESES_HISTORIAL);
+  if (s_meses < MESES_HISTORIAL) s_meses++;
+  s_dc_mes_cah = 0;
+  energia_guardar();
+}
+
 void energia_atender(uint32_t ms, uint8_t estadoBateria)
 {
   // --- Trampa 2: esta resta es correcta aun cuando millis() da la vuelta ---
@@ -219,10 +268,13 @@ void energia_atender(uint32_t ms, uint8_t estadoBateria)
       s_a[ENER_CONSUMO].cubeta_wh[s_cubeta] = 0;   // la que entra borra a la que sale
       s_a[ENER_CARGA].cubeta_wh[s_cubeta]   = 0;
       s_cubeta_max[s_cubeta] = 0;
+      s_dc_hora_cah = 0;                    // la hora DC se reinicia con la cubeta
     }
     if (s_seg_dia >= SEGUNDOS_DIA) {
       s_seg_dia -= SEGUNDOS_DIA;
       cerrar_dia();
+      s_dc_dia_cah = 0;
+      if (++s_dia_del_mes >= DIAS_MES) { s_dia_del_mes = 0; cerrar_mes(); }
     }
   }
 
@@ -242,7 +294,10 @@ void energia_guardar()
   pon16(b + 11, (uint16_t)(s_a[ENER_CARGA].resto_wms   / 1000UL));
   pon16(b + 13, s_indice);
   pon16(b + 15, s_dias);
-  b[17] = crc8(b, ENER_CAB_LARGO - 1);
+  pon32(b + 17, s_dc_historico_cah);
+  b[21] = s_mes_indice;
+  b[22] = s_meses;
+  b[23] = crc8(b, ENER_CAB_LARGO - 1);
   ee_escribir(ENER_EE_CABECERA, b, ENER_CAB_LARGO);
   s_sucio = false;
 }
@@ -254,6 +309,11 @@ void energia_borrar()
     for (uint16_t i = 0; i < DIAS_HISTORIAL; i++) anillo_escribir((Sentido)k, i, 0);
   }
   s_indice = 0; s_dias = 0;
+  s_dc_historico_cah = 0; s_dc_resto = 0; s_dc_mes_cah = 0;
+  s_dc_dia_cah = 0; s_dc_hora_cah = 0; s_mes_indice = 0; s_meses = 0;
+  s_dia_del_mes = 0;
+  uint8_t z[4] = {0,0,0,0};
+  for (uint8_t i = 0; i < MESES_HISTORIAL; i++) ee_escribir(ENER_EE_MESES + (uint16_t)i * 4, z, 4);
   energia_guardar();
 }
 
@@ -297,6 +357,31 @@ uint32_t energia_promedio_wh(Sentido s, uint8_t dias)
   for (uint16_t k = 1; k <= n; k++)
     suma += anillo_leer(s, (uint16_t)((s_indice + DIAS_HISTORIAL - k) % DIAS_HISTORIAL));
   return (suma + n / 2) / n;
+}
+
+uint32_t energia_ah_hora_cah()      { return s_dc_hora_cah; }
+uint32_t energia_ah_dia_cah()       { return s_dc_dia_cah; }
+uint32_t energia_ah_mes_cah()       { return s_dc_mes_cah; }
+uint32_t energia_ah_historico_cah() { return s_dc_historico_cah; }
+uint8_t  energia_meses_guardados()  { return s_meses; }
+
+uint32_t energia_ah_anio_cah()
+{
+  // El año es la suma de los meses guardados más el que corre: no hace falta
+  // un anillo aparte ni definir un año distinto del de la pantalla DESPIERTO.
+  uint32_t t = s_dc_mes_cah;
+  for (uint8_t i = 0; i < s_meses; i++) {
+    uint8_t b[4];
+    ee_leer(ENER_EE_MESES + (uint16_t)i * 4, b, 4);
+    t += lee32(b);
+  }
+  return t;
+}
+
+uint32_t energia_ah_prom_dia_cah()
+{
+  uint8_t n = s_dia_del_mes ? s_dia_del_mes : 1;   // el día en curso cuenta como uno
+  return (s_dc_mes_cah + n / 2) / n;
 }
 
 uint16_t energia_rendimiento_pct()

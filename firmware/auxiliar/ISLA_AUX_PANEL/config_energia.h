@@ -59,18 +59,49 @@ constexpr uint8_t PROM_CORTO = 7;
 constexpr uint8_t PROM_LARGO = 30;
 static_assert(PROM_LARGO <= DIAS_HISTORIAL, "El promedio largo no cabe en el historial");
 
+// ======================== EL LADO DC: AMPERES-HORA ==========================
+// El shunt + INA240 entregan I_OUT en A0 del AUX (0–3.33 V, centro 1.67 V,
+// R de 1 kΩ en serie). El auxiliar lo lee DIRECTO: los Ah no necesitan
+// voltaje, así que esta parte no pasa por el protocolo I2C.
+//
+// Por qué Ah y no Wh de este lado: la batería viene especificada en Ah, y los
+// Ah son la cuenta culómbica: los amperes que entran son casi exactamente los
+// que salen. Los Wh de AC dicen lo que se usó; los Ah de DC, cuánto le queda
+// de vida al banco.
+//
+// ⚠️ CALIBRACIÓN. mA por cuenta del ADC depende de cuántos shunts estén
+// montados. El README del sensor da esta tabla:
+//      1 pieza  (1 mΩ)     20 mV/A
+//      2 piezas (0.5 mΩ)   10 mV/A
+//      3 piezas (0.333 mΩ)  6.67 mV/A   <- operación a 1000 W
+// Con 4.888 mV por cuenta eso sale en 244 / 489 / 733 mA por cuenta, pero la
+// tabla del README dice 0.37 / 0.73 / 1.1 A por cuenta: un factor de 1.5 que
+// no se pudo reconciliar leyendo el documento. **Este número se mide en el
+// banco contra una pinza de referencia antes de creerle nada al contador.**
+constexpr uint16_t DC_MA_POR_CUENTA = 733;     // 3 shunts; verificar en banco
+constexpr uint16_t DC_CUENTA_CENTRO = 341;     // 1.67 V de 5.00 V -> 341 cuentas
+// Zona muerta alrededor del centro: por debajo de esto se toma como cero, para
+// que el ruido del ADC no invente amperes-hora con el equipo apagado.
+constexpr uint8_t  DC_ZONA_MUERTA_CUENTAS = 2;
+
+// Un "mes" son 30 días de operación; el "año" es la suma de los 12 meses
+// guardados, no un anillo aparte. Así no hay que definir un año distinto del
+// de la pantalla DESPIERTO ni gastar EEPROM en algo que es una suma.
+constexpr uint8_t MESES_HISTORIAL = 12;
+
 // ======================== LA EEPROM =========================================
 // El perfil de batería del CRÍTICO vive en la dirección 0 de SU EEPROM; ésta
 // es la del AUX, pero se deja el hueco de todos modos por si alguna vez se
 // comparte el mapa.
-constexpr uint16_t ENER_EE_CABECERA = 16;       // 18 B de cabecera
+constexpr uint16_t ENER_EE_CABECERA = 16;       // 24 B de cabecera
 constexpr uint16_t ENER_EE_CONSUMO  = 40;       // 180 x 2 B = 360 B
 constexpr uint16_t ENER_EE_CARGA    = ENER_EE_CONSUMO + DIAS_HISTORIAL * 2;
+constexpr uint16_t ENER_EE_MESES    = ENER_EE_CARGA + DIAS_HISTORIAL * 2;  // 12 x 4 B
 constexpr uint8_t  ENER_EE_FIRMA    = 'E';
 
 // Comprobación de que todo cabe en los 1024 B del ATmega328P.
-static_assert(ENER_EE_CARGA + DIAS_HISTORIAL * 2 <= 1024,
-  "Los dos historiales no caben en la EEPROM: baje DIAS_HISTORIAL");
+static_assert(ENER_EE_MESES + MESES_HISTORIAL * 4 <= 1024,
+  "Los historiales no caben en la EEPROM: baje DIAS_HISTORIAL o MESES_HISTORIAL");
 
 // ======================== EL VOLCADO POR SERIE ==============================
 // El "archivo de consumo": se pide por el menú y sale en CSV por el serie.

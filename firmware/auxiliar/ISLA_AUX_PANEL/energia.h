@@ -49,6 +49,12 @@
 enum Sentido : uint8_t { ENER_CONSUMO = 0, ENER_CARGA = 1 };
 
 // ---------------------------------------------------------------------------
+// EL LADO DC, EN AMPERES-HORA
+//   Los Wh de AC dicen lo que se usó; los Ah de DC, cuánto trabajó el banco.
+//   La batería viene especificada en Ah, y los Ah son la cuenta culómbica.
+//   El auxiliar lee I_OUT en su propio A0, así que esto NO pasa por el I2C.
+// ---------------------------------------------------------------------------
+
 void energia_iniciar();
 
 // Una foto fresca. `watts` lleva signo: positivo sale de la batería (inversor),
@@ -58,6 +64,11 @@ void energia_muestra(int16_t watts, uint16_t dt_ms);
 // Se perdió el enlace. Tira el bloque de la máxima sostenida a medias: juntar
 // lecturas de antes y después del hueco y llamarlas "sostenidas" sería mentira.
 void energia_sin_enlace();
+
+// Una lectura del shunt. `decimas_A` lleva signo con la misma convención que
+// los watts: positivo sale de la batería, negativo entra. Se llama con la
+// cadencia que el auxiliar quiera; no depende del enlace.
+void energia_muestra_dc(int16_t decimas_A, uint16_t dt_ms);
 
 // Cada vuelta de loop(). `ms` es millis(); `estadoBateria` viene de la foto
 // (0 normal, 1 aviso, 2 corte bajo, ...). Con aviso o corte guarda enseguida.
@@ -74,6 +85,15 @@ uint32_t energia_hoy_wh(Sentido s);         // últimas 24 h
 uint32_t energia_ayer_wh(Sentido s);        // el último día cerrado; 0 si no hay
 uint32_t energia_historico_wh(Sentido s);   // desde que se instaló
 uint32_t energia_promedio_wh(Sentido s, uint8_t dias);   // 0 si no hay días
+
+// --- El lado DC, en centésimas de Ah para no perder resolución -------------
+uint32_t energia_ah_hora_cah();             // la hora en curso
+uint32_t energia_ah_dia_cah();              // el día en curso
+uint32_t energia_ah_mes_cah();              // el mes en curso (30 días)
+uint32_t energia_ah_anio_cah();             // suma de los 12 meses guardados + el actual
+uint32_t energia_ah_historico_cah();        // desde que se instaló
+uint32_t energia_ah_prom_dia_cah();         // promedio diario del mes en curso
+uint8_t  energia_meses_guardados();
 
 uint32_t energia_despierto_s();             // segundos desde el último arranque
 uint16_t energia_dias_guardados();          // cuántos días hay en el historial

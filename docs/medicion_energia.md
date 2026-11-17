@@ -37,6 +37,7 @@ HISTORICO              DESPIERTO
 | **AYER 6.2 kWh** | El último día cerrado |
 | **PROMEDIO 7d / 30d** | Consumo diario promedio de la semana y del mes |
 | **DESPIERTO 45d 07h** | Cuánto lleva encendido sin reiniciarse |
+| **Ah de hora / día / mes / año** | Lo que el banco entregó, en la unidad en que viene especificado |
 
 ---
 
@@ -153,7 +154,7 @@ Mostrar `0a 00m 00d 07h` sería llenar el renglón de ceros para esconder el ún
 
 ---
 
-## 3.5 Los dos modos: inversor y cargador
+## 3B. Los dos modos: inversor y cargador
 
 **Un solo sensor da los dos.** El INA240 mide la corriente de batería **en los dos sentidos**, así que no hacen falta dos sensores ni dos protocolos: basta el signo.
 
@@ -196,22 +197,73 @@ Es el rendimiento de ida y vuelta, y **un número que baja mes con mes es una ba
 
 ---
 
-## 4. Por qué se mide en DC y no en AC
+## 4. Dónde se mide cada cosa: AC para los watts, DC para los amperes-hora
 
-Esta es la decisión que define todo lo demás.
+> **Corrección del 2026-11-17.** Las primeras versiones de este documento decían que no se podían medir watts reales porque no había sensor de corriente AC. **Era falso.** [DC-013](decisiones_criticas.md) existe desde el 7 de noviembre y dice textualmente que la pinza sirve para *"corriente, watts reales, factor de potencia"*. El error vino de mirar `hardware/sensores/`, ver sólo el módulo DC y concluir — pero el sensor AC no es un módulo: **es un jack en la tarjeta de control**.
 
-**En AC no basta con multiplicar voltaje por corriente.** V eficaz × I eficaz da **VA, no watts**. Con un foco incandescente da igual, pero con un refrigerador, una bomba o cualquier fuente conmutada la corriente va desfasada o deformada, y el número sale inflado. Para sacar watts de verdad hay que multiplicar **v(t) × i(t)** muestra por muestra y promediar — y eso exige un sensor de corriente **en AC** que el proyecto no tiene.
+### Los dos sensores y qué entrega cada uno
 
-**En DC el problema no existe:** P = V × I, sin fase, sin factor de potencia. Y los dos sensores ya están en la tarjeta:
+| Sensor | Dónde | Qué mide | Qué micro lo lee |
+| --- | --- | --- | --- |
+| **Pinza SCT-013-015** | abraza la fase del devanado de 127 V, entre el transformador y los relés | corriente AC de los dos modos | **CRÍTICO, A2** |
+| Voltaje AC del inversor | transformador de 12 VAC, J2 | la onda de salida | **CRÍTICO, A0** |
+| Shunt + INA240 (`I_OUT`) | retorno de la batería | corriente DC, los dos sentidos | **AUX, A0** (directo, sin I2C) |
 
-| Qué | Dónde | Estado |
+### AC: watts reales, no VA
+
+Con el voltaje en **A0** y la corriente en **A2**, los dos en el CRÍTICO, se calcula
+
+```
+P = promedio( v(t) × i(t) )
+```
+
+que son **watts de verdad**, no VA. Esa es justamente la razón por la que DC-013 los puso en el mismo micro: *"no se podrían medir watts reales con el voltaje en un micro y la corriente en otro"*.
+
+**Y el factor de potencia sale gratis:** `FP = P / (Vrms × Irms)`. Es un número de trinchera buenísimo, porque explica por qué un motor de 500 W jala más corriente que una plancha de 500 W.
+
+**El signo separa los dos modos**, y así estaba escrito en DC-013 desde antes: *"inversor: del transformador hacia la carga, signo positivo; cargador: de la red hacia el transformador, signo negativo. El signo también dice hacia dónde va la energía"*.
+
+### ⚠️ El problema nuevo: V e I no se muestrean al mismo tiempo
+
+El ADC multiplexa, así que entre la muestra de voltaje y la de corriente pasan **124.875 µs = 2.697°** a 60 Hz. En potencia real eso no es inocuo:
+
+| Carga | Factor de potencia | Error en los watts |
 | --- | --- | --- |
-| Voltaje de batería | A3 del CRÍTICO, divisor de [DC-007](decisiones_criticas.md) | ✅ funcionando, ya viaja en la foto |
-| Corriente de batería, en los dos sentidos | `I_OUT` del INA240 (0–3.3 V, centro 1.67 V) | ⚠️ el hardware existe, **el firmware no la lee** |
+| Foco, plancha, resistencia | 1.00 | −0.11 % — despreciable |
+| Fuente conmutada | 0.90 | **−2.39 %** |
+| Motor con carga | 0.70 | **−4.91 %** |
+| Motor en vacío | 0.50 | **−8.26 %** |
 
-El README del sensor ya decía para qué servía `I_OUT`: *"ADC: potencia, eficiencia, control del cargador, pantalla"*. El terreno estaba puesto desde antes.
+Es un sesgo **constante y conocido**, igual que el de [DC-020](decisiones_criticas.md): se corrige. Pero ignorarlo cuesta hasta 8 % justo en las cargas donde el factor de potencia importa.
 
-**Y midiendo en DC se mide lo que de verdad importa: lo que se le está yendo de la batería.** Los watts que entrega el inversor son esos menos la eficiencia. Si alguna vez se muestran, **se dicen como estimado**.
+Y ahora son **tres canales** en el ADC del CRÍTICO —A0 inversor, A2 corriente, A6 red—, no dos: DC-020 hay que rehacerlo con esa cuenta.
+
+### Límites de la pinza
+
+| | |
+| --- | --- |
+| Rango | 15 A RMS → 1 V RMS; satura el ADC a ~18.7 A RMS |
+| A 1000 W con FP 1.0 | 7.9 A, el 42 % del rango |
+| A 1000 W con FP 0.7 | 11.2 A, el 60 % del rango |
+| Resolución | ~52 mA por cuenta |
+| Arranques de motor | **la saturan** — importa poco, porque ya se decidió no registrarlos (sección 5) |
+
+### DC: amperes-hora, y por qué no watts
+
+El shunt mide del lado de la batería, y ahí la unidad que importa es el **ampere-hora**:
+
+- **La batería viene especificada en Ah**, no en Wh. "Hoy saqué 45 Ah de un banco de 100" se entiende solo.
+- **Los Ah son la cuenta culómbica**: los amperes que entran son casi exactamente los que salen (arriba del 99 % en LFP). Los Wh no, porque entran a más volts de los que salen.
+- **No necesita voltaje**, así que el auxiliar lo calcula **él solo** desde su A0. Esta parte no pasa por el I2C ni espera al protocolo v3.
+
+Se lleva por **hora, día, mes y año**. El mes son 30 días de operación; el año es **la suma de los 12 meses guardados**, no un anillo aparte — así no hay que inventar un año distinto del de la pantalla DESPIERTO ni gastar EEPROM en algo que es una suma.
+
+**Zona muerta.** Por debajo de un par de cuentas alrededor del centro no se acumula nada. Sin eso, el ruido del ADC inventa amperes-hora con el equipo apagado, y en un año eso se vuelve un número grande y falso.
+
+### ⚠️ Dos cosas del lado DC que hay que medir antes de creerles
+
+1. **La constante de calibración no cuadra.** El README del sensor da 20 / 10 / 6.67 mV/A según cuántos shunts estén montados. Con 4.888 mV por cuenta eso sale en **244 / 489 / 733 mA por cuenta**, pero la tabla del mismo README dice **0.37 / 0.73 / 1.1 A por cuenta**: un factor de 1.5 que no se pudo reconciliar leyendo el documento. **Hay que medirlo en el banco contra una pinza de referencia.**
+2. **La resolución es gruesa.** Con 3 shunts, cerca de 1 A por cuenta. El consumo en reposo del propio equipo queda en el ruido, así que el contador de Ah subestima los periodos de poca carga. Promediar muchas muestras lo mejora, pero hay que verificar cuánto.
 
 ---
 
@@ -272,9 +324,10 @@ En orden. Los dos primeros son el trabajo de verdad; los dos últimos son lo que
 
 | # | Qué | Por qué |
 | --- | --- | --- |
-| **1** | **`corriente.cpp` en el CRÍTICO** | Leer `I_OUT` del INA240. **Sin esto no hay nada**: el hardware existe pero el firmware nunca lo ha leído |
+| **1** | **`potencia_ac.cpp` en el CRÍTICO** | Multiplicar v(t) de A0 por i(t) de A2 y promediar. **Sin esto no hay watts reales**: el hardware existe (DC-013) pero el firmware nunca lo ha leído |
 | **2** | **Protocolo v3** | La foto está llena: los 16 bytes del v2 están todos ocupados. Hay que crecerla y revalidar el enlace en los dos micros |
-| **3** | `energia.cpp` en el auxiliar | Integrar, la ventana de 24 h, la EEPROM |
+| **3** | ~~`energia.cpp` en el auxiliar~~ | ✅ **Hecho.** 44 comprobaciones en el banco de PC |
+| **3b** | `corriente_dc.cpp` en el auxiliar | Leer `I_OUT` en su A0 y convertir a décimas de A. **No depende del protocolo**: el lado DC puede funcionar antes que el AC |
 | **4** | Las pantallas del LCD | Las dos de la sección 1 |
 
 ---
@@ -338,7 +391,10 @@ Y queda dicho que **mandar órdenes al inversor desde la red es otra discusión 
 
 ## 11. Pendientes
 
-- [ ] Confirmar en qué pin del CRÍTICO entra `I_OUT` y si queda libre
+- [x] ~~Confirmar en qué pin entra `I_OUT`~~ → **A0 del AUX**, no del CRÍTICO
+- [ ] **Medir la constante de calibración del shunt contra una pinza de referencia.** El README del sensor se contradice por un factor de 1.5 (sección 4)
+- [ ] Medir cuánto mejora la resolución del lado DC promediando muestras
+- [ ] Rehacer DC-020 con **tres** canales (A0 inversor, A2 corriente, A6 red) y la corrección del sesgo V–I
 - [ ] Definir el formato de la foto del protocolo v3
 - [ ] Calibrar la corriente contra un patrón (pinza o fuente conocida)
 - [ ] Decidir si se muestran watts de AC estimados o todo se habla en términos de batería
