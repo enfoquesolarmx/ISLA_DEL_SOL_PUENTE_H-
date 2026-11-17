@@ -18,9 +18,15 @@ MAX24h  950 W
 ```
 
 ```
-HOY    4.8 kWh
-TOTAL 1247 kWh
+HOY      4.8 kWh
+TOTAL ACUMULADO
 ```
+```
+TOTAL ACUMULADO
+     1247 kWh
+```
+
+La segunda pantalla pone el total **en su propio renglón**, no pegado a la etiqueta. No es capricho de diseño: es lo que hace que el número nunca se desborde (sección 2.1).
 
 | Número | Qué es |
 | --- | --- |
@@ -41,6 +47,62 @@ El inversor trabaja entre 0 y 1000 W. En kW eso sería de 0.00 a 1.00: puros cer
 **Y hay una segunda razón, más importante: separar potencia de energía.** Confundirlas es *el* error clásico de todo medidor. Si las unidades son distintas —W para una, kWh para la otra— nadie va a creer que son lo mismo medido diferente.
 
 **De pilón, los watts aguantan bien los arranques.** Cuando arranca la bomba, la pantalla marca `1850 W 185%`, y ese número arriba de 100 % **es la alarma por sí solo**, sin agregar nada. En kW habría que leer "1.85" y pensarlo.
+
+### 2.1 Nunca se cambia a MWh
+
+**El total se queda en kWh toda la vida del equipo.** No se pasa a MWh al llegar a 100 000, ni nunca.
+
+Tres razones:
+
+1. **MWh no es unidad de trinchera.** El recibo de la luz viene en kWh, los aparatos vienen en watts. Nadie piensa en megawatt-hora en su casa.
+2. **Cambiar de unidad parece que se reseteó el medidor.** El usuario vería pasar `99999 kWh` a `100.0 MWh` y pensaría que perdió su historial.
+3. **No hace falta.** El problema no era la unidad, era el renglón.
+
+**El problema real y su solución.** Con la etiqueta pegada al número, el renglón se rompe:
+
+| Total | `TOTAL 1234567 kWh` | Número en su propio renglón |
+| --- | --- | --- |
+| 1 247 kWh | 14 car. ✅ | ✅ |
+| 99 999 kWh | 15 car. ✅ | ✅ |
+| 100 000 kWh | 16 car. ✅ (al límite) | ✅ |
+| 1 234 567 kWh | **17 car. ❌ no cabe** | ✅ |
+| 9 999 999 kWh | **17 car. ❌ no cabe** | ✅ |
+
+Poniendo el número solo en el segundo renglón caben **7 dígitos** sin apretar. Y eso es suficiente para siempre:
+
+| Meta | A 1000 W continuos (el tope del inversor) | A 300 W promedio (uso real de casa) |
+| --- | --- | --- |
+| 100 000 kWh | 11 años | 38 años |
+| 1 000 000 kWh | 114 años | 381 años |
+| **9 999 999 kWh** | **1 142 años** | **3 805 años** |
+
+El inversor entrega 1000 W como máximo, o sea 8 760 kWh al año si trabajara a tope las 8 760 horas. **El renglón de 7 dígitos le sobrevive al equipo, al instalador y a los nietos.**
+
+### 2.2 El acumulador no se puede guardar en Wh enteros
+
+Esta es la trampa que de verdad importa, y es silenciosa.
+
+Con la foto llegando cada 100 ms, **a 780 W cada muestra aporta 0.0217 Wh**. Si el acumulado se guarda como entero en Wh y se le suma eso, **cada suma redondea a cero y el medidor marca cero para siempre**. No falla, no avisa: simplemente nunca sube.
+
+Y la salida obvia tampoco sirve: acumular en **watt-segundo** con 32 bits topa en 4 294 967 W·s = **1 193 kWh**, que a 300 W promedio **se desborda en cinco meses y medio**.
+
+**La forma correcta, y es barata:**
+
+```c
+uint32_t wh_total;     // energía en Wh enteros
+uint16_t resto_ws;     // lo que falta para el siguiente Wh, en W·s
+
+// en cada foto fresca:
+resto_ws += (uint16_t)(watts * 0.1);     // W·s de esta muestra
+while (resto_ws >= 3600) {               // 3600 W·s = 1 Wh
+    resto_ws -= 3600;
+    wh_total++;
+}
+```
+
+**Exacto, sin pérdida, y tope de 4 294 967 kWh.** El resto nunca pasa de 3600 más lo que aporte una muestra (185 W·s en el peor pico), así que 16 bits le quedan grandes.
+
+Esto **no es un detalle de implementación**: es la diferencia entre un medidor que funciona y uno que marca cero y nadie sabe por qué.
 
 ---
 
@@ -143,12 +205,12 @@ Reservando ~450 B de pila quedan **529 B utilizables**. El módulo pide:
 | Ventana de 24 h: 24 cubetas × 2 B de Wh | 48 |
 | Ventana de 24 h: 24 máximas × 2 B | 48 |
 | Máxima sostenida por bloques (mínima + contador) | 4 |
-| Acumulado total en Wh (32 bits) | 4 |
+| Acumulado total en Wh (32 bits) + resto en W·s (16 bits) | 6 |
 | Acumulado del día en Wh (32 bits) | 4 |
 | Potencia actual y auxiliares | 20 |
-| **Total** | **128** |
+| **Total** | **130** |
 
-**Quedan 401 B de margen, el 76 % de lo utilizable.** Cabe con holgura.
+**Quedan 399 B de margen, el 75 % de lo utilizable.** Cabe con holgura.
 
 ---
 
@@ -182,6 +244,7 @@ Y queda dicho que **mandar órdenes al inversor desde la red es otra discusión 
 - [ ] Calibrar la corriente contra un patrón (pinza o fuente conocida)
 - [ ] Decidir si se muestran watts de AC estimados o todo se habla en términos de batería
 - [ ] Validación en banco: el acumulado contra un medidor de referencia durante 24 h
+- [ ] Prueba del acumulador: correrlo con potencia constante conocida y comprobar que los Wh suben al ritmo esperado. Es la prueba que cacha el error de redondeo de la sección 2.2, que de otro modo no avisa
 
 ---
 
