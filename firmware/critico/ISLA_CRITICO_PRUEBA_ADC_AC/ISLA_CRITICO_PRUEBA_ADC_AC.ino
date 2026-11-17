@@ -59,8 +59,8 @@
 // Se eligen aquí, se compila, se carga. Nada se configura desde el serie.
 
 // --- Corrida A7: orden de lectura de los canales -----------------------------
-//   0 = A0 primero, luego A6   (orden normal)
-//   1 = A6 primero, luego A0   (orden invertido, para el diagnóstico de A7)
+//   0 = A0 (inversor) primero, luego A6 (red)   -> orden normal
+//   1 = A6 (red) primero, luego A0 (inversor)   -> invertido, diagnóstico de A7
 #define ORDEN_INVERTIDO        0
 
 // --- Corrida A8: pin de traza para el analizador -----------------------------
@@ -108,16 +108,21 @@ static_assert(PIN_TRAZA_ADC >= 8 && PIN_TRAZA_ADC <= 13,
   "El pin de traza se escribe por PORTB: tiene que ser D8..D13");
 
 // ======================== CANALES ============================================
-constexpr uint8_t CANAL_RED      = 0;   // A0
-constexpr uint8_t CANAL_INVERSOR = 6;   // A6
+// OJO: A0 es el INVERSOR y A6 es la RED, no al reves. El README de la tarjeta
+// de control (seccion 8) lo dice sin ambiguedad: "el del inversor (J2 -> A0)
+// cierra el lazo de amplitud; el de la red (J17 -> A6) da la fase para
+// sincronizarse antes de transferir". Estaban intercambiados en la primera
+// version de este sketch y en DC-020.
+constexpr uint8_t CANAL_INVERSOR = 0;   // A0, J2, lazo de amplitud
+constexpr uint8_t CANAL_RED      = 6;   // A6, J17, fase para sincronizar
 // El índice 0/1 es el ORDEN de lectura, no el número de canal: con el orden
 // invertido el índice 0 es A6. Los nombres siguen al orden para no mentir.
 #if ORDEN_INVERTIDO
-constexpr uint8_t ORDEN[2] = { CANAL_INVERSOR, CANAL_RED };
-static const char* const NOMBRE[2] = { "A6 inversor", "A0 red     " };
-#else
 constexpr uint8_t ORDEN[2] = { CANAL_RED, CANAL_INVERSOR };
-static const char* const NOMBRE[2] = { "A0 red     ", "A6 inversor" };
+static const char* const NOMBRE[2] = { "A6 red     ", "A0 inversor" };
+#else
+constexpr uint8_t ORDEN[2] = { CANAL_INVERSOR, CANAL_RED };
+static const char* const NOMBRE[2] = { "A0 inversor", "A6 red     " };
 #endif
 
 // ======================== ESTADO =============================================
