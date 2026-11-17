@@ -180,9 +180,9 @@ Cada MOSFET tiene la misma red, junto a sus patas, en la cara de soldadura:
 
 ![Acercamiento a Q1 en la cara de soldadura](img/zoom_Q1_BCu.png)
 
-> ⚠️ **Esta imagen es de la REV C antes de mover los pines (2026-11-17) y su pie describe el acomodo viejo.** Pendiente de regenerar: ver el PR #34.
+*Q1 (MOSFET **alto** de la pierna A), con las dos capas encendidas. Sus tres pines son: **1** gate (`Net-(Q1-G)`), **2** drenaje a 48 V y **3** source a VS1, aislados los dos del plano VS1 que los rodea. Debajo está su red de compuerta, en la cara de soldadura: R2 (10 Ω) desde HO_A, R3 (2.2 Ω) + D2 (ES1D) para el apagado y R1 (10 kΩ) del gate a VS1. Las dos pistas que bajan a la derecha, hacia J10, son el par **HO_A / VS1_k**, que viajan juntas. La zona rayada que baja del borne J27 hasta el pin 3 es la **ventana para el alambre**. Los dos pines del disipador HS5 (48 V) también quedan aislados del plano VS1.*
 
-*Q1 (MOSFET alto de la pierna A), visto en B.Cu. Sus tres pines son: **1** gate (`Net-(Q1-G)`), **2** drenaje a 48 V, aislado del plano VS1 que lo rodea, y **3** source a VS1. Debajo está su red de compuerta: R2 (10 Ω) desde HO_A, R3 (2.2 Ω) + D2 (ES1D) para el apagado y R1 (10 kΩ) del gate a VS1. Las dos pistas que salen a la derecha, hacia J10, son el par **HO_A / VS1_k**, que viajan juntas. La zona rayada que baja del borne J27 hasta el pin 3 es la **ventana para el alambre**, que se aleja del pin 2 (48 V). Los dos pines del disipador HS5 (48 V) también quedan aislados del plano VS1.*
+***El acomodo de los pines es el del 2026-11-17.*** *El source subió a la línea de la compuerta —quedaron a **0.00 mm de desalineación**, contra 2.80 mm antes— para que el par HO_A / VS1_k salga derecho sin brincar ningún pad. Y el drenaje se escalonó hacia abajo, hacia el barral de 48 V, quedando a 6.76 mm tanto de la compuerta como del source. Aquí eso se puede hacer sin costo **porque el drenaje del alto son 48 V quietos**; en el bajo (imagen siguiente) el drenaje es el nodo conmutado y el criterio se invierte.*
 
 ![Acercamiento a Q2 y su red de compuerta](img/zoom_Q2_BCu.png)
 
