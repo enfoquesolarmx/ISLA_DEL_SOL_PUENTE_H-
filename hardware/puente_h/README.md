@@ -233,7 +233,9 @@ Las tres láminas con las que se eligieron la red de compuerta y el MOSFET. Ante
 
 **Cómo funciona el desacoplo:**
 - **Plano partido bajo la fila de capacitores:** en F.Cu, GND ocupa la mitad superior (hacia los MOSFET bajos) y 48 V la inferior (hacia los altos). Los 4.7 µF cruzan esa frontera con un pad en cada plano, sin pistas.
-- **Lazo de conmutación doblado:** VS1 y VS2 van en B.Cu, justo debajo de los planos de 48 V y GND de F.Cu. La corriente de ida y la de regreso quedan encimadas a 1.6 mm, y eso da **~4 nH** de lazo en la tarjeta aunque los MOSFET de una pierna estén a 74 mm entre sí.
+- **Lazo de conmutación doblado:** VS1 y VS2 van en B.Cu, y **la mitad del camino** de un MOSFET al otro tiene los planos de 48 V o GND de F.Cu justo encima. Ahí la corriente de ida y la de regreso quedan encimadas a 1.6 mm y sus campos se cancelan, así que esa mitad cuesta casi nada: **de 2.6 a 7.8 nH** en los 38.8 mm encimados. Es por eso que los 74 mm entre los MOSFET de una pierna no cuestan lo que costarían en una pista suelta.
+
+  > **Corregido el 17 de noviembre de 2026.** Esta línea decía **~4 nH** de lazo total, y ése es el costo de los 38.8 mm encimados **solos**. `auditoria/auditoria_conmutacion.py` recorre el camino milímetro por milímetro (M4b) y encuentra que el resto no está encimado: **24.9 mm tienen el mismo VS1 en las dos caras** —conductor más gordo, pero cero cancelación— y **13.9 mm no tienen nada arriba**. Sumando cada tramo con su propio régimen, más el camino al desacoplo, el lazo completo queda **entre 37 y 83 nH**, y el sobretiro con flanco de 50 ns entre 16 y 35 V: pico de 64 a 83 V de los 100 V del MOSFET. Sigue habiendo margen, pero no es el que decía esta línea. **Se mide con sonda en banco; hasta entonces es aritmética.**
 - **Islas con vías:** cada pin de Rubycon tiene su isla de 48 V o de GND en las dos capas, con su anillo de vías.
 
 **Rizo calculado** (detalles en [`auditoria/README.md`](auditoria/README.md), sección 8): de los 28.6 A RMS que el puente toma del bus, **13 A son de alta frecuencia y los entregan los Rubycon, ~3.25 A cada uno (95–97 % de su nominal a 105 °C)**. El bote queda en ~47 °C con 40 °C de ambiente. **No se debe quitar ningún Rubycon**: con 3, cada uno pasaría al ~127 % de su nominal.
@@ -324,7 +326,7 @@ La tarjeta de control lleva un buck **extraíble**, para aceptar distintos fabri
 
 ![Cobre posterior B.Cu](img/cobre_posterior_BCu.png)
 
-*Cara de soldadura (los textos se leen al revés). Cada pierna tiene un plano grande, **VS1** a la izquierda y **VS2** a la derecha, que va del MOSFET bajo al alto pasando por debajo de la fila de Rubycon. Encimado con los planos de GND y 48 V de la cara frontal, forma el **lazo de conmutación doblado** (~4 nH). Alrededor queda **GND**. Las islas con anillo de vías en cada pin de Rubycon llevan 48 V o GND a esta capa, y en medio de ellas van los cerámicos de 10 µF. Las zonas sin máscara que bajan de cada borne VS a la pata de su MOSFET son las **ventanas para el alambre 12 AWG**.*
+*Cara de soldadura (los textos se leen al revés). Cada pierna tiene un plano grande, **VS1** a la izquierda y **VS2** a la derecha, que va del MOSFET bajo al alto pasando por debajo de la fila de Rubycon. Encimado con los planos de GND y 48 V de la cara frontal, forma el **lazo de conmutación doblado** (la mitad del camino va encimada; el lazo completo queda entre 37 y 83 nH, ver la nota de la sección de conmutación). Alrededor queda **GND**. Las islas con anillo de vías en cada pin de Rubycon llevan 48 V o GND a esta capa, y en medio de ellas van los cerámicos de 10 µF. Las zonas sin máscara que bajan de cada borne VS a la pata de su MOSFET son las **ventanas para el alambre 12 AWG**.*
 
 ### 11.1 Auditoría de cobre y temperatura
 
