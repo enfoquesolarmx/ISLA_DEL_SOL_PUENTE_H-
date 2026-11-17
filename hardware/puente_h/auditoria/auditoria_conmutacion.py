@@ -25,17 +25,42 @@ POR QUÉ EXISTE
     de mejora medible, no que la tarjeta esté mal.
 
 PRUEBA DE ACEPTACIÓN DE ESTA HERRAMIENTA
-    Corrida sobre la REV C debe señalar sola M1, M2 y M3. Si no los señala,
-    la herramienta no sirve y hay que arreglarla antes de confiar en ella.
+    Corrida sobre la REV C debe señalar sola M2 y M3. Si no los señala, la
+    herramienta no sirve y hay que arreglarla antes de confiar en ella.
 
 QUÉ MIDE
-    M1  Separación entre los dos MOSFET de cada medio puente.
+    M1  Geometría del nodo conmutado. INFORMATIVA, sin veredicto.
     M2  Reparto de área de cobre por net y por capa (conmutado contra quieto).
     M3  Capacitancia al chasis del nodo conmutado y corriente de modo común.
     M4  Solapamiento del bus entre capas (sándwich 48V/GND).
+    M4b Encimado del nodo conmutado sobre cobre quieto, pesado por área.
     M5  Qué plano queda debajo de cada red de compuerta.
-    M6  Estimación del lazo de conmutación y del sobretiro al apagar.
+    M6  Estimación del lazo de conmutación y del sobretiro al apagar,
+        con el nH/mm que sale de M4b y de M4.
     M7  Distancia del desacoplo más cercano a cada medio puente.
+
+CORRECCIÓN DEL 17 DE NOVIEMBRE DE 2026
+    La primera versión tenía dos errores, los dos del mismo tipo: medir una
+    distancia y hacerla pasar por lo que de verdad importa.
+
+    M1 marcaba fuera de meta los 74 mm entre los MOSFET de una pierna, con un
+    criterio de 25 mm tomado de una regla genérica. Esa regla supone UN borne
+    de salida por pierna y NINGÚN encimado entre capas. Aquí hay DOS bornes,
+    uno pegado a cada MOSFET (J27/J24 en la pierna A, J22/J23 en la B), que se
+    juntan afuera en el transformador: la corriente de carga sale por el
+    extremo donde está su MOSFET y nunca cruza la tarjeta. Y sí hay encimado.
+    La distancia era un *proxy* de la inductancia del lazo, y aquí el proxy
+    miente. M1 se quedó sin veredicto: informa y dice quién juzga cada cosa.
+
+    M6 estimaba el lazo a 1.0 nH/mm, que es el valor de un conductor con el
+    regreso lejos. Medido (M4b, nueva): el 46 % del nodo conmutado tiene 48V o
+    GND directamente encima, a 1.6 mm. Ahí la inductancia por milímetro es de
+    0.07 a 0.20 nH, de 5 a 15 veces menos. El lazo pasó de ~170 nH estimados a
+    100-110 nH, y el margen al límite del MOSFET de negativo a +6 V.
+
+    La lección, que vale para cualquier medida que se agregue después: una
+    distancia sólo sirve de criterio si se sabe de qué es proxy y se verificó
+    que el proxy aplica a ESTE layout.
 
 Uso:  python3 auditoria_conmutacion.py TARJETA.kicad_pcb [--json salida.json]
                                        [--separacion-chasis 10] [--flanco 50]
@@ -48,13 +73,19 @@ from shapely.ops import unary_union
 # ============================ CONFIGURACIÓN =================================
 # Las piernas del puente: (nombre, MOSFET alto, MOSFET bajo, nodo conmutado)
 PIERNAS = [("A", "Q1", "Q2", "VS1"), ("B", "Q3", "Q4", "VS2")]
+# Cada pierna saca su nodo conmutado por DOS bornes, uno pegado a cada MOSFET,
+# y los dos cables se juntan en el transformador. Por eso la corriente de carga
+# no cruza la tarjeta: entra y sale por el extremo donde esta su MOSFET.
+BORNES = {"A": ("J27", "J24"), "B": ("J22", "J23")}
 RIELES_QUIETOS = ("48V", "GND", "GND_IN")
 CARA_AL_CHASIS = "B.Cu"      # la cara de soldadura es la que ve al chasis
 CAP_DESACOPLO  = ("C1", "C2", "C3", "C4", "C9", "C10")
 
 # Criterios. Cada uno trae su razón; cambiarlos exige cambiar la razón.
-CRIT_PAREJA_OK    = 25.0   # mm. Dos TO-247 pegados quedan a ~20-25 mm de centro a centro
-CRIT_PAREJA_ATN   = 50.0   # mm
+# Fraccion minima del nodo conmutado que debe tener cobre quieto encimado. Es
+# lo que vuelve barata la distancia entre los MOSFET: con el retorno a 1.6 mm
+# los campos se cancelan y la inductancia por milimetro cae de ~1 a ~0.1 nH.
+CRIT_ENCIMADO = 0.50
 CRIT_SOLAPE_BUS   = 0.60   # fracción mínima del bus que debe ser sándwich de dos capas
 CRIT_FRAC_CONMUTADO = 0.15 # fracción máxima de una cara que puede ser nodo conmutado
 CRIT_CM_MA        = 1.0    # mA de pico de modo común que se considera aceptable
@@ -186,25 +217,108 @@ class Informe:
 
 # ============================ MEDIDAS =======================================
 def m1_parejas(T, I):
-    I.tit("M1. Separación entre los dos MOSFET de cada medio puente")
-    I.di("En un medio puente el alto y el bajo van PEGADOS: el nodo conmutado es")
-    I.di("el puente corto entre ellos. Si se separan, ese nodo tiene que viajar, y")
-    I.di("para llevar la corriente no le queda más que volverse plano. El tamaño")
-    I.di("del nodo conmutado es consecuencia de esta distancia, no causa aparte.")
+    I.tit("M1. Geometría del nodo conmutado (INFORMATIVA, sin veredicto)")
+    I.di("Tres distancias, y esta medida NO juzga ninguna. Las reporta y dice")
+    I.di("quién sí las juzga, porque cada una cuesta algo distinto:")
+    I.di()
+    I.di("  (a) Entre los dos MOSFET de la pierna. Es el tramo del nodo conmutado")
+    I.di("      por donde se cierra la corriente que CONMUTA. Cuesta inductancia,")
+    I.di("      pero cuánta depende de si va encimada sobre cobre quieto. Quien la")
+    I.di("      juzga es M4b (encimado) y M6 (el lazo), no esta distancia.")
+    I.di("  (b) De cada MOSFET a su borne de salida. Es el camino de la corriente")
+    I.di("      de CARGA, y cada pierna tiene DOS bornes, uno pegado a cada")
+    I.di("      MOSFET, que se juntan afuera en el transformador: la corriente de")
+    I.di("      carga no cruza la tarjeta. Cuesta resistencia y calor, y quien lo")
+    I.di("      juzga es auditoria_cobre.py midiendo el cobre real, no la línea")
+    I.di("      recta entre dos centros.")
+    I.di("  (c) El desbalance entre las dos mitades. Importa, pero tampoco se")
+    I.di("      juzga aquí: un pad puede estar corrido a propósito para abrirle")
+    I.di("      cobre al nodo, y entonces la línea recta se alarga mientras el")
+    I.di("      cobre se ensancha. De nuevo: lo dice el cobre, no el centro.")
+    I.di()
+    I.di("  Esta medida existía antes con un criterio de 25 mm heredado de una")
+    I.di("  regla genérica que supone un solo borne por pierna y ningún encimado.")
+    I.di("  Aquí hay dos bornes y sí hay encimado, así que la regla no aplica y")
+    I.di("  marcaba fuera de meta un layout que está bien. Se quitó el veredicto.")
     I.di()
     res = {}
     for nombre, alto, bajo, vs in PIERNAS:
         a = T.piezas.get(alto); b = T.piezas.get(bajo)
         if not (a and b):
-            I.juicio("ATN", f"pierna {nombre}: no encontré {alto} o {bajo}"); continue
+            I.di(f"    pierna {nombre}: no encontré {alto} o {bajo}"); continue
         d = math.dist(a['pos'], b['pos'])
-        res[nombre] = d
-        est = "OK" if d <= CRIT_PAREJA_OK else ("ATN" if d <= CRIT_PAREJA_ATN else "MAL")
-        I.juicio(est, f"pierna {nombre}: {alto} en ({a['pos'][0]:.1f}, {a['pos'][1]:.1f}) y "
-                      f"{bajo} en ({b['pos'][0]:.1f}, {b['pos'][1]:.1f}) -> {d:.1f} mm "
-                      f"(criterio: <= {CRIT_PAREJA_OK:.0f} mm)")
-    I.datos['separacion_medio_puente_mm'] = res
+        I.di(f"    pierna {nombre}: (a) {alto} a {bajo} = {d:.1f} mm")
+        salidas = {}
+        for ref, pad in ((alto, '3'), (bajo, '2')):
+            p = T.pad(ref, pad)
+            if not p: continue
+            opciones = []
+            for bn in BORNES.get(nombre, ()):
+                pz = T.piezas.get(bn)
+                if not pz: continue
+                opciones.append((bn, math.dist(p[:2], pz['pos'])))
+            if not opciones: continue
+            opciones.sort(key=lambda t: t[1])
+            cerca, lejos = opciones[0], (opciones[1] if len(opciones) > 1 else None)
+            salidas[ref] = {b_: round(d_, 1) for b_, d_ in opciones}
+            extra = f"   (el otro, {lejos[0]}, a {lejos[1]:.1f} mm)" if lejos else ""
+            I.di(f"                (b) {ref} pad {pad} -> {cerca[0]} a {cerca[1]:.1f} mm{extra}")
+        if len(salidas) == 2:
+            v = [min(d.values()) for d in salidas.values()]
+            des = abs(v[0] - v[1]) / max(v) * 100
+            I.di(f"                (c) desbalance de la línea recta: {des:.0f} % "
+                 f"({v[0]:.1f} contra {v[1]:.1f} mm)")
+            res[nombre] = dict(entre_mosfet=round(d, 1), salidas=salidas,
+                               desbalance_recta_pct=round(des, 1))
+        I.di()
+    I.datos['geometria_nodo'] = res
     return res
+
+def m4b_encimado(T, I):
+    """Cuánto del nodo conmutado tiene cobre quieto directamente encima."""
+    I.tit("M4b. Encimado del nodo conmutado sobre cobre quieto")
+    I.di("Si el nodo conmutado va en una cara y el riel quieto justo encima en la")
+    I.di("otra, la ida y el regreso quedan a 1.6 mm (el grosor del FR-4) y los")
+    I.di("campos se cancelan. Eso es lo que vuelve barata la distancia entre los")
+    I.di("MOSFET: la inductancia por milímetro cae de ~1 nH a ~0.1 nH, de 5 a 15")
+    I.di("veces menos. Es la medida que le da el número a M6.")
+    I.di()
+    I.di("Se pesa POR ÁREA, no por cara. Una cara con poco nodo conmutado y mal")
+    I.di("encimada no vale lo mismo que la cara donde vive el nodo: juzgar por la")
+    I.di("peor cara castiga a la que casi no lleva corriente.")
+    I.di()
+    quietos = {}
+    for cara in ('F.Cu', 'B.Cu'):
+        u = unary_union([g for (n, c), gs in T.cobre.items()
+                         if c == cara and n in RIELES_QUIETOS for g in gs])
+        quietos[cara] = u
+    frac = {}
+    for _, _, _, vs in PIERNAS:
+        tot = enc = 0.0
+        for cara, otra in (('B.Cu', 'F.Cu'), ('F.Cu', 'B.Cu')):
+            u = T.union(vs, cara)
+            q = quietos.get(otra)
+            if u is None or u.area < 1: continue
+            e = u.intersection(q).area if (q is not None and not q.is_empty) else 0.0
+            tot += u.area; enc += e
+            I.di(f"    {vs} en {cara}: {u.area:7.0f} mm², con cobre quieto encima "
+                 f"{e:7.0f} mm² = {e/u.area*100:3.0f} %")
+        if tot > 0:
+            f = enc / tot
+            frac[vs] = f
+            I.di(f"    {vs} PESADO POR ÁREA: {enc:.0f} de {tot:.0f} mm² = {f*100:.0f} %")
+            I.di()
+    if frac:
+        peor = min(frac.values())
+        est = "OK" if peor >= CRIT_ENCIMADO else ("ATN" if peor >= CRIT_ENCIMADO*0.7 else "MAL")
+        I.juicio(est, f"peor nodo conmutado: {peor*100:.0f} % encimado "
+                      f"(criterio: >= {CRIT_ENCIMADO*100:.0f} %)")
+        I.di()
+        I.di("    Lo que falta para la meta no se gana ruteando más ancho: se gana")
+        I.di("    poniendo 48V o GND en la cara opuesta justo donde el nodo")
+        I.di("    conmutado todavía corre destapado.")
+    I.datos['encimado'] = frac
+    return frac
 
 def m2_reparto(T, I):
     I.tit("M2. Reparto de área de cobre por net y por capa")
@@ -358,21 +472,46 @@ def m5_compuertas(T, I):
                                         f"es {src}.")
             I.di()
 
+# Inductancia por milímetro de un par encimado en FR-4 de 1.6 mm, según el
+# ancho efectivo del par (placa paralela, L/l = mu0*h/w):
+#   10 mm -> 0.201 nH/mm ; 20 mm -> 0.101 ; 30 mm -> 0.067
+# Y de un conductor cuyo regreso queda lejos: ~1.0 nH/mm. La diferencia entre
+# los dos casos es de 5 a 15 veces, así que suponer el malo cuando el bueno es
+# el real exagera el lazo en un orden de magnitud. Por eso M6 ya no supone:
+# usa el encimado que midió M4b.
+NH_MM_ENCIMADO_OPT = 0.067   # par ancho, 30 mm
+NH_MM_ENCIMADO_PES = 0.201   # par angosto, 10 mm
+NH_MM_SUELTO       = 1.000   # regreso lejano
+
+def _banda_nh_mm(frac):
+    """nH/mm de un tramo del que una fracción `frac` va encimada."""
+    f = max(0.0, min(1.0, frac))
+    return (f * NH_MM_ENCIMADO_OPT + (1 - f) * NH_MM_SUELTO,
+            f * NH_MM_ENCIMADO_PES + (1 - f) * NH_MM_SUELTO)
+
 def m6_lazo(T, I):
     I.tit("M6. Lazo de conmutación y sobretiro al apagar (estimación)")
     I.di("Recorrido: 48V -> drenaje del alto -> source del alto -> drenaje del")
-    I.di("bajo -> source del bajo -> GND -> regreso por el desacoplo. Se da como")
-    I.di("BANDA, no como número: 0.3 nH/mm para plano apretado y 1.0 nH/mm para")
-    I.di("pista con retorno lejano. La verdad está en medio y SE MIDE con sonda.")
-    I.di("Sólo se marca falla si ni el extremo optimista deja margen.")
+    I.di("bajo -> source del bajo -> GND -> regreso por el desacoplo.")
     I.di()
+    I.di("El lazo se parte en dos tramos y cada uno cobra según SU encimado:")
+    I.di("  · el puente del nodo conmutado, con el encimado que midió M4b")
+    I.di("  · el camino al desacoplo, con el sándwich 48V/GND que midió M4")
+    I.di("Un tramo encimado sobre cobre quieto a 1.6 mm cuesta ~0.07-0.20 nH/mm;")
+    I.di("uno con el regreso lejos cuesta ~1.0. Son 5 a 15 veces, así que esto")
+    I.di("no se supone: se mide. Sigue siendo BANDA, y la verdad SE MIDE con")
+    I.di("sonda. Sólo se marca fuera de meta si ni el extremo optimista deja")
+    I.di("margen.")
+    I.di()
+    enc = I.datos.get('encimado', {})
+    snd = I.datos.get('sandwich_bus', {})
+    f_bus = max(snd.values()) if snd else 0.0
     for nombre, alto, bajo, vs in PIERNAS:
         pa2 = T.pad(alto, '2'); pa3 = T.pad(alto, '3')
         pb2 = T.pad(bajo, '2'); pb3 = T.pad(bajo, '3')
         if not all((pa2, pa3, pb2, pb3)):
             I.juicio("ATN", f"pierna {nombre}: faltan pads para estimar el lazo"); continue
         d1 = math.dist(pa3[:2], pb2[:2])          # el puente del nodo conmutado
-        # el desacoplo más cercano al medio puente
         medio = ((pa3[0] + pb2[0]) / 2, (pa3[1] + pb2[1]) / 2)
         mejor = None
         for c in CAP_DESACOPLO:
@@ -381,19 +520,26 @@ def m6_lazo(T, I):
             dd = math.dist(pz['pos'], medio)
             if mejor is None or dd < mejor[1]: mejor = (c, dd)
         d2 = mejor[1] if mejor else float('nan')
-        perim = 2 * (d1 + d2)
-        I.di(f"    pierna {nombre}: puente conmutado {d1:.1f} mm ; desacoplo más cercano "
-             f"{mejor[0] if mejor else '?'} a {d2:.1f} mm ; perímetro del lazo ~{perim:.0f} mm")
-        # Banda, no número único: plano apretado ~0.3 nH/mm, pista con retorno
-        # lejano ~1.0 nH/mm. La verdad está en medio y se mide con sonda.
+        # encimado de ESTE nodo conmutado (el mejor de sus caras)
+        f_vs = enc.get(vs, 0.0)
+        o1, p1 = _banda_nh_mm(f_vs)
+        o2, p2 = _banda_nh_mm(f_bus)
+        # el lazo recorre cada tramo de ida y de vuelta
+        L_opt = 2 * (d1 * o1 + d2 * o2)
+        L_pes = 2 * (d1 * p1 + d2 * p2)
+        I.di(f"    pierna {nombre}:")
+        I.di(f"      puente conmutado  {d1:5.1f} mm, encimado {f_vs*100:3.0f} %  "
+             f"-> {o1:.2f} a {p1:.2f} nH/mm")
+        I.di(f"      al desacoplo {mejor[0] if mejor else '?':<4s} {d2:5.1f} mm, sándwich "
+             f"{f_bus*100:3.0f} %  -> {o2:.2f} a {p2:.2f} nH/mm")
+        I.di(f"      lazo completo (ida y vuelta): entre {L_opt:.0f} y {L_pes:.0f} nH")
         picos = {}
         for flanco in (50, 100):
             didt = CORRIENTE_A / (flanco * 1e-9)
-            lo = perim * 0.3e-9 * didt
-            hi = perim * 1.0e-9 * didt
+            lo = L_opt * 1e-9 * didt
+            hi = L_pes * 1e-9 * didt
             picos[flanco] = (lo, hi)
-            I.di(f"      flanco {flanco:3d} ns -> L entre {perim*0.3:.0f} y {perim*1.0:.0f} nH "
-                 f"-> sobretiro entre {lo:.0f} y {hi:.0f} V "
+            I.di(f"      flanco {flanco:3d} ns -> sobretiro entre {lo:.0f} y {hi:.0f} V "
                  f"-> pico total {V_BUS+lo:.0f} a {V_BUS+hi:.0f} V de {V_MOSFET:.0f} V")
         lo50, hi50 = picos[50]
         m_opt = V_MOSFET - (V_BUS + lo50)
@@ -463,6 +609,7 @@ def main():
     m2_reparto(T, I)
     m3_chasis(T, I, a.separacion_chasis, a.flanco)
     m4_sandwich(T, I)
+    m4b_encimado(T, I)
     m5_compuertas(T, I)
     m6_lazo(T, I)
     m7_desacoplo(T, I)
