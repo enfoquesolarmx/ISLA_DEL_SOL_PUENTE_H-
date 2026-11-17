@@ -10,31 +10,26 @@
 
 ## 1. Qué ve el usuario
 
-Dos pantallas en el LCD de 16×2. Nada más.
+Cuatro pantallas en el LCD de 16×2. Nada más.
 
 ```
- 780 W      78%
-MAX24h  950 W
+ 780 W      78%        CONSUMO DE HOY
+MAX24h  950 W               4.8 kWh
+
+HISTORICO              DESPIERTO
+     1247 kWh              45d 07h
 ```
 
-```
-HOY      4.8 kWh
-TOTAL ACUMULADO
-```
-```
-TOTAL ACUMULADO
-     1247 kWh
-```
-
-La segunda pantalla pone el total **en su propio renglón**, no pegado a la etiqueta. No es capricho de diseño: es lo que hace que el número nunca se desborde (sección 2.1).
+**Tres de las cuatro llevan la etiqueta arriba y el número solo abajo.** No es capricho de diseño: es lo que hace que el número nunca se desborde del renglón (sección 2.1), y de paso deja el dato grande y despejado, que es como se lee de un vistazo.
 
 | Número | Qué es |
 | --- | --- |
 | **780 W** | Lo que está jalando en este momento |
 | **78 %** | Qué tanto de los 1000 W del inversor va ocupado |
 | **MAX24h 950 W** | La potencia **sostenida** más alta de las últimas 24 horas |
-| **HOY 4.8 kWh** | Energía consumida en las últimas 24 horas |
-| **TOTAL 1247 kWh** | Energía consumida desde que se instaló |
+| **CONSUMO DE HOY 4.8 kWh** | Energía consumida en las últimas 24 horas |
+| **HISTORICO 1247 kWh** | Energía consumida desde que se instaló |
+| **DESPIERTO 45d 07h** | Cuánto lleva encendido sin reiniciarse |
 
 ---
 
@@ -58,15 +53,15 @@ Tres razones:
 2. **Cambiar de unidad parece que se reseteó el medidor.** El usuario vería pasar `99999 kWh` a `100.0 MWh` y pensaría que perdió su historial.
 3. **No hace falta.** El problema no era la unidad, era el renglón.
 
-**El problema real y su solución.** Con la etiqueta pegada al número, el renglón se rompe:
+**El problema real y su solución.** La etiqueta y el número no caben juntos en 16 caracteres — `HISTORICO ACUMULADO` por sí sola ya son 19, así que se quedó en **`HISTORICO`**, que dice lo mismo en 9. Y aun así, con el número pegado a la etiqueta el renglón se rompe:
 
-| Total | `TOTAL 1234567 kWh` | Número en su propio renglón |
+| Histórico | `HISTORICO 1234567 kWh` | Número en su propio renglón |
 | --- | --- | --- |
-| 1 247 kWh | 14 car. ✅ | ✅ |
-| 99 999 kWh | 15 car. ✅ | ✅ |
-| 100 000 kWh | 16 car. ✅ (al límite) | ✅ |
-| 1 234 567 kWh | **17 car. ❌ no cabe** | ✅ |
-| 9 999 999 kWh | **17 car. ❌ no cabe** | ✅ |
+| 1 247 kWh | 18 car. ❌ | ✅ |
+| 99 999 kWh | 19 car. ❌ | ✅ |
+| 100 000 kWh | 20 car. ❌ | ✅ |
+| 1 234 567 kWh | **21 car. ❌** | ✅ |
+| 9 999 999 kWh | **21 car. ❌** | ✅ |
 
 Poniendo el número solo en el segundo renglón caben **7 dígitos** sin apretar. Y eso es suficiente para siempre:
 
@@ -78,7 +73,11 @@ Poniendo el número solo en el segundo renglón caben **7 dígitos** sin apretar
 
 El inversor entrega 1000 W como máximo, o sea 8 760 kWh al año si trabajara a tope las 8 760 horas. **El renglón de 7 dígitos le sobrevive al equipo, al instalador y a los nietos.**
 
-### 2.2 El acumulador no se puede guardar en Wh enteros
+### 2.2 Las etiquetas van sin acento
+
+El juego de caracteres estándar del HD44780 —el de la mayoría de los módulos 16×2— **no trae vocales acentuadas**. A menos que el módulo traiga la ROM europea, en pantalla va `HISTORICO`, sin acento. En esta documentación sí lleva el suyo.
+
+### 2.3 El acumulador no se puede guardar en Wh enteros
 
 Esta es la trampa que de verdad importa, y es silenciosa.
 
@@ -106,7 +105,48 @@ Esto **no es un detalle de implementación**: es la diferencia entre un medidor 
 
 ---
 
-## 3. Por qué se mide en DC y no en AC
+## 3. DESPIERTO: cuánto lleva encendido
+
+**Para qué sirve.** Es la evidencia de que el equipo trabaja. Un número grande dice, sin palabras, que el aparato lleva meses sin tropezarse.
+
+**Y se diagnostica solo.** Si el usuario ve `2h` cuando esperaba `45d` y él no tocó nada, **eso ya le dijo que algo se reinició**. No hace falta agregar ninguna alarma: el número ausente es la alarma.
+
+### La trampa de `millis()`
+
+**`millis()` se desborda a los 49.7 días** (2³² milisegundos). Calculando el tiempo directo de ahí, el contador **se regresa a cero justo cuando empieza a ser presumible**: quien llevaba 49 días sin un reinicio vería el número caerse solo y creería que su equipo se reinició cuando no pasó nada. La medalla al revés.
+
+El arreglo cuesta 8 bytes y una resta bien hecha:
+
+```c
+static uint32_t segundos = 0;
+static uint32_t ultimo = 0;
+uint32_t ahora = millis();
+if (ahora - ultimo >= 1000) {              // esta resta es correcta aun
+    segundos += (ahora - ultimo) / 1000;   // cuando millis() se desborda
+    ultimo   += ((ahora - ultimo) / 1000) * 1000;
+}
+```
+
+Con `uint32_t` de segundos el tope son **136 años**.
+
+### Mes y año, definidos
+
+Sin reloj de calendario no hay de otra: **un mes son 30 días y un año son 365**. Queda escrito para que nadie saque cuentas contra el calendario y crea que el medidor está mal.
+
+### Se muestran las dos unidades más grandes que apliquen
+
+| Tiempo despierto | Se ve |
+| --- | --- |
+| Menos de 2 días | `7h 23m` |
+| Menos de 3 meses | `45d 07h` |
+| Menos de 1 año | `5m 12d` |
+| Más | `1a 2m 15d` |
+
+Mostrar `0a 00m 00d 07h` sería llenar el renglón de ceros para esconder el único número que importa.
+
+---
+
+## 4. Por qué se mide en DC y no en AC
 
 Esta es la decisión que define todo lo demás.
 
@@ -125,7 +165,7 @@ El README del sensor ya decía para qué servía `I_OUT`: *"ADC: potencia, efici
 
 ---
 
-## 4. La potencia máxima: la regla de los 2 segundos
+## 5. La potencia máxima: la regla de los 2 segundos
 
 **Para registrarse, la potencia debe sostenerse 2 segundos.**
 
@@ -151,7 +191,7 @@ Si el LCD dijera nada más `MAX 847W`, quien sabe que su bomba jala mucho más a
 
 ---
 
-## 5. La ventana de 24 horas
+## 6. La ventana de 24 horas
 
 Hay dos maneras, y se eligió la cara porque cabe:
 
@@ -166,7 +206,7 @@ Con la ventana real **los dos números dicen la verdad siempre**, sin el hueco d
 
 ---
 
-## 6. La EEPROM: 365 escrituras al año
+## 7. La EEPROM: 365 escrituras al año
 
 **El acumulado se guarda una vez cada 24 horas.** Son 365 escrituras al año, y con los 100 000 ciclos que aguanta la celda eso da **274 años**. El desgaste deja de ser un tema, resuelto por escribir menos.
 
@@ -176,7 +216,7 @@ Lo que no cubre: un corte brusco sin aviso (alguien desconecta la batería). Ah�
 
 ---
 
-## 7. Lo que hay que construir antes
+## 8. Lo que hay que construir antes
 
 En orden. Los dos primeros son el trabajo de verdad; los dos últimos son lo que se ve.
 
@@ -189,7 +229,7 @@ En orden. Los dos primeros son el trabajo de verdad; los dos últimos son lo que
 
 ---
 
-## 8. Presupuesto de recursos, medido
+## 9. Presupuesto de recursos, medido
 
 Compilado el auxiliar tal como está hoy (Nano: 30 720 B de flash, 2048 B de RAM):
 
@@ -208,17 +248,18 @@ Reservando ~450 B de pila quedan **529 B utilizables**. El módulo pide:
 | Acumulado total en Wh (32 bits) + resto en W·s (16 bits) | 6 |
 | Acumulado del día en Wh (32 bits) | 4 |
 | Potencia actual y auxiliares | 20 |
-| **Total** | **130** |
+| DESPIERTO: segundos + marca de `millis()` | 8 |
+| **Total** | **138** |
 
-**Quedan 399 B de margen, el 75 % de lo utilizable.** Cabe con holgura.
+**Quedan 391 B de margen, el 74 % de lo utilizable.** Cabe con holgura.
 
 ---
 
-## 9. Lo que este módulo NO hace, y por qué
+## 10. Lo que este módulo NO hace, y por qué
 
 | No hace | Por qué |
 | --- | --- |
-| **Watts verdaderos en AC** | Haría falta un sensor de corriente en AC que la tarjeta no tiene. Ver sección 3 |
+| **Watts verdaderos en AC** | Haría falta un sensor de corriente en AC que la tarjeta no tiene. Ver sección 4 |
 | **Registrar los picos de arranque** | A propósito: eso lo vigila el hardware (DC-016), y ensuciaría el número útil |
 | **Guardar en microSD** | La librería de SD necesita un buffer de sector de 512 B y en el auxiliar solo hay 529 B utilizables. **No cabe**, y no es cuestión de optimizar: el sector de 512 B es un piso duro de FAT |
 | **Fecha y hora reales** | No hay reloj de tiempo real. Las 24 horas son de operación, no de calendario |
@@ -237,18 +278,19 @@ Y queda dicho que **mandar órdenes al inversor desde la red es otra discusión 
 
 ---
 
-## 10. Pendientes
+## 11. Pendientes
 
 - [ ] Confirmar en qué pin del CRÍTICO entra `I_OUT` y si queda libre
 - [ ] Definir el formato de la foto del protocolo v3
 - [ ] Calibrar la corriente contra un patrón (pinza o fuente conocida)
 - [ ] Decidir si se muestran watts de AC estimados o todo se habla en términos de batería
 - [ ] Validación en banco: el acumulado contra un medidor de referencia durante 24 h
-- [ ] Prueba del acumulador: correrlo con potencia constante conocida y comprobar que los Wh suben al ritmo esperado. Es la prueba que cacha el error de redondeo de la sección 2.2, que de otro modo no avisa
+- [ ] Prueba del DESPIERTO al pasar los 49.7 días: comprobar que no se regresa a cero cuando `millis()` se desborda
+- [ ] Prueba del acumulador: correrlo con potencia constante conocida y comprobar que los Wh suben al ritmo esperado. Es la prueba que cacha el error de redondeo de la sección 2.3, que de otro modo no avisa
 
 ---
 
-## 11. Referencias
+## 12. Referencias
 
 - [`decisiones_criticas.md`](decisiones_criticas.md): DC-007 (divisor de batería), DC-014 (corte por hardware fail-safe), DC-016 (niveles de protección), DC-020 (reloj del ADC)
 - [README del sensor DC](../hardware/sensores/sensor-dc-ina-comparador/README.md): qué entrega `I_OUT` y con qué escala
