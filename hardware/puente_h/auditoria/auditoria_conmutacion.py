@@ -79,6 +79,25 @@ def num(x):
     try: return float(x)
     except Exception: return 0.0
 
+def net_de(nodo):
+    """Nombre del net, aguantando los dos formatos de KiCad.
+
+    hasta 20241229 :  (net 2 "48V")   o   (net 2) + (net_name "48V")
+    desde 20260206 :  (net "48V")
+
+    Si esto devuelve None donde debería haber un net, la auditoría entera
+    miente en silencio: mide áreas de nets que cree vacíos. Por eso vive
+    aquí, en un solo lugar, y no repartido por el código.
+    """
+    nn = first(nodo, 'net_name')
+    if nn and len(nn) > 1: return nn[1]
+    n = first(nodo, 'net')
+    if not n: return None
+    if len(n) > 2: return n[2]                                   # (net 2 "48V")
+    if len(n) > 1 and not re.fullmatch(r'\d+', str(n[1])):
+        return n[1]                                              # (net "48V")
+    return None
+
 def gira(dx, dy, grados):
     """KiCad rota los pads con el footprint, en sentido horario."""
     a = math.radians(-grados)
@@ -106,18 +125,15 @@ class Tarjeta:
             pads = {}
             for pad in find(fp, 'pad'):
                 pat = first(pad, 'at')
-                net = first(pad, 'net')
                 if not pat: continue
                 dx, dy = gira(num(pat[1]), num(pat[2]), rot)
-                nombre = net[2] if net and len(net) > 2 else None
-                pads.setdefault(pad[1], []).append((x + dx, y + dy, nombre))
+                pads.setdefault(pad[1], []).append((x + dx, y + dy, net_de(pad)))
             s.piezas[ref] = dict(pos=(x, y), rot=rot, valor=val, pads=pads)
 
     def _cobre(s):
         """Usa filled_polygon: es el cobre que queda DESPUÉS de los huecos."""
         for z in find(s.arbol, 'zone'):
-            nn = first(z, 'net_name')
-            net = nn[1] if nn and len(nn) > 1 else ''
+            net = net_de(z) or ''
             for fp in find(z, 'filled_polygon'):
                 lay = first(fp, 'layer')
                 capa = lay[1] if lay and len(lay) > 1 else '?'
@@ -417,6 +433,27 @@ def main():
     a = ap.parse_args()
 
     T = Tarjeta(a.pcb)
+
+    # CANDADO contra el falso aprobado. Si el lector no entiende el formato del
+    # archivo, los nets salen vacíos, todas las áreas dan cero, y M2/M3/M4
+    # reportan "EN META" sin haber medido nada. Eso es peor que no correr la
+    # herramienta: es correrla y creerle. Pasó al abrir un archivo guardado con
+    # KiCad 20260206, donde el net cambió de (net 2 "48V") a (net "48V").
+    con_cobre = sorted({n for (n, _) in T.cobre if n})
+    if not con_cobre:
+        print(f"ABORTADO: no leí ningún net con cobre en {a.pcb}.", file=sys.stderr)
+        print("No es que la tarjeta esté vacía: es que no entendí el formato.",
+              file=sys.stderr)
+        print("Revise net_de() contra la versión de KiCad del archivo antes de",
+              file=sys.stderr)
+        print("creerle una sola cifra a esta herramienta.", file=sys.stderr)
+        return 2
+    faltan = [n for n in (list(RIELES_QUIETOS) + [v for _, _, _, v in PIERNAS])
+              if n not in con_cobre]
+    if faltan:
+        print(f"AVISO: no encontré cobre de estos nets esperados: {', '.join(faltan)}",
+              file=sys.stderr)
+
     I = Informe()
     I.di("AUDITORÍA DE CONMUTACIÓN — Isla del Sol, Puente H")
     I.di(f"tarjeta: {a.pcb}")
