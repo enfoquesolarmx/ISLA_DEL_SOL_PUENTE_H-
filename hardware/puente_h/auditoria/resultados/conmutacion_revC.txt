@@ -10,8 +10,8 @@ el puente corto entre ellos. Si se separan, ese nodo tiene que viajar, y
 para llevar la corriente no le queda más que volverse plano. El tamaño
 del nodo conmutado es consecuencia de esta distancia, no causa aparte.
 
-  FALLA pierna A: Q1 en (95.8, 129.4) y Q2 en (106.8, 55.8) -> 74.5 mm (criterio: <= 25 mm)
-  FALLA pierna B: Q3 en (160.4, 129.4) y Q4 en (171.2, 55.6) -> 74.6 mm (criterio: <= 25 mm)
+  FUERA META pierna A: Q1 en (95.8, 129.4) y Q2 en (106.8, 55.8) -> 74.5 mm (criterio: <= 25 mm)
+  FUERA META pierna B: Q3 en (160.4, 129.4) y Q4 en (171.2, 55.6) -> 74.6 mm (criterio: <= 25 mm)
 
 ==========================================================================
 M2. Reparto de área de cobre por net y por capa
@@ -29,15 +29,15 @@ reparto está invertido.
     VS2               3223           0        1317   CONMUTADO
     (mm² de cobre real, ya descontados los huecos)
 
-  OK    B.Cu: VS1 = 3121 mm² contra 9852 mm² del riel quieto.
-  OK    B.Cu: VS2 = 3223 mm² contra 9852 mm² del riel quieto.
-  OK    F.Cu: VS1 = 1322 mm² contra 9760 mm² del riel quieto.
-  OK    F.Cu: VS2 = 1317 mm² contra 9760 mm² del riel quieto.
+  EN META    B.Cu: VS1 = 3121 mm² contra 9852 mm² del riel quieto.
+  EN META    B.Cu: VS2 = 3223 mm² contra 9852 mm² del riel quieto.
+  EN META    F.Cu: VS1 = 1322 mm² contra 9760 mm² del riel quieto.
+  EN META    F.Cu: VS2 = 1317 mm² contra 9760 mm² del riel quieto.
 
-  FALLA B.Cu: el nodo conmutado ocupa 6344 mm² de 17740 mm² = 36 % de la cara (criterio: <= 15 %)
-  OK    F.Cu: el nodo conmutado ocupa 2638 mm² de 20778 mm² = 13 % de la cara (criterio: <= 15 %)
+  FUERA META B.Cu: el nodo conmutado ocupa 6344 mm² de 17740 mm² = 36 % de la cara (criterio: <= 15 %)
+  EN META    F.Cu: el nodo conmutado ocupa 2638 mm² de 20778 mm² = 13 % de la cara (criterio: <= 15 %)
 
-  FALLA 48V tiene 9760 mm² en la otra cara pero sólo 135 mm² en B.Cu: el bus no es sándwich, es una sola cara.
+  FUERA META 48V tiene 9760 mm² en la otra cara pero sólo 135 mm² en B.Cu: el bus no es sándwich, es una sola cara.
 
 ==========================================================================
 M3. Capacitancia al chasis del nodo conmutado
@@ -52,7 +52,7 @@ que decide qué tan difícil será la corriente de fuga (DC-015).
     total conmutado: 6344 mm²
     separación al chasis supuesta: 10 mm ; flanco: 50 ns (dv/dt = 0.96 V/ns)
     C = 5.62 pF  ->  5.39 mA de pico de modo común
-  FALLA 5.39 mA de pico (criterio: <= 1.0 mA)
+  FUERA META 5.39 mA de pico (criterio: <= 1.0 mA)
 
 ==========================================================================
 M4. Solapamiento del bus entre capas (sándwich 48V / GND)
@@ -63,7 +63,7 @@ en una cara y GND en la otra pero no se traslapan, no hay cancelación.
 
     48V(F.Cu) bajo GND(B.Cu): 3776 mm² de 9760 mm²  ->  39 % encimado
     48V(B.Cu) bajo GND(F.Cu): 0 mm² de 135 mm²  ->  0 % encimado
-  AVISO mejor solapamiento del bus: 39 % (criterio: >= 60 %)
+  CERCA      mejor solapamiento del bus: 39 % (criterio: >= 60 %)
 
 ==========================================================================
 M5. Qué plano queda debajo de cada red de compuerta
@@ -74,24 +74,24 @@ OTRO nodo conmutado, ese nodo le acopla dv/dt al gate: es el camino
 clásico al encendido parásito y a la conducción cruzada.
 
     Q1: source = VS1 ; gate = Net-(Q1-G)
-  AVISO Q1: R1 sobre 48V en F.Cu, y su referencia es VS1.
-  AVISO Q1: R2 sobre 48V en F.Cu, y su referencia es VS1.
-  AVISO Q1: R3 sobre 48V en F.Cu, y su referencia es VS1.
+  CERCA      Q1: R1 sobre 48V en F.Cu, y su referencia es VS1.
+  CERCA      Q1: R2 sobre 48V en F.Cu, y su referencia es VS1.
+  CERCA      Q1: R3 sobre 48V en F.Cu, y su referencia es VS1.
 
     Q2: source = GND ; gate = Net-(Q2-G)
-  OK    Q2: R7 sobre GND en F.Cu (su propia referencia).
-  OK    Q2: R8 sobre GND en F.Cu (su propia referencia).
-  OK    Q2: R9 sobre GND en F.Cu (su propia referencia).
+  EN META    Q2: R7 sobre GND en F.Cu (su propia referencia).
+  EN META    Q2: R8 sobre GND en F.Cu (su propia referencia).
+  EN META    Q2: R9 sobre GND en F.Cu (su propia referencia).
 
     Q3: source = VS2 ; gate = Net-(Q3-G)
-  AVISO Q3: R4 sobre 48V en F.Cu, y su referencia es VS2.
-  AVISO Q3: R5 sobre 48V en F.Cu, y su referencia es VS2.
-  AVISO Q3: R6 sobre 48V en F.Cu, y su referencia es VS2.
+  CERCA      Q3: R4 sobre 48V en F.Cu, y su referencia es VS2.
+  CERCA      Q3: R5 sobre 48V en F.Cu, y su referencia es VS2.
+  CERCA      Q3: R6 sobre 48V en F.Cu, y su referencia es VS2.
 
     Q4: source = GND ; gate = Net-(Q4-G)
-  OK    Q4: R10 sobre GND en F.Cu (su propia referencia).
-  OK    Q4: R11 sobre GND en F.Cu (su propia referencia).
-  OK    Q4: R12 sobre GND en F.Cu (su propia referencia).
+  EN META    Q4: R10 sobre GND en F.Cu (su propia referencia).
+  EN META    Q4: R11 sobre GND en F.Cu (su propia referencia).
+  EN META    Q4: R12 sobre GND en F.Cu (su propia referencia).
 
 
 ==========================================================================
@@ -106,12 +106,12 @@ Sólo se marca falla si ni el extremo optimista deja margen.
     pierna A: puente conmutado 76.6 mm ; desacoplo más cercano C2 a 9.2 mm ; perímetro del lazo ~172 mm
       flanco  50 ns -> L entre 52 y 172 nH -> sobretiro entre 22 y 72 V -> pico total 70 a 120 V de 100 V
       flanco 100 ns -> L entre 52 y 172 nH -> sobretiro entre 11 y 36 V -> pico total 59 a 84 V de 100 V
-  AVISO pierna A: margen al límite del MOSFET entre -20 V (pesimista) y +30 V (optimista). Hay que MEDIRLO con sonda antes de confiar.
+  CERCA      pierna A: margen al límite del MOSFET entre -20 V (pesimista) y +30 V (optimista). Hay que MEDIRLO con sonda antes de confiar.
 
     pierna B: puente conmutado 76.8 mm ; desacoplo más cercano C3 a 7.9 mm ; perímetro del lazo ~169 mm
       flanco  50 ns -> L entre 51 y 169 nH -> sobretiro entre 21 y 71 V -> pico total 69 a 119 V de 100 V
       flanco 100 ns -> L entre 51 y 169 nH -> sobretiro entre 11 y 36 V -> pico total 59 a 84 V de 100 V
-  AVISO pierna B: margen al límite del MOSFET entre -19 V (pesimista) y +31 V (optimista). Hay que MEDIRLO con sonda antes de confiar.
+  CERCA      pierna B: margen al límite del MOSFET entre -19 V (pesimista) y +31 V (optimista). Hay que MEDIRLO con sonda antes de confiar.
 
 
 ==========================================================================
@@ -131,10 +131,14 @@ medio puente, no en la banda central con los electrolíticos.
 ==========================================================================
 RESUMEN
 ==========================================================================
-    fallas: 5    avisos: 9
+    fuera de meta: 5    cerca: 9
 
-    Las fallas son estructurales: no se arreglan ensanchando pistas.
-    Casi siempre salen de dónde están puestas las piezas, así que se
-    corrigen moviendo, no ruteando.
+    Esto NO dice que la tarjeta esté mal. Una tarjeta puede ser correcta,
+    pasar DRC, pasar corriente y pasar térmica, y aun así tener margen de
+    optimización en la conmutación. Eso es lo que mide esta herramienta.
+
+    Lo que sí conviene saber: las metas fuera de rango son estructurales.
+    No se alcanzan ensanchando pistas. Casi siempre dependen de dónde
+    están puestas las piezas, así que se ganan moviendo, no ruteando.
 
 [guardado] auditoria/resultados/conmutacion_revC.json

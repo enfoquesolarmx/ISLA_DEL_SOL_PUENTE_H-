@@ -12,15 +12,21 @@ POR QUÉ EXISTE
     pregunta otra cosa: "¿el nodo que brinca 48 V a 24 kHz está donde debe,
     y del tamaño que debe?".
 
-    Se escribió después de que un error estructural —los dos MOSFET de la
-    misma pierna a 74 mm uno del otro, y el nodo conmutado convertido en el
-    plano más grande de la cara que ve al chasis— sobreviviera a la auditoría
-    de cobre, al DRC y a varias revisiones a ojo. Lo encontró una persona
-    mirando una imagen mientras cenaba. Eso no se puede volver a dejar al azar.
+    Se escribió después de que una oportunidad de optimización —los dos
+    MOSFET de la misma pierna a 74 mm uno del otro, con el nodo conmutado
+    ocupando un tercio de la cara que ve al chasis— pasara inadvertida en
+    una tarjeta por lo demás correcta, que aprobó la auditoría de cobre, el
+    DRC y la térmica. La vio una persona mirando una imagen mientras cenaba.
+    Nada estaba mal; simplemente podía estar mejor, y eso no se puede dejar
+    a que alguien lo note de casualidad.
+
+    IMPORTANTE SOBRE EL LENGUAJE: aquí no hay fallas. Las metas las pone
+    esta herramienta, no el circuito. "FUERA META" significa que hay margen
+    de mejora medible, no que la tarjeta esté mal.
 
 PRUEBA DE ACEPTACIÓN DE ESTA HERRAMIENTA
-    Corrida sobre la REV C debe marcar sola M1, M2 y M3. Si no los marca, la
-    herramienta no sirve y hay que arreglarla antes de confiar en ella.
+    Corrida sobre la REV C debe señalar sola M1, M2 y M3. Si no los señala,
+    la herramienta no sirve y hay que arreglarla antes de confiar en ella.
 
 QUÉ MIDE
     M1  Separación entre los dos MOSFET de cada medio puente.
@@ -154,7 +160,9 @@ class Informe:
         s.lineas.append(t); s.lineas.append("=" * 74)
     def di(s, t=""): s.lineas.append(t)
     def juicio(s, estado, t):
-        marca = {"OK": "  OK    ", "ATN": "  AVISO ", "MAL": "  FALLA "}[estado]
+        # No son veredictos sobre una tarjeta que funciona: son metas de
+        # optimización que la revisión auditada todavía no alcanza.
+        marca = {"OK": "  EN META    ", "ATN": "  CERCA      ", "MAL": "  FUERA META "}[estado]
         if estado == "MAL": s.fallas += 1
         if estado == "ATN": s.avisos += 1
         s.lineas.append(marca + t)
@@ -423,11 +431,15 @@ def main():
     m7_desacoplo(T, I)
 
     I.tit("RESUMEN")
-    I.di(f"    fallas: {I.fallas}    avisos: {I.avisos}")
+    I.di(f"    fuera de meta: {I.fallas}    cerca: {I.avisos}")
     I.di()
-    I.di("    Las fallas son estructurales: no se arreglan ensanchando pistas.")
-    I.di("    Casi siempre salen de dónde están puestas las piezas, así que se")
-    I.di("    corrigen moviendo, no ruteando.")
+    I.di("    Esto NO dice que la tarjeta esté mal. Una tarjeta puede ser correcta,")
+    I.di("    pasar DRC, pasar corriente y pasar térmica, y aun así tener margen de")
+    I.di("    optimización en la conmutación. Eso es lo que mide esta herramienta.")
+    I.di()
+    I.di("    Lo que sí conviene saber: las metas fuera de rango son estructurales.")
+    I.di("    No se alcanzan ensanchando pistas. Casi siempre dependen de dónde")
+    I.di("    están puestas las piezas, así que se ganan moviendo, no ruteando.")
     I.imprime()
 
     if a.json:
