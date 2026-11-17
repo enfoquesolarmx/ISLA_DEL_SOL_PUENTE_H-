@@ -1110,7 +1110,7 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 
 **Contexto**
 
-[DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc) fijó el cobre de los dos canales AC — A0 (red) y A6 (inversor), transformador de 12 VAC, bias de 2.5 V — y dejó el firmware abierto, con una advertencia: el ADC lee un canal a la vez, y eso mete desfase entre las dos lecturas.
+[DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc) fijó el cobre de los dos canales AC — **A0 el del inversor** (J2, cierra el lazo de amplitud) y **A6 el de la red** (J17, da la fase para sincronizar) —, transformador de 12 VAC, bias de 2.5 V — y dejó el firmware abierto, con una advertencia: el ADC lee un canal a la vez, y eso mete desfase entre las dos lecturas.
 
 Al llegar al PLL y al cruce por cero hay que decidir dos cosas que parecen independientes y no lo son:
 
@@ -1138,7 +1138,7 @@ La tentación de los preescaladores rápidos nace de suponer que la sincronía e
 - **Conversión normal: 13 ciclos de ADC = 104 µs.** La primera después de habilitar el ADC toma 25 ciclos = 200 µs (inicializa la parte analógica): **se descarta**.
 - **El valor no se captura al final de la conversión.** El *sample-and-hold* ocurre **1.5 ciclos de ADC después del disparo = 12 µs**, que son **192 cuentas del Timer1** [26]. Ese, y no el final, es el instante de la medición — y es determinista.
 - **Disparo desde la ISR de desborde del Timer1** (modo 8: el desborde es en BOTTOM), **una conversión cada 3 desbordes**: 3 × 41.625 µs = **124.875 µs > 104 µs**, así que la conversión siempre termina antes del siguiente disparo. `fs` = 8008 Hz.
-- **Multiplexado alternado A0 / A6:** 66.7 muestras por canal por ciclo de 60 Hz (80.1 a 50 Hz). Entre muestra y muestra del mismo canal hay 5.39°.
+- **Multiplexado alternado A0 (inversor) / A6 (red):** 66.7 muestras por canal por ciclo de 60 Hz (80.1 a 50 Hz). Entre muestra y muestra del mismo canal hay 5.39°.
 - **Sesgo entre canales: 124.875 µs = 2.70° a 60 Hz** (2.25° a 50 Hz). **Constante y conocido: se resta en firmware.** Esto cierra el pendiente de DC-006.
 - **Rechazo de muestras sucias.** La muestra cae siempre en la cuenta 192 del Timer1; el flanco de conmutación está en la cuenta `d`, que el firmware acaba de escribir. Cuando `|d − 192|` cae dentro de una ventana de guarda, **esa muestra se descarta**: el firmware sabe cuáles salieron sucias porque él mismo puso el flanco ahí. Son ~2 de cada 67 por medio ciclo (**3 %**), y cuesta una comparación.
 
@@ -1151,6 +1151,8 @@ La tentación de los preescaladores rápidos nace de suponer que la sincronía e
 - **Resuelve la advertencia de DC-006:** el desfase entre canales deja de ser un error que hay que acotar y pasa a ser una constante que se resta.
 - ⚠️ **El techo de exactitud de fase ya no lo pone el ADC.** Lo pone el desfase propio del transformador de 12 VAC más los 10 nF del pin (~2° según DC-006). Para **transferencia** se cancela, porque es igual en los dos canales. Para **inyección a red** (V3) hay que calibrarlo contra un patrón: queda apuntado como pendiente de esa versión.
 - ⚠️ **Nada de esto está medido en banco.** Es aritmética sobre la hoja de datos. Pendiente, el día que haya los dos Nano, un transformador de 12 VAC y el analizador: verificar `fs` real, el instante de muestreo (12 µs después del desborde), el ruido con el puente conmutando, y que el rechazo del 3 % se comporte como se calculó.
+> **Corrección del 2026-11-17.** La primera redacción de esta entrada decía "A0 (red) y A6 (inversor)", al revés. La sección 8 del README de la tarjeta de control no deja lugar a dudas: *"el del inversor (J2 → A0) cierra el lazo de amplitud; el de la red (J17 → A6) da la fase para sincronizarse antes de transferir"*. DC-006 ya lo tenía bien; el error entró al redactar esta entrada. Las dos cadenas son idénticas en cobre, así que **ninguna cifra cambia** — lo que estaba mal eran las etiquetas. Pero en el banco habría hecho leer la red como el inversor, que es justo la confusión que puede costar una decisión equivocada sobre el PLL.
+
 - ⚠️ **Si se cambia de micro** (Nano Every, ESP32, Blue Pill), lo que se conserva **no es el /128**: es la metodología — el reloj del ADC dentro de la ventana que pida *su* hoja de datos, el instante de muestreo conocido, y la muestra amarrada a un punto fijo del periodo de portadora. Misma regla que en [`base_de_tiempo_spwm.md`](base_de_tiempo_spwm.md) para la base de tiempo del SPWM.
 
 **Referencias:** [6], [26].
