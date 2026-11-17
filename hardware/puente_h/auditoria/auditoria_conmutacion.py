@@ -67,7 +67,7 @@ Uso:  python3 auditoria_conmutacion.py TARJETA.kicad_pcb [--json salida.json]
 Licencia: MIT (ver LICENSE.md del repositorio). Escrito desde cero.
 """
 import re, sys, math, json, argparse
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, LineString
 from shapely.ops import unary_union
 
 # ============================ CONFIGURACIÓN =================================
@@ -275,50 +275,83 @@ def m1_parejas(T, I):
     return res
 
 def m4b_encimado(T, I):
-    """Cuánto del nodo conmutado tiene cobre quieto directamente encima."""
-    I.tit("M4b. Encimado del nodo conmutado sobre cobre quieto")
-    I.di("Si el nodo conmutado va en una cara y el riel quieto justo encima en la")
-    I.di("otra, la ida y el regreso quedan a 1.6 mm (el grosor del FR-4) y los")
-    I.di("campos se cancelan. Eso es lo que vuelve barata la distancia entre los")
-    I.di("MOSFET: la inductancia por milímetro cae de ~1 nH a ~0.1 nH, de 5 a 15")
-    I.di("veces menos. Es la medida que le da el número a M6.")
+    """Recorre el camino de conmutación milímetro por milímetro y clasifica
+    qué hay en la cara opuesta. No promedia áreas: sigue el camino."""
+    I.tit("M4b. Qué hay encima del camino de conmutación, milímetro por milímetro")
+    I.di("La ida y el regreso de la corriente que conmuta se cancelan sólo si van")
+    I.di("encimadas. Así que no sirve promediar el área del nodo: hay que recorrer")
+    I.di("el camino de Q-alto a Q-bajo y ver, en cada milímetro, qué hay en la")
+    I.di("cara de enfrente. Salen tres casos muy distintos:")
     I.di()
-    I.di("Se pesa POR ÁREA, no por cara. Una cara con poco nodo conmutado y mal")
-    I.di("encimada no vale lo mismo que la cara donde vive el nodo: juzgar por la")
-    I.di("peor cara castiga a la que casi no lleva corriente.")
+    I.di("  ENCIMADO   48V o GND arriba. Par a 1.6 mm, los campos se cancelan.")
+    I.di("             Es física: mu0*h/w da de 0.067 a 0.201 nH/mm de LAZO según")
+    I.di("             el ancho efectivo del par (30 a 10 mm). El tramo bueno.")
+    I.di("  DOBLADO    el MISMO nodo conmutado arriba. No es regreso: es el mismo")
+    I.di("             conductor en las dos caras, o sea más gordo. Baja algo la")
+    I.di("             inductancia, pero NO cancela nada.")
+    I.di("  SUELTO     nada arriba. El regreso se va por donde pueda.")
     I.di()
-    quietos = {}
-    for cara in ('F.Cu', 'B.Cu'):
-        u = unary_union([g for (n, c), gs in T.cobre.items()
-                         if c == cara and n in RIELES_QUIETOS for g in gs])
-        quietos[cara] = u
-    frac = {}
-    for _, _, _, vs in PIERNAS:
-        tot = enc = 0.0
-        for cara, otra in (('B.Cu', 'F.Cu'), ('F.Cu', 'B.Cu')):
-            u = T.union(vs, cara)
-            q = quietos.get(otra)
-            if u is None or u.area < 1: continue
-            e = u.intersection(q).area if (q is not None and not q.is_empty) else 0.0
-            tot += u.area; enc += e
-            I.di(f"    {vs} en {cara}: {u.area:7.0f} mm², con cobre quieto encima "
-                 f"{e:7.0f} mm² = {e/u.area*100:3.0f} %")
-        if tot > 0:
-            f = enc / tot
-            frac[vs] = f
-            I.di(f"    {vs} PESADO POR ÁREA: {enc:.0f} de {tot:.0f} mm² = {f*100:.0f} %")
-            I.di()
-    if frac:
-        peor = min(frac.values())
-        est = "OK" if peor >= CRIT_ENCIMADO else ("ATN" if peor >= CRIT_ENCIMADO*0.7 else "MAL")
-        I.juicio(est, f"peor nodo conmutado: {peor*100:.0f} % encimado "
-                      f"(criterio: >= {CRIT_ENCIMADO*100:.0f} %)")
+    res = {}
+    quieto = {}
+    for c in ('F.Cu', 'B.Cu'):
+        quieto[c] = unary_union([g for (n, cc), gs in T.cobre.items()
+                                 if cc == c and n in RIELES_QUIETOS for g in gs])
+    porcara = {}
+    for (n, c), gs in T.cobre.items():
+        porcara.setdefault(c, {}).setdefault(n, []).extend(gs)
+    porcara = {c: {n: unary_union(gs) for n, gs in d.items()} for c, d in porcara.items()}
+    for nombre, alto, bajo, vs in PIERNAS:
+        pa = T.pad(alto, '3'); pb = T.pad(bajo, '2')
+        if not (pa and pb):
+            I.di(f"    pierna {nombre}: faltan pads"); continue
+        L = LineString([pa[:2], pb[:2]])
+        n = max(2, int(round(L.length)))
+        cuenta = dict(encimado=0, doblado=0, suelto=0, fuera=0)
+        tramos = []; prev = None
+        for k in range(n + 1):
+            p = L.interpolate(k / n, normalized=True)
+            cara = None
+            for c in ('B.Cu', 'F.Cu'):
+                g = porcara.get(c, {}).get(vs)
+                if g is not None and not g.is_empty and g.contains(p): cara = c; break
+            if cara is None:
+                caso, etiq = 'fuera', '(fuera del nodo)'
+            else:
+                otra = 'F.Cu' if cara == 'B.Cu' else 'B.Cu'
+                arriba = None
+                for nt, g in porcara.get(otra, {}).items():
+                    if not g.is_empty and g.contains(p): arriba = nt; break
+                if arriba in RIELES_QUIETOS:   caso, etiq = 'encimado', arriba
+                elif arriba == vs:             caso, etiq = 'doblado', vs
+                else:                          caso, etiq = 'suelto', (arriba or 'nada')
+            cuenta[caso] += 1
+            mm = k / n * L.length
+            if prev != (caso, etiq): tramos.append([mm, mm, caso, etiq]); prev = (caso, etiq)
+            else: tramos[-1][1] = mm
+        paso = L.length / n
+        I.di(f"    pierna {nombre}: de {alto} pad 3 a {bajo} pad 2, {L.length:.1f} mm")
+        for m0, m1, caso, etiq in tramos:
+            I.di(f"      {m0:5.1f} a {m1:5.1f} mm ({m1-m0+paso:4.1f} mm) | arriba: {etiq:<6s} "
+                 f"-> {caso.upper()}")
+        largos = {k: v * paso for k, v in cuenta.items()}
+        I.di(f"      SUMA: encimado {largos['encimado']:.1f} mm, doblado "
+             f"{largos['doblado']:.1f} mm, suelto {largos['suelto']:.1f} mm"
+             + (f", fuera del nodo {largos['fuera']:.1f} mm" if cuenta['fuera'] else ""))
+        f = largos['encimado'] / L.length
+        res[vs] = dict(largo_mm=round(L.length, 1), **{k: round(v, 1) for k, v in largos.items()})
+        est = "OK" if f >= CRIT_ENCIMADO else ("ATN" if f >= CRIT_ENCIMADO*0.7 else "MAL")
+        I.juicio(est, f"pierna {nombre}: {f*100:.0f} % del camino va encimado sobre cobre "
+                      f"quieto (criterio: >= {CRIT_ENCIMADO*100:.0f} %)")
         I.di()
-        I.di("    Lo que falta para la meta no se gana ruteando más ancho: se gana")
-        I.di("    poniendo 48V o GND en la cara opuesta justo donde el nodo")
-        I.di("    conmutado todavía corre destapado.")
-    I.datos['encimado'] = frac
-    return frac
+    if res:
+        I.di("    Dónde se gana: los tramos DOBLADO y SUELTO son los caros. Poner")
+        I.di("    48V o GND en la cara opuesta justo ahí es lo que baja el lazo, y")
+        I.di("    no se gana ensanchando: se gana cambiando QUÉ net va encima.")
+        I.di("    Ojo con el tramo DOBLADO: ese cobre de la cara de enfrente está")
+        I.di("    llevando corriente de carga al borne, así que quitarlo tiene un")
+        I.di("    costo térmico. Es un canje, no un olvido.")
+    I.datos['camino_conmutacion'] = res
+    return res
 
 def m2_reparto(T, I):
     I.tit("M2. Reparto de área de cobre por net y por capa")
@@ -472,46 +505,71 @@ def m5_compuertas(T, I):
                                         f"es {src}.")
             I.di()
 
-# Inductancia por milímetro de un par encimado en FR-4 de 1.6 mm, según el
-# ancho efectivo del par (placa paralela, L/l = mu0*h/w):
-#   10 mm -> 0.201 nH/mm ; 20 mm -> 0.101 ; 30 mm -> 0.067
-# Y de un conductor cuyo regreso queda lejos: ~1.0 nH/mm. La diferencia entre
-# los dos casos es de 5 a 15 veces, así que suponer el malo cuando el bueno es
-# el real exagera el lazo en un orden de magnitud. Por eso M6 ya no supone:
-# usa el encimado que midió M4b.
-NH_MM_ENCIMADO_OPT = 0.067   # par ancho, 30 mm
-NH_MM_ENCIMADO_PES = 0.201   # par angosto, 10 mm
-NH_MM_SUELTO       = 1.000   # regreso lejano
+# nH por milímetro de LAZO, por régimen. Sólo el primero es física; los otros
+# dos son reglas de dedo con banda ancha, y es ahí donde vive la incertidumbre.
+#
+#   ENCIMADO sobre cobre quieto: placa paralela, L/l = mu0*h/w con h = 1.6 mm.
+#       ancho efectivo 30 mm -> 0.067 nH/mm ; 10 mm -> 0.201. Es el lazo ya
+#       completo (ida y regreso), no hay que doblarlo.
+#   DOBLADO (el mismo nodo conmutado en las dos caras): conductor más gordo,
+#       cero cancelación. El regreso se va por los planos quietos de al lado.
+#   SUELTO (nada encima): lo peor del camino.
+#
+# Si alguien cambia estos números, que sea con una medición de sonda, no con
+# otra opinión.
+NH_MM = {
+    'encimado': (0.067, 0.201),   # física: mu0*h/w, h = 1.6 mm, w = 30 a 10 mm
+    'doblado':  (0.60,  1.40),    # regla de dedo
+    'suelto':   (1.00,  2.00),    # regla de dedo
+}
 
-def _banda_nh_mm(frac):
-    """nH/mm de un tramo del que una fracción `frac` va encimada."""
-    f = max(0.0, min(1.0, frac))
-    return (f * NH_MM_ENCIMADO_OPT + (1 - f) * NH_MM_SUELTO,
-            f * NH_MM_ENCIMADO_PES + (1 - f) * NH_MM_SUELTO)
+def _nh_mm_mezcla(frac_encimada):
+    """Para un tramo del que sólo se conoce la fracción encimada (el bus)."""
+    f = max(0.0, min(1.0, frac_encimada))
+    lo = f * NH_MM['encimado'][0] + (1 - f) * NH_MM['suelto'][0]
+    hi = f * NH_MM['encimado'][1] + (1 - f) * NH_MM['suelto'][1]
+    return lo, hi
 
 def m6_lazo(T, I):
     I.tit("M6. Lazo de conmutación y sobretiro al apagar (estimación)")
     I.di("Recorrido: 48V -> drenaje del alto -> source del alto -> drenaje del")
     I.di("bajo -> source del bajo -> GND -> regreso por el desacoplo.")
     I.di()
-    I.di("El lazo se parte en dos tramos y cada uno cobra según SU encimado:")
-    I.di("  · el puente del nodo conmutado, con el encimado que midió M4b")
-    I.di("  · el camino al desacoplo, con el sándwich 48V/GND que midió M4")
-    I.di("Un tramo encimado sobre cobre quieto a 1.6 mm cuesta ~0.07-0.20 nH/mm;")
-    I.di("uno con el regreso lejos cuesta ~1.0. Son 5 a 15 veces, así que esto")
-    I.di("no se supone: se mide. Sigue siendo BANDA, y la verdad SE MIDE con")
-    I.di("sonda. Sólo se marca fuera de meta si ni el extremo optimista deja")
-    I.di("margen.")
+    I.di("El lazo se arma sumando tramos, y cada tramo cobra según lo que tiene")
+    I.di("encima, que es lo que midió M4b milímetro por milímetro. Esto NO se")
+    I.di("supone: antes esta medida cobraba 1.0 nH/mm en todo el camino, que es")
+    I.di("el valor de un conductor con el regreso lejos, y exageraba el lazo")
+    I.di("varias veces. Pero tampoco se puede cobrar 0.07 en todo: sólo la mitad")
+    I.di("del camino va encimada sobre cobre quieto.")
     I.di()
-    enc = I.datos.get('encimado', {})
+    I.di("Sigue siendo BANDA y la verdad SE MIDE con sonda. Sólo se marca fuera")
+    I.di("de meta si ni el extremo optimista deja margen.")
+    I.di()
+    cam = I.datos.get('camino_conmutacion', {})
     snd = I.datos.get('sandwich_bus', {})
     f_bus = max(snd.values()) if snd else 0.0
     for nombre, alto, bajo, vs in PIERNAS:
-        pa2 = T.pad(alto, '2'); pa3 = T.pad(alto, '3')
-        pb2 = T.pad(bajo, '2'); pb3 = T.pad(bajo, '3')
-        if not all((pa2, pa3, pb2, pb3)):
+        pa3 = T.pad(alto, '3'); pb2 = T.pad(bajo, '2')
+        if not (pa3 and pb2):
             I.juicio("ATN", f"pierna {nombre}: faltan pads para estimar el lazo"); continue
-        d1 = math.dist(pa3[:2], pb2[:2])          # el puente del nodo conmutado
+        tr = cam.get(vs)
+        if not tr:
+            I.juicio("ATN", f"pierna {nombre}: M4b no midió el camino"); continue
+        I.di(f"    pierna {nombre}:")
+        L_opt = L_pes = 0.0
+        for caso in ('encimado', 'doblado', 'suelto'):
+            mm = tr.get(caso, 0.0)
+            if mm <= 0: continue
+            lo, hi = NH_MM[caso]
+            L_opt += mm * lo; L_pes += mm * hi
+            I.di(f"      {caso:<9s} {mm:5.1f} mm x {lo:.2f}-{hi:.2f} nH/mm = "
+                 f"{mm*lo:5.1f} a {mm*hi:5.1f} nH")
+        if tr.get('fuera', 0) > 0:
+            mm = tr['fuera']; lo, hi = NH_MM['suelto']
+            L_opt += mm * lo; L_pes += mm * hi
+            I.di(f"      {'fuera':<9s} {mm:5.1f} mm x {lo:.2f}-{hi:.2f} nH/mm = "
+                 f"{mm*lo:5.1f} a {mm*hi:5.1f} nH   (la línea se sale del nodo)")
+        # el tramo del desacoplo, con el sándwich 48V/GND que midió M4
         medio = ((pa3[0] + pb2[0]) / 2, (pa3[1] + pb2[1]) / 2)
         mejor = None
         for c in CAP_DESACOPLO:
@@ -519,34 +577,23 @@ def m6_lazo(T, I):
             if not pz: continue
             dd = math.dist(pz['pos'], medio)
             if mejor is None or dd < mejor[1]: mejor = (c, dd)
-        d2 = mejor[1] if mejor else float('nan')
-        # encimado de ESTE nodo conmutado (el mejor de sus caras)
-        f_vs = enc.get(vs, 0.0)
-        o1, p1 = _banda_nh_mm(f_vs)
-        o2, p2 = _banda_nh_mm(f_bus)
-        # el lazo recorre cada tramo de ida y de vuelta
-        L_opt = 2 * (d1 * o1 + d2 * o2)
-        L_pes = 2 * (d1 * p1 + d2 * p2)
-        I.di(f"    pierna {nombre}:")
-        I.di(f"      puente conmutado  {d1:5.1f} mm, encimado {f_vs*100:3.0f} %  "
-             f"-> {o1:.2f} a {p1:.2f} nH/mm")
-        I.di(f"      al desacoplo {mejor[0] if mejor else '?':<4s} {d2:5.1f} mm, sándwich "
-             f"{f_bus*100:3.0f} %  -> {o2:.2f} a {p2:.2f} nH/mm")
-        I.di(f"      lazo completo (ida y vuelta): entre {L_opt:.0f} y {L_pes:.0f} nH")
+        if mejor:
+            d2 = mejor[1]; lo, hi = _nh_mm_mezcla(f_bus)
+            L_opt += d2 * lo; L_pes += d2 * hi
+            I.di(f"      {'desacoplo':<9s} {d2:5.1f} mm x {lo:.2f}-{hi:.2f} nH/mm = "
+                 f"{d2*lo:5.1f} a {d2*hi:5.1f} nH   ({mejor[0]}, sándwich {f_bus*100:.0f} %)")
+        I.di(f"      LAZO COMPLETO: entre {L_opt:.0f} y {L_pes:.0f} nH")
         picos = {}
         for flanco in (50, 100):
             didt = CORRIENTE_A / (flanco * 1e-9)
-            lo = L_opt * 1e-9 * didt
-            hi = L_pes * 1e-9 * didt
-            picos[flanco] = (lo, hi)
-            I.di(f"      flanco {flanco:3d} ns -> sobretiro entre {lo:.0f} y {hi:.0f} V "
-                 f"-> pico total {V_BUS+lo:.0f} a {V_BUS+hi:.0f} V de {V_MOSFET:.0f} V")
+            lo_v = L_opt * 1e-9 * didt; hi_v = L_pes * 1e-9 * didt
+            picos[flanco] = (lo_v, hi_v)
+            I.di(f"      flanco {flanco:3d} ns -> sobretiro entre {lo_v:.0f} y {hi_v:.0f} V "
+                 f"-> pico total {V_BUS+lo_v:.0f} a {V_BUS+hi_v:.0f} V de {V_MOSFET:.0f} V")
         lo50, hi50 = picos[50]
         m_opt = V_MOSFET - (V_BUS + lo50)
         m_pes = V_MOSFET - (V_BUS + hi50)
-        if m_pes > 0:   est = "OK"
-        elif m_opt > 0: est = "ATN"
-        else:           est = "MAL"
+        est = "OK" if m_pes > 0 else ("ATN" if m_opt > 0 else "MAL")
         I.juicio(est, f"pierna {nombre}: margen al límite del MOSFET entre {m_pes:+.0f} V "
                       f"(pesimista) y {m_opt:+.0f} V (optimista). "
                       + ("Hay que MEDIRLO con sonda antes de confiar."
