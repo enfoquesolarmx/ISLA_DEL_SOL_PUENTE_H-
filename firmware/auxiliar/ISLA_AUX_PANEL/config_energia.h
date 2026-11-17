@@ -43,9 +43,16 @@ constexpr uint16_t DIAS_MES = 30;
 constexpr uint16_t DIAS_ANIO = 365;
 
 // ======================== EL HISTORIAL DIARIO ===============================
-// Un año completo de consumo diario. Un día a 1000 W continuos son 24 000 Wh,
-// así que 2 bytes por día (tope 65 535) sobran.
-constexpr uint16_t DIAS_HISTORIAL = 365;
+// DOS historiales: lo que se consumió (modo inversor) y lo que se cargó (modo
+// cargador). Un día a 1000 W continuos son 24 000 Wh, así que 2 bytes por día
+// (tope 65 535) sobran.
+//
+// POR QUÉ 180 Y NO 365. Dos anillos de un año en Wh completo son 1460 B y la
+// EEPROM tiene 1024. La alternativa era un año con 1 byte por día en pasos de
+// 100 Wh, pero eso topa en 25.5 kWh/día y el equipo puede entregar 24: seis
+// por ciento de margen antes de que el número se achate. Medio año menos de
+// historial se paga solo con no tener que preocuparse por eso.
+constexpr uint16_t DIAS_HISTORIAL = 180;
 
 // Promedios que se muestran en la pantalla.
 constexpr uint8_t PROM_CORTO = 7;
@@ -56,15 +63,16 @@ static_assert(PROM_LARGO <= DIAS_HISTORIAL, "El promedio largo no cabe en el his
 // El perfil de batería del CRÍTICO vive en la dirección 0 de SU EEPROM; ésta
 // es la del AUX, pero se deja el hueco de todos modos por si alguna vez se
 // comparte el mapa.
-constexpr uint16_t ENER_EE_CABECERA = 16;       // 12 B de cabecera
-constexpr uint16_t ENER_EE_ANILLO   = 32;       // 365 x 2 B = 730 B
+constexpr uint16_t ENER_EE_CABECERA = 16;       // 18 B de cabecera
+constexpr uint16_t ENER_EE_CONSUMO  = 40;       // 180 x 2 B = 360 B
+constexpr uint16_t ENER_EE_CARGA    = ENER_EE_CONSUMO + DIAS_HISTORIAL * 2;
 constexpr uint8_t  ENER_EE_FIRMA    = 'E';
 
 // Comprobación de que todo cabe en los 1024 B del ATmega328P.
-static_assert(ENER_EE_ANILLO + DIAS_HISTORIAL * 2 <= 1024,
-  "El historial no cabe en la EEPROM: baje DIAS_HISTORIAL");
+static_assert(ENER_EE_CARGA + DIAS_HISTORIAL * 2 <= 1024,
+  "Los dos historiales no caben en la EEPROM: baje DIAS_HISTORIAL");
 
 // ======================== EL VOLCADO POR SERIE ==============================
 // El "archivo de consumo": se pide por el menú y sale en CSV por el serie.
-// 365 renglones son ~3.6 KB: 0.3 s a 115200 baudios.
-#define ENER_CSV_ENCABEZADO "dia,Wh"
+// 180 renglones son ~2.5 KB: 0.2 s a 115200 baudios.
+#define ENER_CSV_ENCABEZADO "dia,Wh_consumidos,Wh_cargados"

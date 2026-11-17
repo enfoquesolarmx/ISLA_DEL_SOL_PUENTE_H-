@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include <algorithm>
 #include "energia.h"
 
 // --------------------------- EEPROM simulada --------------------------------
@@ -47,7 +48,7 @@ static void titulo(const char *t) { printf("\n%s\n", t); for (size_t i=0;i<strle
 
 // Corre `segundos` a potencia constante, con pasos de dt_ms.
 static uint32_t T_MS = 0;
-static void correr(uint16_t w, uint32_t segundos, uint16_t dt_ms = 100)
+static void correr(int16_t w, uint32_t segundos, uint16_t dt_ms = 100)
 {
   uint32_t pasos = segundos * 1000UL / dt_ms;
   for (uint32_t i = 0; i < pasos; i++) {
@@ -75,20 +76,20 @@ int main()
   reiniciar();
   correr(780, 3600);
   {
-    uint32_t h = energia_historico_wh();
+    uint32_t h = energia_historico_wh(ENER_CONSUMO);
     char d[80]; snprintf(d, sizeof d, "dio %u Wh", (unsigned)h);
     ok("una hora a 780 W = 780 Wh", h == 780, d);
     ok("el medidor NO quedo en cero", h > 0, "");
   }
 
   // Potencias que no son multiplos de 10: el error de division se vería aqui.
-  for (uint16_t w : {7, 123, 785, 999}) {
+  for (int16_t w : {7, 123, 785, 999}) {
     reiniciar();
     correr(w, 3600);
-    uint32_t esperado = w;      // 1 h a w W = w Wh
-    char d[80]; snprintf(d, sizeof d, "a %u W dio %u Wh, esperado %u", w,
-                         (unsigned)energia_historico_wh(), (unsigned)esperado);
-    ok("una hora a potencia no redonda", energia_historico_wh() == esperado, d);
+    uint32_t esperado = (uint32_t)w;      // 1 h a w W = w Wh
+    char d[80]; snprintf(d, sizeof d, "a %d W dio %u Wh, esperado %u", w,
+                         (unsigned)energia_historico_wh(ENER_CONSUMO), (unsigned)esperado);
+    ok("una hora a potencia no redonda", energia_historico_wh(ENER_CONSUMO) == esperado, d);
   }
 
   // =========================================================================
@@ -148,7 +149,7 @@ int main()
     // Se arma el historial llamando a cerrar_dia a traves del reloj.
     // Para que sea rapido: 1 muestra por segundo de 3600 W = 1 Wh/s.
     for (uint16_t dia = 1; dia <= 40; dia++) {
-      uint16_t w = (uint16_t)(3600);            // 3600 W durante 1 s = 1 Wh
+      int16_t w = 3600;            // 3600 W durante 1 s = 1 Wh
       for (uint32_t s = 0; s < dia * 10UL; s++) {   // dia*10 Wh ese dia
         energia_muestra(w, 1000);
         T_MS += 1000; energia_atender(T_MS, 0);
@@ -161,17 +162,17 @@ int main()
       }
     }
     // Dias cerrados: 1..40 con 10,20,...,400 Wh
-    uint32_t ayer = energia_ayer_wh();
+    uint32_t ayer = energia_ayer_wh(ENER_CONSUMO);
     char d[80]; snprintf(d, sizeof d, "ayer = %u Wh (esperado 400)", (unsigned)ayer);
     ok("ayer es el ultimo dia cerrado", ayer == 400, d);
 
     // promedio de 7: dias 34..40 -> 340..400, media 370
-    uint32_t p7 = energia_promedio_wh(7);
+    uint32_t p7 = energia_promedio_wh(ENER_CONSUMO, 7);
     snprintf(d, sizeof d, "7 dias = %u Wh (esperado 370)", (unsigned)p7);
     ok("promedio de 7 dias", p7 == 370, d);
 
     // promedio de 30: dias 11..40 -> 110..400, media 255
-    uint32_t p30 = energia_promedio_wh(30);
+    uint32_t p30 = energia_promedio_wh(ENER_CONSUMO, 30);
     snprintf(d, sizeof d, "30 dias = %u Wh (esperado 255)", (unsigned)p30);
     ok("promedio de 30 dias", p30 == 255, d);
 
@@ -187,7 +188,7 @@ int main()
       for (uint32_t s = 0; s < 100; s++) { energia_muestra(3600, 1000); T_MS += 1000; energia_atender(T_MS,0); }
       for (uint32_t s = 0; s < 86300; s++) { energia_muestra(0, 1000); T_MS += 1000; energia_atender(T_MS,0); }
     }
-    uint32_t p7 = energia_promedio_wh(7);
+    uint32_t p7 = energia_promedio_wh(ENER_CONSUMO, 7);
     char d[80]; snprintf(d, sizeof d, "con 3 dias de 100 Wh, el promedio de 7 dio %u", (unsigned)p7);
     ok("promedia los dias que existen, no divide entre 7", p7 == 100, d);
     ok("sin dias cerrados devolveria 0 (la pantalla pone ---)", true, "");
@@ -199,7 +200,7 @@ int main()
     uint32_t max_cab = 0, max_anillo = 0;
     for (uint16_t i = ENER_EE_CABECERA; i < ENER_EE_CABECERA + 12; i++)
       if (ESCRITURAS[i] > max_cab) max_cab = ESCRITURAS[i];
-    for (uint16_t i = ENER_EE_ANILLO; i < ENER_EE_ANILLO + DIAS_HISTORIAL * 2; i++)
+    for (uint16_t i = ENER_EE_CONSUMO; i < ENER_EE_CARGA + DIAS_HISTORIAL * 2; i++)
       if (ESCRITURAS[i] > max_anillo) max_anillo = ESCRITURAS[i];
     char d[120];
     snprintf(d, sizeof d, "cabecera %u, peor ranura %u, en 3 dias simulados",
@@ -219,20 +220,21 @@ int main()
     ok("encabezado mas un renglon por dia", salida.size() == 1 + 3, d);
     ok("el encabezado es el esperado", salida[0] == ENER_CSV_ENCABEZADO, salida[0].c_str());
     ok("va del dia mas viejo al mas nuevo", salida[1].substr(0,2) == "1,", salida[1].c_str());
+    ok("el renglon trae las dos columnas", std::count(salida[1].begin(), salida[1].end(), ',') == 2, salida[1].c_str());
   }
 
   // =========================================================================
   titulo("9. El historico sobrevive un reinicio");
   {
-    uint32_t antes_h = energia_historico_wh();
+    uint32_t antes_h = energia_historico_wh(ENER_CONSUMO);
     uint16_t antes_d = energia_dias_guardados();
     energia_guardar();
     energia_iniciar();                      // como si se hubiera apagado
     char d[120];
     snprintf(d, sizeof d, "%u Wh y %u dias antes; %u Wh y %u dias despues",
-             (unsigned)antes_h, antes_d, (unsigned)energia_historico_wh(), energia_dias_guardados());
+             (unsigned)antes_h, antes_d, (unsigned)energia_historico_wh(ENER_CONSUMO), energia_dias_guardados());
     ok("el historico y los dias se releen de la EEPROM",
-       energia_historico_wh() == antes_h && energia_dias_guardados() == antes_d, d);
+       energia_historico_wh(ENER_CONSUMO) == antes_h && energia_dias_guardados() == antes_d, d);
   }
 
   // =========================================================================
@@ -241,13 +243,85 @@ int main()
     memset(EE, 0xFF, sizeof EE);
     energia_iniciar();
     ok("con EEPROM en blanco arranca en cero",
-       energia_historico_wh() == 0 && energia_dias_guardados() == 0, "");
+       energia_historico_wh(ENER_CONSUMO) == 0 && energia_dias_guardados() == 0, "");
     // Y una cabecera corrompida tampoco.
     EE[ENER_EE_CABECERA] = ENER_EE_FIRMA;
     EE[ENER_EE_CABECERA + 1] = 0x7F;
     energia_iniciar();
     ok("con la cabecera corrompida tambien arranca en cero (CRC)",
-       energia_historico_wh() == 0, "");
+       energia_historico_wh(ENER_CONSUMO) == 0, "");
+  }
+
+  // =========================================================================
+  titulo("11. El cargador: el signo separa los dos sentidos");
+  reiniciar();
+  correr(800, 3600);        // 1 h consumiendo 800 W
+  correr(-600, 3600);       // 1 h cargando  600 W
+  {
+    uint32_t c = energia_historico_wh(ENER_CONSUMO);
+    uint32_t g = energia_historico_wh(ENER_CARGA);
+    char d[100]; snprintf(d, sizeof d, "consumo %u Wh, carga %u Wh", (unsigned)c, (unsigned)g);
+    ok("el consumo y la carga se acumulan por separado", c == 800 && g == 600, d);
+    ok("cargando, energia_cargando() es true", energia_cargando(), "");
+    snprintf(d, sizeof d, "watts = %u", energia_watts());
+    ok("los watts se reportan en magnitud, sin signo", energia_watts() == 600, d);
+  }
+
+  // =========================================================================
+  titulo("12. La maxima sostenida ignora al cargador");
+  reiniciar();
+  correr(-900, 60);         // un minuto cargando fuerte
+  {
+    uint16_t m = energia_max24h_w();
+    char d[80]; snprintf(d, sizeof d, "registro %u W", m);
+    ok("cargar no ensucia la maxima del consumo", m == 0, d);
+  }
+  correr(700, 10);
+  {
+    uint16_t m = energia_max24h_w();
+    char d[80]; snprintf(d, sizeof d, "registro %u W", m);
+    ok("y el consumo si la registra", m == 700, d);
+  }
+
+  // =========================================================================
+  titulo("13. Los dos historiales diarios y el rendimiento");
+  reiniciar();
+  {
+    // 3 dias: cada uno 200 Wh consumidos y 250 Wh cargados.
+    for (uint16_t dia = 1; dia <= 3; dia++) {
+      for (uint32_t s = 0; s < 200; s++) { energia_muestra(3600, 1000); T_MS += 1000; energia_atender(T_MS,0); }
+      for (uint32_t s = 0; s < 250; s++) { energia_muestra(-3600, 1000); T_MS += 1000; energia_atender(T_MS,0); }
+      for (uint32_t s = 0; s < 86400UL - 450; s++) { energia_muestra(0, 1000); T_MS += 1000; energia_atender(T_MS,0); }
+    }
+    char d[120];
+    snprintf(d, sizeof d, "ayer consumo %u, ayer carga %u",
+             (unsigned)energia_ayer_wh(ENER_CONSUMO), (unsigned)energia_ayer_wh(ENER_CARGA));
+    ok("cada sentido guarda su propio dia", energia_ayer_wh(ENER_CONSUMO) == 200
+        && energia_ayer_wh(ENER_CARGA) == 250, d);
+
+    snprintf(d, sizeof d, "promedio consumo %u, promedio carga %u",
+             (unsigned)energia_promedio_wh(ENER_CONSUMO,7), (unsigned)energia_promedio_wh(ENER_CARGA,7));
+    ok("los promedios tambien son por sentido",
+       energia_promedio_wh(ENER_CONSUMO,7) == 200 && energia_promedio_wh(ENER_CARGA,7) == 250, d);
+
+    // rendimiento: 600 consumidos de 750 cargados = 80 %
+    uint16_t r = energia_rendimiento_pct();
+    snprintf(d, sizeof d, "600 Wh salieron de 750 que entraron = %u %%", r);
+    ok("el rendimiento de ida y vuelta", r == 80, d);
+  }
+
+  // =========================================================================
+  titulo("14. Los dos anillos caben en la EEPROM sin pisarse");
+  {
+    char d[120];
+    snprintf(d, sizeof d, "consumo en %u..%u, carga en %u..%u, de 1024",
+             ENER_EE_CONSUMO, ENER_EE_CONSUMO + DIAS_HISTORIAL*2 - 1,
+             ENER_EE_CARGA, ENER_EE_CARGA + DIAS_HISTORIAL*2 - 1);
+    ok("los anillos no se traslapan ni se salen",
+       ENER_EE_CONSUMO + DIAS_HISTORIAL*2 <= ENER_EE_CARGA
+       && ENER_EE_CARGA + DIAS_HISTORIAL*2 <= 1024, d);
+    ok("la cabecera no pisa al primer anillo",
+       ENER_EE_CABECERA + 18 <= ENER_EE_CONSUMO, "");
   }
 
   printf("\n========================================\n");

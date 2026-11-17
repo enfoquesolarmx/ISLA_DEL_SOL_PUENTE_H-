@@ -5,6 +5,8 @@
 **Fecha:** 2026-11-17
 
 > **En resumen: watts para lo que pasa ahora, kWh para lo que se acumuló, y la máxima solo cuenta si se sostuvo 2 segundos.**
+>
+> **Y todo se lleva por partida doble: lo que la casa consumió y lo que entró a la batería. El signo de la corriente es la única diferencia.**
 
 ---
 
@@ -148,6 +150,49 @@ Sin reloj de calendario no hay de otra: **un mes son 30 días y un año son 365*
 | Más | `1a 2m 15d` |
 
 Mostrar `0a 00m 00d 07h` sería llenar el renglón de ceros para esconder el único número que importa.
+
+---
+
+## 3.5 Los dos modos: inversor y cargador
+
+**Un solo sensor da los dos.** El INA240 mide la corriente de batería **en los dos sentidos**, así que no hacen falta dos sensores ni dos protocolos: basta el signo.
+
+```
+watts > 0  ->  sale de la batería  ->  CONSUMO (modo inversor)
+watts < 0  ->  entra a la batería  ->  CARGA   (modo cargador)
+```
+
+De ahí en adelante **la aritmética es idéntica**: cada sentido lleva su integración, su ventana de 24 h, su día en curso, su historial y sus promedios.
+
+### Dos cosas que NO se duplican, a propósito
+
+| | Por qué |
+| --- | --- |
+| **La máxima sostenida** | Sólo del consumo. La máxima del cargador la fija el cargador, no la casa, así que no dice nada de cómo se usa la instalación |
+| **El tiempo despierto** | Es del equipo, no de un modo |
+
+### El historial baja de 365 a 180 días por sentido
+
+Dos anillos de un año en Wh completo son **1460 B** y la EEPROM tiene **1024**. Hubo que elegir:
+
+| Opción | EEPROM | Problema |
+| --- | --- | --- |
+| 2 × 365 días × 2 B | 1494 B | **No cabe** |
+| 2 × 365 días × 1 B (pasos de 100 Wh) | 764 B | Tope de **25.5 kWh/día** y el equipo puede entregar 24: **6 % de margen** antes de que el número se achate |
+| **2 × 180 días × 2 B** ✅ | **754 B** | Medio año menos de historial |
+
+Se eligió **180 días de cada sentido con resolución completa en Wh**. Perder medio año de historial se paga solo con no tener que preocuparse por un tope que está a un 6 % de la realidad.
+
+### Un número que sale gratis: el rendimiento
+
+Con los dos históricos, la división dice **de la energía que entró a la batería, cuánta volvió a salir**:
+
+```
+RENDIMIENTO
+      80 %
+```
+
+Es el rendimiento de ida y vuelta, y **un número que baja mes con mes es una batería envejeciendo**. No cuesta nada: una división de dos valores que ya existen.
 
 ---
 
