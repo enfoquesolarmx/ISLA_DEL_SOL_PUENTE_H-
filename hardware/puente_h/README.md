@@ -10,7 +10,7 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 
 ![Prototipo de trinchera del puente H en perspectiva](img/perspectiva_prototipo_trinchera.png)
 
-*Prototipo de trinchera en perspectiva (render 3D de KiCad): los cuatro IRF100P219 en sus disipadores Fischer SK 129, los Rubycon entre las dos filas de MOSFET, los films rojos de entrada, los sockets J10 y J9 para los gate drivers, J3 para el sensor DC y la salida J8 con su resistencia fusible R14.*
+*Prototipo de trinchera en perspectiva (render 3D de KiCad, **rehecho el 2026-11-17 con los pines ya movidos**): los cuatro IRF100P219 en sus disipadores Fischer SK 129, los Rubycon entre las dos filas de MOSFET, los films rojos de entrada, los sockets J10 y J9 para los gate drivers, J3 para el sensor DC y la salida J8 con su resistencia fusible R14.*
 
 ---
 
@@ -37,8 +37,8 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 
 | Archivo | Contenido |
 | --- | --- |
-| `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pro` | Proyecto de KiCad 9 (ábrelo para cargar todo) |
-| `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_sch` | Esquemático principal (hoja raíz A3 por bloques A–I, KiCad 9) |
+| `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pro` | Proyecto de **KiCad 10** (ábrelo para cargar todo). ⚠️ KiCad 9 ya no lo abre: ver la nota de formato abajo |
+| `PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_sch` | Esquemático principal (hoja raíz A3 por bloques A–I, KiCad 10) |
 | `CAPACITORES.kicad_sch` | Hoja jerárquica: banco de capacitores del bus (antes `CAPASITORES.kicad_sch`) |
 | `DISIPADORES.kicad_sch` | Hoja jerárquica: disipadores (antes `untitled.kicad_sch`) |
 | `ESTUDIOS.kicad_sch` | Hoja jerárquica sin conexiones: las tres láminas de estudio (red de compuerta y comparación de MOSFET), sección 6.1 |
@@ -47,6 +47,12 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 | `Disipador_V8511Y_equiv.step` | Modelo 3D aproximado de un disipador equivalente (versión anterior, ya no se usa en el layout) |
 | `SSA2512_Littelfuse_Kelvin.kicad_mod` · `SSA2512_Littelfuse.step` | Huella y modelo 3D del shunt (los mismos que en la carpeta del sensor) |
 | `auditoria/` | Auditoría de corriente y temperatura del layout: herramientas, figuras y [README](auditoria/README.md) |
+
+> ⚠️ **Formato: el proyecto está en KiCad 10 y KiCad 9 ya no lo abre.** KiCad no sabe guardar hacia atrás. En Debian estable el paquete es 9.0.2 y en backports 9.0.8, así que para abrirlo hay que instalar el Flatpak oficial:
+>
+> ```
+> flatpak install --from https://flathub.org/repo/appstream/org.kicad.KiCad.flatpakref
+> ```
 
 ---
 
@@ -87,7 +93,9 @@ Es la tarjeta principal del inversor/cargador: contiene los cuatro MOSFET del pu
 
 ![Vista 3D frontal del puente H](img/vista_3d_frontal.png)
 
-*Vista 3D de la cara de componentes. Arriba, los MOSFET bajos (Q2, Q4) con sus disipadores; en medio, los cuatro Rubycon con los cerámicos de 4.7 µF y los sockets J10 y J9; abajo, los MOSFET altos (Q1, Q3). A la izquierda, los Faston de batería (NEG − / POS +), los shunts y los films C10 (MKS) y C9 (MKP). Las franjas claras de arriba y abajo son las tiras sin máscara del bus.*
+*Cara de componentes **sin los modelos 3D puestos**, para que no estorben: con los disipadores montados no se ve nada de lo que hay debajo. Arriba, las huellas de los MOSFET bajos (Q2, Q4) con sus redes de compuerta; en medio, los cuatro Rubycon, los cerámicos de 4.7 µF y los sockets J10 ("24K") y J9 ("60HZ"); abajo, los MOSFET altos (Q1, Q3). A la izquierda, los Faston de batería (NEG − / POS +), los shunts y los films C10 (MKS) y C9 (MKP). Las dos franjas amarillas de arriba y abajo son las tiras sin máscara del bus.*
+
+*En cada MOSFET se alcanzan a leer sus tres pines, y ahí se ve el acomodo nuevo: en los altos (abajo) dice `GATE · 48V · VS`, con el drenaje escalonado; en los bajos (arriba) dice `GND · 15V · GATE` con el drenaje conmutado apartado de la compuerta.*
 
 ![Vista del editor de PCB: tarjeta completa](img/editor_pcb_completo.png)
 
@@ -172,7 +180,15 @@ Cada MOSFET tiene la misma red, junto a sus patas, en la cara de soldadura:
 
 ![Acercamiento a Q1 en la cara de soldadura](img/zoom_Q1_BCu.png)
 
+> ⚠️ **Esta imagen es de la REV C antes de mover los pines (2026-11-17) y su pie describe el acomodo viejo.** Pendiente de regenerar: ver el PR #34.
+
 *Q1 (MOSFET alto de la pierna A), visto en B.Cu. Sus tres pines son: **1** gate (`Net-(Q1-G)`), **2** drenaje a 48 V, aislado del plano VS1 que lo rodea, y **3** source a VS1. Debajo está su red de compuerta: R2 (10 Ω) desde HO_A, R3 (2.2 Ω) + D2 (ES1D) para el apagado y R1 (10 kΩ) del gate a VS1. Las dos pistas que salen a la derecha, hacia J10, son el par **HO_A / VS1_k**, que viajan juntas. La zona rayada que baja del borne J27 hasta el pin 3 es la **ventana para el alambre**, que se aleja del pin 2 (48 V). Los dos pines del disipador HS5 (48 V) también quedan aislados del plano VS1.*
+
+![Acercamiento a Q2 y su red de compuerta](img/zoom_Q2_BCu.png)
+
+*Q2 (MOSFET **bajo** de la pierna A) con su red de compuerta: R8 (10 Ω) desde LO_A, R7 (2.2 Ω) + D3 (ES1D) para el apagado y R9 (10 kΩ) del gate a GND. Arriba salen las dos pistas del par **LO_A / GND_KELVIN_A** hacia J10.*
+
+***Aquí se ve por qué los altos y los bajos no llevan la misma huella.*** *En Q2 el drenaje es **VS1**, el nodo que brinca 48 V a 24 kHz, así que se escalonó **apartándolo** de la compuerta y de su referencia (GND): de 5.45 mm pasó a 6.22 mm de la compuerta y a 6.76 mm del source. En Q1, en cambio, el drenaje son 48 V quietos, así que lo que convino fue **alinear compuerta y source** —quedaron a 0.00 mm de desalineación— para que el par HO_A / VS1_k salga derecho. Copiar la misma huella en los cuatro habría empeorado uno de los dos.*
 
 - **Encendido por 10 Ω y apagado por 2.2 Ω + diodo:** el MOSFET enciende suave (menos sobretiro y ruido) y apaga rápido (menos riesgo de conducción cruzada). El ánodo del ES1D va hacia el gate.
 - **10 kΩ gate–source:** mantienen apagado el MOSFET si el módulo no está puesto o se desconecta.
@@ -308,7 +324,7 @@ La tarjeta de control lleva un buck **extraíble**, para aceptar distintos fabri
 
 ![Cobre posterior B.Cu](img/cobre_posterior_BCu.png)
 
-*Cara de soldadura, vista desde arriba (por eso los textos se leen al revés). Cada pierna tiene un plano grande, **VS1** a la izquierda y **VS2** a la derecha, que va del MOSFET bajo al alto pasando por debajo de la fila de Rubycon. Encimado con los planos de GND y 48 V de la cara frontal, forma el **lazo de conmutación doblado** (~4 nH). Alrededor queda **GND**. Las islas con anillo de vías en cada pin de Rubycon llevan 48 V o GND a esta capa, y en medio de ellas van los cerámicos de 10 µF. Las zonas sin máscara que bajan de cada borne VS a la pata de su MOSFET son las **ventanas para el alambre 12 AWG**.*
+*Cara de soldadura (los textos se leen al revés). Cada pierna tiene un plano grande, **VS1** a la izquierda y **VS2** a la derecha, que va del MOSFET bajo al alto pasando por debajo de la fila de Rubycon. Encimado con los planos de GND y 48 V de la cara frontal, forma el **lazo de conmutación doblado** (~4 nH). Alrededor queda **GND**. Las islas con anillo de vías en cada pin de Rubycon llevan 48 V o GND a esta capa, y en medio de ellas van los cerámicos de 10 µF. Las zonas sin máscara que bajan de cada borne VS a la pata de su MOSFET son las **ventanas para el alambre 12 AWG**.*
 
 ### 11.1 Auditoría de cobre y temperatura
 
@@ -321,6 +337,8 @@ La auditoría completa está en [`auditoria/README.md`](auditoria/README.md). Re
 | Unión de Q1 / Q2 | ~62 °C | ~61 °C |
 | Rubycon | 45–47 °C | 45–46 °C |
 | Pérdidas totales (MOSFET + cobre + Rubycon) | ~14 W (1.4 %) | ~13 W |
+
+> **Actualizado el 2026-11-17.** Con la distribución nueva de pines, la auditoría de cobre baja la **pérdida total en el cobre de 5.56 a 4.83 W (−13 %)** y el **área sobre el límite de corriente de 115 a 23 mm² (−80 %)**. Los watts son modestos —0.73 W sobre 1000 son 0.07 puntos de eficiencia—; lo que de verdad gana es que **desaparecen los puntos donde el cobre se apretaba**. Las cifras de la tabla de arriba son de la revisión anterior y quedan pendientes de rehacerse.
 
 - **El refuerzo con alambre es opcional a 1000 W.** Se recomienda en gabinetes cerrados o en clima caliente, y es necesario si se sube la potencia.
 - **El calor dominante viene de los MOSFET de la pierna A**, no del cobre.
@@ -426,6 +444,7 @@ La auditoría completa está en [`auditoria/README.md`](auditoria/README.md). Re
 | 2026-11-05 | Ventanas del MOSFET bajo con cuello en la pata central: Q2 a 2.50 mm del gate y 2.85 mm de GND; Q4 a 2.84 / 3.12 mm. Las del MOSFET alto quedan a 1.98–1.99 mm del pin de 48 V. Serigrafía HO_A / LO_A corregida | Verificado con la geometría exacta; sin pistas con net distinta a su pad ni referencias duplicadas: **lista para fabricar** |
 | 2026-11-05 | Nets de compuerta unificadas: `HO_A` / `LO_A` (pierna A) y `HO_B` / `LO_B` (pierna B), de J10/J9 hasta las redes de gate | Ninguna pista queda con net distinta a la del pad que toca |
 | 2026-11-12 | **Hoja raíz rehecha en A3 por bloques A–I** (antes casi todo quedaba fuera de la hoja A4); MOSFET con símbolo de **canal N** (antes `IRF4905`, canal P; los pines 1 G · 2 D · 3 S no cambian); D1–D4 con símbolo de diodo rápido (antes Schottky SS14); red **15V → 15V_GB**, pareja de 15V_GA como en la tarjeta de control; hojas renombradas a **CAPACITORES** y **DISIPADORES**; valores con voltaje y dieléctrico (cerámicos 100 V X7R, Rubycon 100 V ZLH); notas al día (tiempo muerto por P9, 33 A RMS, bootstrap en los módulos); J3-5 y J9/J10-3, 8, 9 marcados sin conexión; se quitaron los buses de adorno; las 3 láminas de estudio (imágenes de ~1 MB que generaban líneas de más de 1 MB y KiCad no abría el archivo) pasan a la hoja **ESTUDIOS** y a `img/` | Conexiones idénticas a la versión anterior (comparadas pin por pin). PCB sincronizado: red 15V_GB, nombres de hoja y valores; sin mover huellas ni pistas; la serigrafía no cambia |
+| 2026-11-17 | **Distribución nueva de los pines de los cuatro MOSFET**, distinta en altos que en bajos: en Q1/Q3 el source subió a la línea de la compuerta y el drenaje (48 V, quieto) bajó; en Q2/Q4 subieron compuerta y source y el drenaje (VS, conmutado) se quedó apartado. 20 huellas de las redes de compuerta movidas para seguirlos. Proyecto convertido a **KiCad 10** | Auditoría de cobre: pérdida total 5.56 → **4.83 W** (−13 %) y área en rojo 115 → **23 mm²** (−80 %). Costo en la auditoría de conmutación: área de nodo conmutado +2.3 %, modo común 5.39 → 5.52 mA. El puente conmutado se acortó de 76.6 a 73.9 mm |
 | 2026-11-12 | Archivos del autor abiertos y guardados en KiCad 9: acomodo de textos en la raíz, CAPACITORES y ESTUDIOS (texto descriptivo de las láminas); 2 textos de serigrafía movidos en el PCB; ESTUDIOS registrada en el `.kicad_pro`. **Corrección:** al girar J22 (VS2) 180° su pin pasó a x = 353.06 y la etiqueta VS2 quedó en el cuerpo del conector, dejando J22 sin red; se movió la etiqueta al pin | Conexiones idénticas a la versión anterior (comparadas pin por pin) |
 
 ---
