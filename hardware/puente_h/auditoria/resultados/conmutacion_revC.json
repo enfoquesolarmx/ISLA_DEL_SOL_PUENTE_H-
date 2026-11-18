@@ -1,9 +1,35 @@
 {
-  "fallas": 5,
-  "avisos": 9,
-  "separacion_medio_puente_mm": {
-    "A": 74.45221621953239,
-    "B": 74.5933140435522
+  "fallas": 3,
+  "avisos": 8,
+  "geometria_nodo": {
+    "A": {
+      "entre_mosfet": 74.5,
+      "salidas": {
+        "Q1": {
+          "J27": 24.9,
+          "J24": 56.2
+        },
+        "Q2": {
+          "J24": 20.5,
+          "J27": 52.2
+        }
+      },
+      "desbalance_recta_pct": 17.7
+    },
+    "B": {
+      "entre_mosfet": 74.6,
+      "salidas": {
+        "Q3": {
+          "J22": 24.8,
+          "J23": 56.1
+        },
+        "Q4": {
+          "J23": 20.7,
+          "J22": 52.3
+        }
+      },
+      "desbalance_recta_pct": 16.5
+    }
   },
   "fraccion_conmutado": {
     "B.Cu": 0.3575963152081867,
@@ -46,5 +72,21 @@
   "sandwich_bus": {
     "48V(F.Cu) bajo GND(B.Cu)": 0.3869236129684705,
     "48V(B.Cu) bajo GND(F.Cu)": 0.0
+  },
+  "camino_conmutacion": {
+    "VS1": {
+      "largo_mm": 76.6,
+      "encimado": 38.8,
+      "doblado": 24.9,
+      "suelto": 13.9,
+      "fuera": 0.0
+    },
+    "VS2": {
+      "largo_mm": 76.8,
+      "encimado": 37.9,
+      "doblado": 24.9,
+      "suelto": 15.0,
+      "fuera": 0.0
+    }
   }
 }
