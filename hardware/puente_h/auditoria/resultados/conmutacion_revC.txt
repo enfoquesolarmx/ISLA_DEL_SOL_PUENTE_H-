@@ -1,0 +1,144 @@
+AUDITORÍA DE CONMUTACIÓN — Isla del Sol, Puente H
+tarjeta: PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pcb
+piezas leídas: 70 ; polígonos de cobre: 52
+
+==========================================================================
+M1. Separación entre los dos MOSFET de cada medio puente
+==========================================================================
+En un medio puente el alto y el bajo van PEGADOS: el nodo conmutado es
+el puente corto entre ellos. Si se separan, ese nodo tiene que viajar, y
+para llevar la corriente no le queda más que volverse plano. El tamaño
+del nodo conmutado es consecuencia de esta distancia, no causa aparte.
+
+  FUERA META pierna A: Q1 en (95.8, 129.4) y Q2 en (106.8, 55.8) -> 74.5 mm (criterio: <= 25 mm)
+  FUERA META pierna B: Q3 en (160.4, 129.4) y Q4 en (171.2, 55.6) -> 74.6 mm (criterio: <= 25 mm)
+
+==========================================================================
+M2. Reparto de área de cobre por net y por capa
+==========================================================================
+Regla: el nodo conmutado se hace lo más CHICO que la corriente y el
+térmico permitan; los rieles quietos se hacen GRANDES. Si un nodo
+conmutado tiene más cobre que un riel quieto en la misma capa, el
+reparto está invertido.
+
+    NET               B.Cu      B.Mask        F.Cu   tipo
+    48V                135           0        9760   quieto
+    GND               9852           0        6972   quieto
+    GND_IN            1409           0        1408   quieto
+    VS1               3121           0        1322   CONMUTADO
+    VS2               3223           0        1317   CONMUTADO
+    (mm² de cobre real, ya descontados los huecos)
+
+  EN META    B.Cu: VS1 = 3121 mm² contra 9852 mm² del riel quieto.
+  EN META    B.Cu: VS2 = 3223 mm² contra 9852 mm² del riel quieto.
+  EN META    F.Cu: VS1 = 1322 mm² contra 9760 mm² del riel quieto.
+  EN META    F.Cu: VS2 = 1317 mm² contra 9760 mm² del riel quieto.
+
+  FUERA META B.Cu: el nodo conmutado ocupa 6344 mm² de 17740 mm² = 36 % de la cara (criterio: <= 15 %)
+  EN META    F.Cu: el nodo conmutado ocupa 2638 mm² de 20778 mm² = 13 % de la cara (criterio: <= 15 %)
+
+  FUERA META 48V tiene 9760 mm² en la otra cara pero sólo 135 mm² en B.Cu: el bus no es sándwich, es una sola cara.
+
+==========================================================================
+M3. Capacitancia al chasis del nodo conmutado
+==========================================================================
+El cobre de la cara B.Cu ve al chasis. Si ahí vive el nodo que
+brinca 48 V, esa área es un capacitor que inyecta corriente de modo común
+en el chasis cada flanco. Es la vía principal de ruido del aparato y la
+que decide qué tan difícil será la corriente de fuga (DC-015).
+
+    VS1 en B.Cu: 3121 mm²
+    VS2 en B.Cu: 3223 mm²
+    total conmutado: 6344 mm²
+    separación al chasis supuesta: 10 mm ; flanco: 50 ns (dv/dt = 0.96 V/ns)
+    C = 5.62 pF  ->  5.39 mA de pico de modo común
+  FUERA META 5.39 mA de pico (criterio: <= 1.0 mA)
+
+==========================================================================
+M4. Solapamiento del bus entre capas (sándwich 48V / GND)
+==========================================================================
+La inductancia del lazo se desploma cuando la ida y el regreso van
+encimados en capas opuestas: sus campos se cancelan. Si el 48 V vive
+en una cara y GND en la otra pero no se traslapan, no hay cancelación.
+
+    48V(F.Cu) bajo GND(B.Cu): 3776 mm² de 9760 mm²  ->  39 % encimado
+    48V(B.Cu) bajo GND(F.Cu): 0 mm² de 135 mm²  ->  0 % encimado
+  CERCA      mejor solapamiento del bus: 39 % (criterio: >= 60 %)
+
+==========================================================================
+M5. Qué plano queda debajo de cada red de compuerta
+==========================================================================
+El lazo de compuerta de cada MOSFET se cierra por su propio SOURCE. El
+plano debajo de esa red debe ser el net de ese source. Si debajo hay
+OTRO nodo conmutado, ese nodo le acopla dv/dt al gate: es el camino
+clásico al encendido parásito y a la conducción cruzada.
+
+    Q1: source = VS1 ; gate = Net-(Q1-G)
+  CERCA      Q1: R1 sobre 48V en F.Cu, y su referencia es VS1.
+  CERCA      Q1: R2 sobre 48V en F.Cu, y su referencia es VS1.
+  CERCA      Q1: R3 sobre 48V en F.Cu, y su referencia es VS1.
+
+    Q2: source = GND ; gate = Net-(Q2-G)
+  EN META    Q2: R7 sobre GND en F.Cu (su propia referencia).
+  EN META    Q2: R8 sobre GND en F.Cu (su propia referencia).
+  EN META    Q2: R9 sobre GND en F.Cu (su propia referencia).
+
+    Q3: source = VS2 ; gate = Net-(Q3-G)
+  CERCA      Q3: R4 sobre 48V en F.Cu, y su referencia es VS2.
+  CERCA      Q3: R5 sobre 48V en F.Cu, y su referencia es VS2.
+  CERCA      Q3: R6 sobre 48V en F.Cu, y su referencia es VS2.
+
+    Q4: source = GND ; gate = Net-(Q4-G)
+  EN META    Q4: R10 sobre GND en F.Cu (su propia referencia).
+  EN META    Q4: R11 sobre GND en F.Cu (su propia referencia).
+  EN META    Q4: R12 sobre GND en F.Cu (su propia referencia).
+
+
+==========================================================================
+M6. Lazo de conmutación y sobretiro al apagar (estimación)
+==========================================================================
+Recorrido: 48V -> drenaje del alto -> source del alto -> drenaje del
+bajo -> source del bajo -> GND -> regreso por el desacoplo. Se da como
+BANDA, no como número: 0.3 nH/mm para plano apretado y 1.0 nH/mm para
+pista con retorno lejano. La verdad está en medio y SE MIDE con sonda.
+Sólo se marca falla si ni el extremo optimista deja margen.
+
+    pierna A: puente conmutado 76.6 mm ; desacoplo más cercano C2 a 9.2 mm ; perímetro del lazo ~172 mm
+      flanco  50 ns -> L entre 52 y 172 nH -> sobretiro entre 22 y 72 V -> pico total 70 a 120 V de 100 V
+      flanco 100 ns -> L entre 52 y 172 nH -> sobretiro entre 11 y 36 V -> pico total 59 a 84 V de 100 V
+  CERCA      pierna A: margen al límite del MOSFET entre -20 V (pesimista) y +30 V (optimista). Hay que MEDIRLO con sonda antes de confiar.
+
+    pierna B: puente conmutado 76.8 mm ; desacoplo más cercano C3 a 7.9 mm ; perímetro del lazo ~169 mm
+      flanco  50 ns -> L entre 51 y 169 nH -> sobretiro entre 21 y 71 V -> pico total 69 a 119 V de 100 V
+      flanco 100 ns -> L entre 51 y 169 nH -> sobretiro entre 11 y 36 V -> pico total 59 a 84 V de 100 V
+  CERCA      pierna B: margen al límite del MOSFET entre -19 V (pesimista) y +31 V (optimista). Hay que MEDIRLO con sonda antes de confiar.
+
+
+==========================================================================
+M7. Distancia del desacoplo más cercano a cada medio puente
+==========================================================================
+El capacitor que cierra el lazo de alta frecuencia debe estar pegado al
+medio puente, no en la banda central con los electrolíticos.
+
+    pierna A: C1 (820µF 100V Rubycon ZLH) a 18.6 mm del medio puente
+    pierna A: C2 (820µF 100V Rubycon ZLH) a 9.2 mm del medio puente
+    pierna A: C3 (820µF 100V Rubycon ZLH) a 57.0 mm del medio puente
+    pierna A: C9 (1µF 250V MKP) a 35.7 mm del medio puente
+    pierna B: C2 (820µF 100V Rubycon ZLH) a 55.6 mm del medio puente
+    pierna B: C3 (820µF 100V Rubycon ZLH) a 7.9 mm del medio puente
+    pierna B: C4 (820µF 100V Rubycon ZLH) a 16.3 mm del medio puente
+
+==========================================================================
+RESUMEN
+==========================================================================
+    fuera de meta: 5    cerca: 9
+
+    Esto NO dice que la tarjeta esté mal. Una tarjeta puede ser correcta,
+    pasar DRC, pasar corriente y pasar térmica, y aun así tener margen de
+    optimización en la conmutación. Eso es lo que mide esta herramienta.
+
+    Lo que sí conviene saber: las metas fuera de rango son estructurales.
+    No se alcanzan ensanchando pistas. Casi siempre dependen de dónde
+    están puestas las piezas, así que se ganan moviendo, no ruteando.
+
+[guardado] auditoria/resultados/conmutacion_revC.json
