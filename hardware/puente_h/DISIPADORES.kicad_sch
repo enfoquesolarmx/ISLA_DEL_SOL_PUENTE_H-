@@ -1,7 +1,7 @@
 (kicad_sch
-	(version 20250114)
+	(version 20260306)
 	(generator "eeschema")
-	(generator_version "9.0")
+	(generator_version "10.0")
 	(uuid "4b0fe91a-0d93-440c-afd1-43c0cc9af586")
 	(paper "A4")
 	(lib_symbols
@@ -12,8 +12,12 @@
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
 			(property "Reference" "HS"
 				(at 0 5.715 0)
+				(show_name no)
+				(do_not_autoplace no)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -22,6 +26,8 @@
 			)
 			(property "Value" "Heatsink_Pad_2Pin"
 				(at 0 3.81 0)
+				(show_name no)
+				(do_not_autoplace no)
 				(effects
 					(font
 						(size 1.27 1.27)
@@ -30,47 +36,57 @@
 			)
 			(property "Footprint" ""
 				(at 0.3048 -1.27 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
-			(property "Datasheet" "~"
+			(property "Datasheet" ""
 				(at 0.3048 -1.27 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "Description" "Heatsink with electrical connection, 2 pin"
 				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "ki_keywords" "thermal heat temperature"
 				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(property "ki_fp_filters" "Heatsink_*"
 				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
 				(effects
 					(font
 						(size 1.27 1.27)
 					)
-					(hide yes)
 				)
 			)
 			(symbol "Heatsink_Pad_2Pin_0_1"
@@ -106,7 +122,7 @@
 				(pin passive line
 					(at -2.54 -2.54 90)
 					(length 1.27)
-					(name "~"
+					(name ""
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -124,7 +140,7 @@
 				(pin passive line
 					(at 2.54 -2.54 90)
 					(length 1.27)
-					(name "~"
+					(name ""
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -21511,12 +21527,14 @@
 		(uuid "2007f55d-be03-4661-8378-a062e3b31bfa")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 80.01 44.5928 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify right)
-				(hide yes)
 			)
 		)
 	)
@@ -21533,12 +21551,14 @@
 		(uuid "398f70d2-698f-49da-bf52-b2afe0189fcd")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 85.09 44.5928 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify right)
-				(hide yes)
 			)
 		)
 	)
@@ -21555,12 +21575,14 @@
 		(uuid "8f302a33-5d5b-40c1-a7a5-427594750e14")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 83.82 62.3728 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify right)
-				(hide yes)
 			)
 		)
 	)
@@ -21577,12 +21599,14 @@
 		(uuid "a9952841-e608-4f36-a38d-f3c44e83acaf")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 78.74 62.3728 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify right)
-				(hide yes)
 			)
 		)
 	)
@@ -21599,12 +21623,14 @@
 		(uuid "b217f9bb-e72b-485a-93a2-8f21ac60c5e0")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 62.23 62.3728 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify right)
-				(hide yes)
 			)
 		)
 	)
@@ -21621,12 +21647,14 @@
 		(uuid "b77094e5-e467-4989-86ea-155dd9528e10")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 57.15 62.3728 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify right)
-				(hide yes)
 			)
 		)
 	)
@@ -21643,12 +21671,14 @@
 		(uuid "cbed3dd8-0a99-492b-a5fa-8a80cd7ad135")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 63.5 44.5928 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify right)
-				(hide yes)
 			)
 		)
 	)
@@ -21665,12 +21695,14 @@
 		(uuid "cdd3a3ef-3d00-4858-9601-21caa9532fb5")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 58.42 44.5928 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify right)
-				(hide yes)
 			)
 		)
 	)
@@ -21678,14 +21710,18 @@
 		(lib_id "Mechanical:Heatsink_Pad_2Pin")
 		(at 82.55 35.56 0)
 		(unit 1)
+		(body_style 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
+		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "26d02487-867e-4b45-a105-8bb6e6c1abec")
 		(property "Reference" "HS8"
 			(at 86.36 33.6549 0)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21695,6 +21731,8 @@
 		)
 		(property "Value" "DISIPADOR_4"
 			(at 86.36 36.1949 0)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21704,29 +21742,35 @@
 		)
 		(property "Footprint" "Heatsink:Heatsink_Fischer_SK129-STS_42x25mm_2xDrill2.5mm"
 			(at 82.8548 36.83 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" ""
 			(at 82.8548 36.83 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Description" "Heatsink with electrical connection, 2 pin"
 			(at 82.55 35.56 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(pin "1"
@@ -21748,14 +21792,18 @@
 		(lib_id "Mechanical:Heatsink_Pad_2Pin")
 		(at 60.96 35.56 0)
 		(unit 1)
+		(body_style 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
+		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "3ca290e3-2af7-4bf7-804f-680bd8e335c3")
 		(property "Reference" "HS6"
 			(at 64.77 33.6549 0)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21765,6 +21813,8 @@
 		)
 		(property "Value" "DISIPADOR_3"
 			(at 64.77 36.1949 0)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21774,29 +21824,35 @@
 		)
 		(property "Footprint" "Heatsink:Heatsink_Fischer_SK129-STS_42x25mm_2xDrill2.5mm"
 			(at 61.2648 36.83 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" ""
 			(at 61.2648 36.83 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Description" "Heatsink with electrical connection, 2 pin"
 			(at 60.96 35.56 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(pin "1"
@@ -21818,14 +21874,18 @@
 		(lib_id "Mechanical:Heatsink_Pad_2Pin")
 		(at 59.69 53.34 0)
 		(unit 1)
+		(body_style 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
+		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "deebc98c-94a4-4ce7-96ff-bb3562fc982c")
 		(property "Reference" "HS5"
 			(at 63.5 51.4349 0)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21835,6 +21895,8 @@
 		)
 		(property "Value" "DISIPADOR_1"
 			(at 63.5 53.9749 0)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21844,29 +21906,35 @@
 		)
 		(property "Footprint" "Heatsink:Heatsink_Fischer_SK129-STS_42x25mm_2xDrill2.5mm"
 			(at 59.9948 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" ""
 			(at 59.9948 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Description" "Heatsink with electrical connection, 2 pin"
 			(at 59.69 53.34 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(pin "1"
@@ -21888,14 +21956,18 @@
 		(lib_id "Mechanical:Heatsink_Pad_2Pin")
 		(at 81.28 53.34 0)
 		(unit 1)
+		(body_style 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
+		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "dfc4c834-cbea-4939-bf3f-51f2b35d1fbb")
 		(property "Reference" "HS7"
 			(at 85.09 51.4349 0)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21905,6 +21977,8 @@
 		)
 		(property "Value" "DISIPADOR_2"
 			(at 85.09 53.9749 0)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21914,29 +21988,35 @@
 		)
 		(property "Footprint" "Heatsink:Heatsink_Fischer_SK129-STS_42x25mm_2xDrill2.5mm"
 			(at 81.5848 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" ""
 			(at 81.5848 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(property "Description" "Heatsink with electrical connection, 2 pin"
 			(at 81.28 53.34 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
 		(pin "1"
