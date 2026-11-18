@@ -18,10 +18,6 @@ _autosave-*
 *.zip
 gerber_tmp/
 
-# Python: cache de bytecode de las herramientas de auditoria
-__pycache__/
-*.py[cod]
-
 # Sistema operativo
 .DS_Store
 Thumbs.db
