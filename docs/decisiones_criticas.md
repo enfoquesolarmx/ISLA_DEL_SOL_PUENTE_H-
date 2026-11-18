@@ -1160,97 +1160,115 @@ La tentación de los preescaladores rápidos nace de suponer que la sincronía e
 
 ## DC-021. Transformador fuera de rango: qué pasa, qué se detecta solo y qué no
 
-> **En resumen: el proyecto no controla qué transformador le conectan, así que el diseño tiene que asumir el equivocado. Con razón alta el lazo regula bien pero pierde resolución y la distorsión de tiempo muerto se triplica; con razón baja nunca llega y deja a las cargas en subtensión permanente; y en el arranque a amplitud plena cualquiera de los dos satura el núcleo. Lo único que el firmware no puede detectar solo es el VA.**
+> **En resumen: el proyecto no controla qué transformador le conectan, así que el diseño tiene que asumir el equivocado. Pero lo primero que salió al hacer las cuentas es que el arranque a amplitud plena satura el núcleo incluso con el transformador CORRECTO, así que la rampa y el techo de amplitud por flujo no son protección contra piezas ajenas: son requisito del diseño nominal.**
 
 **Contexto**
 
-Este repositorio es abierto y está dirigido a la trinchera. **La gente va a usar el transformador que encuentre**, no el que dice el diseño, y los que se consiguen en México son de 120 V a 30, 18 o 14 V — el de 18 V es el más común. El diseño supone 48 → 127 V con una batería 16S LiFePO4 que va de **40 V (corte) a 56 V (100 % SOC)**.
+Este repositorio es abierto y está dirigido a la trinchera. **La gente va a usar el transformador que encuentre**, y los que se consiguen en México son de 120 V a 30, 18 o 14 V — el de 18 V es el más común.
 
-Un diseño abierto que supone el transformador correcto está suponiendo justo lo que no controla.
+El diseño usa un transformador de **24–26 V a 120 V**, con el puente H alimentado de un bus de 48 V y una batería 16S LiFePO4 que va de **40 V (corte) a 56 V (100 % SOC)**.
+
+**La relación que gobierna todo**, y que hay que tener presente porque es donde es fácil equivocarse: en un puente completo con SPWM el fundamental en el primario **no es el voltaje del bus**, es
+
+```
+V_primario_RMS = amplitud × V_bus / √2
+```
+
+A 48 V de bus y amplitud plena eso son **33.9 V RMS**, no 48. Por eso un primario de 24 V corresponde al 71 % de amplitud y uno de 26 V al 77 %: **el diseño trabaja alrededor de tres cuartos de amplitud, no al tope.**
 
 **Lo que se calculó**
 
-**1. ¿Puede el lazo llegar a los 127 V?**
+**1. ¿Puede el lazo llegar a los 127 V?** Amplitud necesaria, por estado de batería:
 
-| Transformador | Razón | A 100 % con 48 V | Amplitud para 127 V | Con batería a 40 V |
+| Transformador | Razón | Bat. 48 V | Bat. 40 V | Bat. 56 V |
 | --- | --- | --- | --- | --- |
-| **Diseño 48 → 127** | 2.646 | 127.0 V | **100.0 %** | **120 % — no llega** |
-| 30 → 120 | 4.000 | 192.0 V | 66.1 % | 79.4 % |
-| 18 → 120 *(el común)* | 6.667 | 320.0 V | 39.7 % | 47.6 % |
-| 14 → 120 | 8.571 | 411.4 V | 30.9 % | 37.0 % |
-| 60 → 120 *(razón baja)* | 2.000 | 96.0 V | **132 % — no llega** | 159 % |
+| **24 → 120** *(diseño)* | 5.000 | 74.8 % | **89.8 %** | 64.1 % |
+| **26 → 120** *(diseño)* | 4.615 | 81.1 % | **97.3 % — no llega** | 69.5 % |
+| 30 → 120 | 4.000 | 93.5 % | **112 % — no llega** | 80.2 % |
+| 18 → 120 *(el común)* | 6.667 | 56.1 % | 67.4 % | 48.1 % |
+| 14 → 120 | 8.571 | 43.7 % | 52.4 % | 37.4 % |
 
-> ⚠️ **El hallazgo incómodo está en el primer renglón: el transformador del diseño no tiene margen.** Da exactamente 127 V a 100 % de amplitud con la batería en 48 V, así que **no le queda nada para regular**, y con la batería baja la salida se cae a ~105 V. La razón correcta no es la que da 127 V con la batería nominal: es **la que los da con la batería MÍNIMA y todavía deja margen de amplitud**. Esa razón es **3.34** (a 48 V usaría 79 % y a 56 V, 68 %). Dicho de otro modo, **el transformador de 30 → 120 está más cerca del ideal que el nominal del diseño.**
+Con techo de amplitud al 95 %. **Dentro del propio rango del diseño, el extremo de 24 V es el seguro y el de 26 V no lo es:** con la batería baja, el de 26 V necesita 97.3 % y la salida se cae. La razón ideal —la que llega a 127 V con la batería mínima y todavía deja margen— es **4.73 a 4.99**, o sea un transformador de **25.5 a 26.9 V a 127 V**. El diseño está bien centrado; lo que conviene es **tomar el extremo bajo del rango.**
 
-**2. Resolución de SPWM a la amplitud de trabajo.** El Timer1 en modo 8 a 16 MHz da **333 cuentas** a amplitud plena, y la amplitud de trabajo recorta esa cuenta:
+El de **30 → 120 es el que no alcanza**: necesita 93.5 % con batería nominal y no llega con batería baja. Los de 18 y 14 V sobran de margen.
 
-| Transformador | Amplitud | Cuentas | Escalón |
+**2. Resolución y tiempo muerto, a batería nominal.** El Timer1 en modo 8 a 16 MHz da 333 cuentas a amplitud plena:
+
+| Transformador | Amplitud | Cuentas | Distorsión por tiempo muerto |
 | --- | --- | --- | --- |
-| 30 → 120 | 66.1 % | 220 | 577 mV |
-| 18 → 120 | 39.7 % | 132 | 961 mV |
-| 14 → 120 | 30.9 % | 103 | 1236 mV |
+| 30 → 120 | 93.5 % | 312 | 1.28 % |
+| **26 → 120** *(diseño)* | 81.1 % | 270 | 1.48 % |
+| **24 → 120** *(diseño)* | 74.8 % | 249 | 1.61 % |
+| 18 → 120 | 56.1 % | 187 | 2.14 % |
+| 14 → 120 | 43.7 % | 145 | **2.75 %** |
 
-**La cuantización no es lo que duele: lo que duele es el tiempo muerto.** El error que mete son `Vbus × t_muerto / T_portadora` = 48 × 0.5 µs / 41.6 µs = **0.577 V fijos en el primario**, sin importar la amplitud. Como fracción del fundamental, eso crece cuando la amplitud baja:
+El error de tiempo muerto son `V_bus × t_muerto / T_portadora` = 48 × 0.5 µs / 41.6 µs = **0.577 V fijos en el primario**, sin importar la amplitud; como fracción del fundamental crece cuando la amplitud baja. Del diseño al de 14 V **sube 1.7 veces**, no se dispara. Es el error que corrige la compensación adaptativa de [DC-013](#dc-013-corriente-ac-con-pinza-sct-013-015-en-el-crítico-a2), y **mientras más alta la razón, más se apoya el diseño en esa compensación.**
 
-| Transformador | Amplitud | Distorsión por tiempo muerto |
+**3. El flujo, que resultó ser el hallazgo de verdad.**
+
+En régimen el flujo lo fija **solamente el voltaje de salida**: pedirle 127 V a un transformador de 120 V son 127/120 = **1.06× su flujo nominal**, sin importar la batería ni la razón. Eso está bien.
+
+El peligro es **el arranque a amplitud plena, antes de que el lazo tome el control**, con la batería cargada. A 56 V de bus y amplitud 1.00 el primario ve 39.6 V RMS:
+
+| Transformador | Veces su flujo nominal |
+| --- | --- |
+| 30 → 120 | 1.32× |
+| **26 → 120** *(diseño)* | **1.52×** |
+| **24 → 120** *(diseño)* | **1.65×** |
+| 18 → 120 | 2.20× |
+| 14 → 120 | 2.83× |
+
+> ⚠️ **El transformador correcto también satura.** Arriba de ~1.3× el núcleo entra en saturación: la inductancia magnetizante se desploma y el primario se vuelve, para el puente, un corto. Y el diseño nominal queda en **1.65×**. Esto no es una protección contra transformadores ajenos — **es un requisito del diseño nominal**, y además dice que un techo de amplitud fijo en 95 % es peligroso: el techo tiene que seguir al flujo, no a un porcentaje.
+
+**4. El VA, que no depende de la razón y es el que más quema.** Para 1000 W a 127 V:
+
+- el devanado de **alta** lleva **7.87 A**
+- el de **baja**, a 25 V de primario y 90 % de eficiencia, lleva **~44 A RMS** *(ojo: ése no es el consumo del bus, que son ~23 A promedio a 48 V)*
+
+Un transformador de 120 V y *X* VA tiene su lado de alta limitado a *X*/120 A:
+
+| VA | Corriente en alta | Potencia que aguanta |
 | --- | --- | --- |
-| Diseño | 100 % | 1.20 % |
-| 30 → 120 | 66.1 % | 1.82 % |
-| 18 → 120 | 39.7 % | 3.03 % |
-| 14 → 120 | 30.9 % | **3.89 %** |
-
-Se **triplica**. Y es exactamente el error que la compensación adaptativa de [DC-013](#dc-013-corriente-ac-con-pinza-sct-013-015-en-el-crítico-a2) existe para corregir: **mientras más alta la razón del transformador, más indispensable esa compensación.**
-
-**3. El flujo en el transitorio — aquí está el peligro real.** En régimen el lazo regula a 127 V y el flujo queda donde debe, *sin importar la razón*. El problema es **el arranque, o una falla de lazo, con la batería cargada**:
-
-| Transformador | En el primario | Veces lo nominal | Salida |
-| --- | --- | --- | --- |
-| Diseño 48 → 127 | 56.0 V | 1.17× | 148 V |
-| 30 → 120 | 56.0 V | **1.87×** | 224 V |
-| 18 → 120 | 56.0 V | **3.11×** | 373 V |
-| 14 → 120 | 56.0 V | **4.00×** | 480 V |
-
-Arriba de ~1.3× el núcleo entra en **saturación dura**: la inductancia magnetizante se desploma y el primario se vuelve, para el puente, un corto. Eso mata MOSFETs. **Y ocurre en el arranque, antes de que el lazo tenga una sola medición con la cual actuar.** Lo único que se interpone es la protección por hardware de [DC-014](#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado), y éste es un argumento más para que sea **independiente del firmware**: aquí el firmware todavía no sabe nada.
-
-**4. El VA, que no depende de la razón y es el que más quema.** Para 1000 W a 127 V el devanado de alta lleva **7.87 A**, y el de baja 23.1 A al 90 % de eficiencia. Un transformador de 120 V y *X* VA tiene su lado de alta limitado a *X*/120 amperes:
-
-| VA del transformador | Corriente en alta | Potencia que aguanta |
-| --- | --- | --- |
-| 50 VA | 0.42 A | 53 W |
 | 100 VA | 0.83 A | 106 W |
 | 300 VA | 2.50 A | 318 W |
 | 500 VA | 4.17 A | 529 W |
 | **1000 VA** | **8.33 A** | **1058 W** |
 
-**Abajo de ~1000 VA el devanado se quema a plena carga, con la razón que sea.** Y es la falla más probable en la práctica: alguien usa el de 300 VA que encontró, funciona a 300 W, y se quema a 800 W.
+**Abajo de ~1000 VA el devanado se quema a plena carga, con la razón que sea.** Y el de baja de un transformador de 1000 VA y 24 V está en 41.7 A nominales contra los ~44 A que pide el diseño: **también al límite.** Es la falla más probable en la práctica — alguien usa el de 300 VA que encontró, funciona a 300 W, y se quema a 800 W.
 
 **Decisión**
 
-Cuatro mitigaciones en firmware y una en documentación.
-
-**1. Identificar el transformador al arrancar, en lazo abierto.** Antes de cerrar el lazo, subir a una amplitud conocida y chica (25 %) y despejar la razón:
+**1. Rampa de arranque, y techo de amplitud por flujo, no por porcentaje.** Es lo primero porque lo exige el diseño nominal, no el caso raro. El techo es
 
 ```
-razon_medida = V_salida_medida / (V_bateria × amplitud)
+amplitud_max = V_primario_nominal × √2 / V_bus
 ```
 
-Una medición, una división y una comparación. Con eso el firmware **sabe qué transformador le conectaron**: si esperaba 2.65 y le sale 6.67, le pusieron uno de 18 V. Se hace con el inversor sin carga y antes de que nada esté en riesgo.
+que a 40 V de bus da 85 %, a 48 V da 71 % y a 56 V da 61 % para un primario de 24 V. Un techo fijo del 95 % permite 1.57× de flujo con la batería cargada.
 
-**2. Rampa de arranque, nunca amplitud plena.** La rampa acota el transitorio del punto 3 y le da al lazo tiempo de tomar el control. A amplitud plena de arranque, un transformador de 18 V satura antes de la primera medición.
+**2. Identificar el transformador al arrancar, en lazo abierto.** A una amplitud conocida y chica (25 %), despejar:
 
-**3. Techo de amplitud pegado → falla.** Si la amplitud lleva N segundos en su máximo y la salida sigue abajo del 90 % del objetivo: *«razón de transformador insuficiente o batería baja»*. Es el caso de 60 → 120, donde hoy **nada se dispara**: la salida se queda en ~91 V, la pantalla lo reporta correctamente, y los motores se queman en subtensión sin que ninguna protección opine.
+```
+razón_medida = V_salida_medida / (V_batería × amplitud / √2)
+```
 
-**4. Piso de amplitud → advertencia, no falla.** Si el lazo regula de forma sostenida abajo del 35 %, avisar que la resolución y la distorsión están degradadas. Funciona, pero el usuario debe saberlo.
+Una medición, una división y una comparación. Con eso el firmware **sabe qué transformador le conectaron**: si esperaba 5.0 y le sale 6.67, le pusieron uno de 18 V. Se hace sin carga y antes de que nada esté en riesgo. **La misma prueba caza una cadena de sensado mal escalada**, porque un sensado 1.36× sobre-sensible da una razón 1.36× alta.
 
-**5. El VA va en la documentación, porque el firmware no lo puede medir.** El README tiene que pedir **≥ 1000 VA** para los 1000 W nominales, con la tabla de arriba. La regulación bajo carga es un proxy parcial, pero no sustituye a decirlo.
+**3. Techo de amplitud pegado → falla.** Si la amplitud lleva N segundos en su máximo y la salida sigue abajo del 90 % del objetivo: *«razón de transformador insuficiente o batería baja»*. Es el caso de 30 → 120 y el del propio 26 → 120 con batería baja, donde hoy **nada se dispara**: la salida se queda corta, la pantalla lo reporta bien, y los motores se queman en subtensión sin que ninguna protección opine.
+
+**4. Piso de amplitud → advertencia, no falla.** Abajo del 35 % sostenido, avisar que la resolución y la distorsión están degradadas.
+
+**5. El VA va en la documentación, porque el firmware no lo puede medir.** El README tiene que pedir **≥ 1000 VA** con la tabla de arriba, y advertir que el devanado de baja debe aguantar **~44 A RMS**.
 
 **Consecuencias**
 
-- **El rango de razón aceptable queda acotado por los dos lados**, y por razones distintas: abajo de ~3.3 el lazo no alcanza los 127 V con la batería baja; arriba de ~5 la distorsión de tiempo muerto pasa del 2.5 % y el transitorio de arranque satura el núcleo con la batería cargada.
-- ⚠️ **El transformador nominal del diseño (48 → 127) es marginal** y hay que revisarlo. No tiene margen de regulación a batería nominal y no llega a 127 V con batería baja. **Pendiente: decidir si la razón de referencia sube a ~3.3.** Esto no se descubrió midiendo, sino al evaluar los casos que no son el nominal — la razón de ser de esta entrada.
-- La mitigación 1 **también cubre la falla de sensado mal escalado**: si la cadena de sensado está 1.36× sobre-sensible, la razón medida sale 1.36× alta y el arranque la caza igual, antes de que el ADC sature.
-- ⚠️ **Nada de esto está medido en banco.** Es aritmética sobre la razón de vueltas, el presupuesto de tiempo muerto de este diseño y la hoja de datos. Pendiente: verificar la saturación real en el transitorio y la distorsión a amplitud baja.
+- **El rango de razón aceptable queda acotado por los dos lados.** Abajo de ~4.7 el lazo no llega a 127 V con batería baja; arriba de ~6.7 la distorsión por tiempo muerto pasa del 2 % y el transitorio de arranque es más violento. El diseño (4.6–5.0) está centrado.
+- **Dentro del propio rango del diseño conviene el extremo bajo:** 24 V antes que 26 V. El de 26 V no llega a 127 V con la batería en corte.
+- **La rampa de arranque deja de ser una buena práctica y pasa a ser requisito**, y el techo de amplitud tiene que calcularse contra el bus en vez de ser una constante.
+- ⚠️ **Nada de esto está medido en banco.** Es aritmética sobre la razón de vueltas y el presupuesto de tiempo muerto de este diseño. Pendiente: verificar la saturación real en el transitorio y la distorsión a amplitud baja.
 - Este análisis **no cubre** la impedancia de dispersión ni la corriente de magnetización en vacío, que cambian entre marcas y afectan el arranque. Son pendientes de banco.
+
+> **Historia de esta entrada.** La primera redacción (18 de noviembre de 2026) tenía un error que invalidaba casi todas sus tablas: trataba la salida del puente como `amplitud × V_bus × razón`, **olvidando el √2** del fundamental del SPWM. Con ese error el diseño parecía trabajar al 100 % de amplitud y quedaba «marginal», y se llegó a escribir que un transformador de 30 → 120 estaría *más cerca del ideal que el nominal del diseño*. **Es falso, y lo contrario es lo cierto:** el de 30 V es justo el que no alcanza con batería baja, y el diseño está bien centrado. El error lo encontró el usuario al señalar que una cosa son los 48 V del bus y otra los 24–26 V del primario. Se deja asentado porque el número de la izquierda de una multiplicación es el que nadie revisa.
 
 **Referencias:** [6], [26], y las entradas [DC-013](#dc-013-corriente-ac-con-pinza-sct-013-015-en-el-crítico-a2), [DC-014](#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado) y [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809).
 
@@ -1265,7 +1283,7 @@ Lo que sabemos que se puede discutir. Se deja escrito a propósito:
 3. **No hay UVLO por hardware** en el buck de 48 V: la batería depende del firmware para no descargarse de más.
 4. **Los clones de los módulos varían** en tamaño, posición de los pines y calidad de los capacitores. El socket mixto ayuda, pero no elimina el problema: hay que medir cada módulo nuevo.
 5. **La disipación del D2PAK** depende del cobre de la tarjeta, y todavía no se ha medido.
-6. **La razón del transformador de referencia (48 → 127) es marginal.** No deja margen de regulación con la batería nominal y no alcanza los 127 V con la batería baja ([DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no)). La razón que cubre todo el rango de batería es ~3.3. Está sin decidir.
+6. **El techo de amplitud es hoy una constante y debería seguir al flujo.** Con la batería cargada, un techo del 95 % permite 1.57 veces el flujo nominal del transformador ([DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no)). Está sin implementar.
 
 Quien tenga datos (mediciones, una alternativa probada, una falla documentada) puede abrir una entrada nueva que reemplace a cualquiera de las anteriores.
 
