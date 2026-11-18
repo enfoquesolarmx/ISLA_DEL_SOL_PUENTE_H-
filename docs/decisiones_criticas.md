@@ -1178,19 +1178,46 @@ A 48 V de bus y amplitud plena eso son **33.9 V RMS**, no 48. Por eso un primari
 
 **Lo que se calculó**
 
-**1. ¿Puede el lazo llegar a los 127 V?** Amplitud necesaria, por estado de batería:
+**1. La holgura de amplitud no es sobrante: es presupuesto.**
 
-| Transformador | Razón | Bat. 48 V | Bat. 40 V | Bat. 56 V |
-| --- | --- | --- | --- | --- |
-| **24 → 120** *(diseño)* | 5.000 | 74.8 % | **89.8 %** | 64.1 % |
-| **26 → 120** *(diseño)* | 4.615 | 81.1 % | **97.3 % — no llega** | 69.5 % |
-| 30 → 120 | 4.000 | 93.5 % | **112 % — no llega** | 80.2 % |
-| 18 → 120 *(el común)* | 6.667 | 56.1 % | 67.4 % | 48.1 % |
-| 14 → 120 | 8.571 | 43.7 % | 52.4 % | 37.4 % |
+El diseño trabaja alrededor del 75 % **a propósito**. Lo que compra ese 20 % que sobra son tres cosas, y las tres son requisitos:
 
-Con techo de amplitud al 95 %. **Dentro del propio rango del diseño, el extremo de 24 V es el seguro y el de 26 V no lo es:** con la batería baja, el de 26 V necesita 97.3 % y la salida se cae. La razón ideal —la que llega a 127 V con la batería mínima y todavía deja margen— es **4.73 a 4.99**, o sea un transformador de **25.5 a 26.9 V a 127 V**. El diseño está bien centrado; lo que conviene es **tomar el extremo bajo del rango.**
+1. **El rango de la batería.** De 56 V (100 % SOC) a 40 V (corte) la amplitud tiene que subir **1.40×** para sostener la misma salida.
+2. **La salida que escoja el trinchero.** De 110 a 130 V son otro **1.18×**. No todos quieren 127: hay quien quiere 110 para alargar la vida de los focos y quien quiere 130 porque su casa está al final de la línea.
+3. **El hundimiento al arrancar un motor.** Cuando el refrigerador o la bomba jalan corriente de arranque, el bus se hunde y **la amplitud tiene que subir para regular**. Sin holgura, la salida se cae junto con la batería.
 
-El de **30 → 120 es el que no alcanza**: necesita 93.5 % con batería nominal y no llega con batería baja. Los de 18 y 14 V sobran de margen.
+El sobre completo pide un recorrido de amplitud de **(130/40) ÷ (110/56) = 1.655×**. Con el techo en 95 %, el piso tiene que estar en 57 %. **Eso es exactamente lo que da el transformador de 24 → 120**, que recorre de 55.6 % a 91.9 %: un recorrido de 1.653×. El diseño está dimensionado al sobre, no sobrado.
+
+**La matriz completa.** Amplitud necesaria; `*` marca lo que se pasa del techo de 95 % y se cae:
+
+| Transformador | Salida | Bat. 56 V | Bat. 48 V | Bat. 44 V | Bat. 40 V | Bus mínimo |
+| --- | --- | --- | --- | --- | --- | --- |
+| **24 → 120** | 110 V | 55.6 % | 64.8 % | 70.7 % | 77.8 % | 32.8 V |
+| *(diseño)* | 117 V | 59.1 % | 68.9 % | 75.2 % | 82.7 % | 34.8 V |
+| | 127 V | 64.1 % | 74.8 % | 81.6 % | **89.8 %** | 37.8 V |
+| | 130 V | 65.7 % | 76.6 % | 83.6 % | **91.9 %** | 38.7 V |
+| **26 → 120** | 117 V | 64.0 % | 74.7 % | 81.5 % | 89.6 % | 37.7 V |
+| | 127 V | 69.5 % | 81.1 % | 88.4 % | **97.3 %\*** | 41.0 V |
+| | 130 V | 71.1 % | 83.0 % | 90.5 % | **99.6 %\*** | 41.9 V |
+| **30 → 120** | 110 V | 69.4 % | 81.0 % | 88.4 % | **97.2 %\*** | 40.9 V |
+| | 127 V | 80.2 % | 93.5 % | **102 %\*** | **112 %\*** | 47.3 V |
+| | 130 V | 82.1 % | **95.8 %\*** | **105 %\*** | **115 %\*** | 48.4 V |
+| **18 → 120** | 127 V | 48.1 % | 56.1 % | 61.2 % | 67.4 % | 28.4 V |
+| | 130 V | 49.2 % | 57.5 % | 62.7 % | 68.9 % | 29.0 V |
+| **14 → 120** | 127 V | 37.4 % | 43.7 % | 47.6 % | 52.4 % | 22.1 V |
+| | 130 V | 38.3 % | 44.7 % | 48.7 % | 53.6 % | 22.6 V |
+
+**Lo que dice la última columna es el margen contra el arranque de motores:**
+
+| Transformador | A 127 V aguanta el bus hasta | Hundimiento tolerado desde 48 V |
+| --- | --- | --- |
+| **24 → 120** | 37.8 V | **10.2 V** |
+| 26 → 120 | 41.0 V | 7.0 V |
+| 30 → 120 | 47.3 V | **0.7 V** |
+
+> **El de 30 → 120 no tiene margen de maniobra.** A 130 V no sostiene ni con la batería en 48 V, y su tolerancia al hundimiento es de **−0.4 V**: cualquier arranque de motor le tumba la salida. Y el de 26 → 120 pierde 127 y 130 V con la batería en corte. **Dentro del propio rango del diseño, 24 V es el que cubre el sobre completo y 26 V no.**
+
+Los de 18 y 14 V, al revés, **sobran de margen de regulación** —sostendrían 130 V con el bus en 29 y 22.6 V, muy por debajo del corte de la batería— y lo pagan en resolución y en flujo de arranque, que es lo que viene abajo.
 
 **2. Resolución y tiempo muerto, a batería nominal.** El Timer1 en modo 8 a 16 MHz da 333 cuentas a amplitud plena:
 
