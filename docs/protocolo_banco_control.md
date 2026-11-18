@@ -41,7 +41,7 @@ Derivada de las corridas de abajo, no de un catálogo. Si algo ya está en el ca
 
 | Cant. | Pieza | Para qué | Nota |
 | --- | --- | --- | --- |
-| 1 | Transformador 120 → 12 VAC, ~500 mA | A2 a A8 | **La pieza que manda.** Sin él no hay parte A |
+| 1 | Transformador 120 → 12 VAC, ~500 mA, **con tap central (3 hilos)** | A2 a A8 | **La pieza que manda.** Sin él no hay parte A. Se usa el devanado completo; el tap queda como contingencia (ver A2) |
 | 2 | Resistencia 100 kΩ ¼ W | Divisor AC, rama de arriba | El valor final lo decide **A3**; lleva también 2 × 120 kΩ y 2 × 150 kΩ por si sale alto |
 | 2 | Resistencia 8.2 kΩ | Divisor AC, rama de abajo (parte fija) | |
 | 2 | Trimmer 2 kΩ multivuelta (Bourns 3296W o equivalente) | Ajuste del divisor AC | Se conecta **como reóstato**: cursor unido a un extremo (DC-006) |
@@ -65,7 +65,7 @@ El viaje cuesta más que los materiales. Todo lo de esta tabla se compra **estan
 
 | Cant. | Pieza | Qué falla previene | Prioridad |
 | --- | --- | --- | --- |
-| 1 | **Segundo transformador 120 → 12 VAC, mismo modelo** | **A5 no se puede contestar con uno solo.** La pregunta es si ±10 % de trimmer cubre la dispersión entre unidades, y eso exige dos unidades | **Alta** |
+| 1 | **Segundo transformador 120 → 12 VAC, mismo modelo y mismo lote** | **A5 no se puede contestar con uno solo.** La pregunta es si ±10 % de trimmer cubre la dispersión entre unidades, y eso exige dos unidades. **Verificar en la tienda que los dos traigan tap central:** uno con tap y otro sin tap obliga al devanado completo y cierra la contingencia de A2 | **Alta** |
 | 1 | **Nano de repuesto** | Un Nano muerto termina la corrida en seco, con todo armado | **Alta** |
 | 2 c/u | Resistencias 110 kΩ, 120 kΩ, 150 kΩ | A3 puede pedir cualquiera de ellas y no se sabe cuál hasta medir A2 | **Alta** |
 | 2 | Electrolítico 220 µF | Si 100 µF no alcanza para el bias | Media |
@@ -147,11 +147,21 @@ Referencia de diseño: [DC-006](decisiones_criticas.md#dc-006-sensado-ac-con-dos
 
 > ⚠️ **Precaución.** El primario va a 120 V de la red. El secundario está aislado y es inofensivo, el primario no. Conectar con la clavija afuera y las puntas del multímetro ya puestas.
 
+> ⚠️ **Estos transformadores traen tres hilos, no dos.** Validado en tienda el 18 de noviembre de 2026: el de 120 → 12 VAC tiene **tap central**, y entre un extremo y el central da ~6 V. Con tres hilos hay **tres pares que medir**, y medir el par equivocado mete un error de **2×** en todo el atenuador. Este proyecto usa el **devanado completo** (los dos extremos); el por qué está abajo.
+
 **Procedimiento.**
-1. Conectar el primario a la red, el secundario **al aire** (sin divisor, sin nada).
-2. Medir el secundario con el multímetro en AC. Anotar: **Vsec**.
-3. **En el mismo instante**, medir el voltaje de la red en el mismo contacto. Anotar: **Vlínea**.
-4. Escalar al peor caso: `Vsec_max = Vsec × (Vlínea_max / Vlínea)`.
+1. **Identificar los tres hilos antes de nada.** Medir los tres pares con el primario conectado: el par que da **~12 V son los dos extremos**, y el central es el hilo que da ~6 V contra cualquiera de los otros dos. Etiquetarlos.
+2. Conectar el primario a la red, el secundario **al aire** (sin divisor, sin nada).
+3. Medir **de extremo a extremo** con el multímetro en AC. Anotar: **Vsec**. *No* medir contra el tap central.
+4. **En el mismo instante**, medir el voltaje de la red en el mismo contacto. Anotar: **Vlínea**.
+5. Escalar al peor caso: `Vsec_max = Vsec × (Vlínea_max / Vlínea)`.
+6. **El tap central no se conecta a nada.** Se aísla con cinta y no se deja colgando cerca de la tarjeta de control: es un conductor flotante con 6 V AC encima, o sea una antena.
+
+**Por qué el devanado completo y no el tap.** El medio devanado hereda **dos** tolerancias en vez de una — la relación de vueltas del transformador *y* la posición del tap, que ningún fabricante barato especifica. Dos unidades cuyas relaciones de vueltas coincidan dentro del 3 % pueden tener los taps corridos 4 % en sentidos opuestos, y entonces el devanado completo dispersa 2.9 % mientras el medio dispersa 10.4 %: **el completo lo cubre el trimmer de 2 kΩ y el medio no.** Eso le pegaría directo a A5, que es la corrida que decide si el trimmer sube a 5 kΩ — y eso toca el esquemático antes de imprimir.
+
+Todo lo demás sale **idéntico** entre las dos opciones, porque el divisor se dimensiona para poner el mismo voltaje en el nodo: las mismas cuentas de ADC (778 contra 750 a línea nominal), la misma corriente por el divisor (205 contra 198 µA), **el mismo corrimiento del bias de ~54 mV** y la misma relación señal/ruido. El tap **no** arregla lo que prueba A1.
+
+**El tap se queda como salida de emergencia.** Si `Vsec_max` sale arriba de ~24 VAC punta a punta, el devanado completo pediría más de 150 kΩ, la impedancia del nodo sube y los valores estándar se acaban. Ahí el tap parte el problema a la mitad. Es una contingencia, no un plan.
 
 Para `Vlínea_max` se usa **140 V** (127 V + 10 %) como margen de diseño de este proyecto. Si conoces el rango real de tu red, usa el tuyo y anótalo.
 
@@ -182,6 +192,7 @@ Rt ≥ Rb × ( Vsec_max × √2 / 2.10 − 1 )        con Rb = 10.2 kΩ
 | 14.0 VAC | 86.0 kΩ | **100 kΩ** | 4.333 V |
 | 15.0 VAC | 92.8 kΩ | **100 kΩ** | 4.463 V |
 | 16.0 VAC | 99.7 kΩ | **100 kΩ** | 4.594 V ← el supuesto de DC-006, al límite |
+| | | *o 110 kΩ* | *4.420 V — ver la nota de abajo* |
 | 17.0 VAC | 106.6 kΩ | **110 kΩ** | 4.540 V |
 | 18.0 VAC | 113.4 kΩ | **120 kΩ** | 4.494 V |
 | 19.0 VAC | 120.3 kΩ | **130 kΩ** | 4.455 V |
@@ -189,6 +200,16 @@ Rt ≥ Rb × ( Vsec_max × √2 / 2.10 − 1 )        con Rb = 10.2 kΩ
 | 22.0 VAC | 140.9 kΩ | **150 kΩ** | 4.481 V |
 
 **Lo que hay que entender de esta tabla.** Los 100 kΩ de DC-006 solo alcanzan si `Vsec_max` **no pasa de 16 VAC**, y `Vsec_max` ya incluye la red alta. Eso significa que a 127 V de línea el transformador no debe dar más de **~14.5 VAC en vacío**. Un transformador de "12 VAC" barato sube entre 15 y 25 % sin carga, así que puede caer justo arriba. **Es la razón por la que esta medición va antes del PCB.**
+
+**El techo no es un acantilado: es una perilla.** Esta tabla escoge siempre **la resistencia estándar más chica que pasa**, que es la que aprovecha más el ADC y la que deja menos reserva. Subir al siguiente valor compra margen pagando rango:
+
+| `Vsec_max` | R mínima | Pin | Cuentas de ADC | | R siguiente | Pin | Cuentas de ADC |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 16.0 VAC | 100 kΩ | 4.594 V | 778 | | **110 kΩ** | **4.420 V** | 713 |
+| 18.0 VAC | 120 kΩ | 4.494 V | 741 | | 130 kΩ | 4.352 V | 688 |
+| 20.0 VAC | 130 kΩ | 4.558 V | 765 | | 150 kΩ | 4.301 V | 669 |
+
+Cuentas de pico a pico a **línea nominal** (127 V), de las 1024 del ADC. El renglón de 16 VAC que la tabla de arriba marca "al límite" cuesta **65 cuentas, un 6 % del rango**, y a cambio el pin baja de 4.594 a 4.420 V. **Decídalo en el banco con el número medido**, no aquí: si `Vsec` sale cómodo, use la mínima y quédese con el rango; si sale justo contra los 16 VAC, suba al siguiente valor y pague el 6 %.
 
 **Por qué igual no es catastrófico si sale alto.** En THT una resistencia se cambia desoldando. Lo que sí sería caro es descubrirlo con la tarjeta ya poblada y el firmware persiguiendo un RMS equivocado.
 
@@ -239,6 +260,15 @@ Por eso el segundo transformador del mismo modelo está en la lista de repuestos
 **Criterio.** Si la diferencia entre dos unidades del mismo modelo es **menor al 8 %**, el trimmer de 2 kΩ alcanza y DC-006 queda confirmado. Si es mayor, hay que subir a 5 kΩ (el que viene en los repuestos) y **eso cambia el reparto fijo/ajustable del divisor**, o sea que toca el esquemático antes de imprimir.
 
 Dos unidades no son una muestra estadística, pero una diferencia grande entre dos ya basta para descartar el ±10 %. Es lo más que se puede saber por el precio de un transformador.
+
+**Y de paso, dos mediciones gratis con el tap central.** Ya que los dos transformadores están en la mesa y el multímetro en la mano, medir también **medio devanado** de cada unidad (extremo a tap central) y anotar **las dos dispersiones por separado**:
+
+| | Unidad 1 | Unidad 2 | Dispersión |
+| --- | --- | --- | --- |
+| Devanado completo (extremo a extremo) | | | % |
+| Medio devanado (extremo a tap) | | | % |
+
+Son cuatro lecturas y cierran una pregunta que si no se mide aquí nadie va a volver a medir. La predicción de A2 es que **la del medio devanado sale peor**, porque hereda la tolerancia de la posición del tap además de la de la relación de vueltas. Si sale peor, queda confirmado por qué este proyecto usa el devanado completo. **Si sale igual o mejor**, el argumento de A2 estaba equivocado y hay que revisarlo — y entonces el tap vuelve a la mesa como opción de diseño, no solo como salida de emergencia.
 
 ---
 
@@ -399,10 +429,10 @@ Se llena en el banco, con lápiz, y después se pasa aquí.
 | Corrida | Fecha | Valor medido | ¿Pasa? | Notas |
 | --- | --- | --- | --- | --- |
 | A1 bias 2.5 V | | | | |
-| A2 secundario en vacío | | `Vsec` = ___ a `Vlínea` = ___ → `Vsec_max` = ___ | — | marca del transformador: |
+| A2 secundario en vacío | | `Vsec` (extremo a extremo) = ___ a `Vlínea` = ___ → `Vsec_max` = ___ | — | marca del transformador: ___ · hilos identificados: sí / no · medio devanado: ___ V |
 | A3 resistencia elegida | | `Rt` = ___ | — | |
 | A4 atenuador y recorte | | tope ___ V / mínimo ___ V | | |
-| A5 rango del trimmer | | ___ % | | dispersión entre los dos transformadores: ___ % |
+| A5 rango del trimmer | | ___ % | | dispersión completo: ___ % · dispersión medio devanado: ___ % |
 | A6 ADC vs multímetro | | error ___ % | | |
 | A7 simetría entre canales | | ___ µs (esperado 124.9) | | invertido: ___ µs |
 | A8 fs e instante | | ___ µs / ___ µs | | disparos perdidos: |
