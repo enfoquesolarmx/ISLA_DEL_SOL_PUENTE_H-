@@ -1289,8 +1289,8 @@ Una medición, una división y una comparación. Con eso el firmware **sabe qué
 
 **Consecuencias**
 
-- **El rango de razón aceptable queda acotado por los dos lados.** Abajo de ~4.7 el lazo no llega a 127 V con batería baja; arriba de ~6.7 la distorsión por tiempo muerto pasa del 2 % y el transitorio de arranque es más violento. El diseño (4.6–5.0) está centrado.
-- **Dentro del propio rango del diseño conviene el extremo bajo:** 24 V antes que 26 V. El de 26 V no llega a 127 V con la batería en corte.
+- **El rango de razón aceptable queda acotado por los dos lados, y lo acota el sobre de operación completo.** Abajo de ~5.0 el lazo no cubre 127–130 V con la batería en corte ni deja margen para el hundimiento de arranque de motores; arriba de ~6.7 la distorsión por tiempo muerto pasa del 2 % y el transitorio de arranque es más violento. **La razón de 5.0 del transformador de 24 V no es un punto cómodo a media escala: es el mínimo que cubre el sobre.**
+- ⚠️ **Dentro del propio rango del diseño, el extremo bajo no es «preferible»: es el único que cumple.** El de 26 V pierde 127 y 130 V con la batería en corte, y su tolerancia al hundimiento de arranque baja de 10.2 a 7.0 V. **Pendiente: cerrar el rango publicado a 24 V** en vez de dejarlo como 24–26 V.
 - **La rampa de arranque deja de ser una buena práctica y pasa a ser requisito**, y el techo de amplitud tiene que calcularse contra el bus en vez de ser una constante.
 - ⚠️ **Nada de esto está medido en banco.** Es aritmética sobre la razón de vueltas y el presupuesto de tiempo muerto de este diseño. Pendiente: verificar la saturación real en el transitorio y la distorsión a amplitud baja.
 - Este análisis **no cubre** la impedancia de dispersión ni la corriente de magnetización en vacío, que cambian entre marcas y afectan el arranque. Son pendientes de banco.
