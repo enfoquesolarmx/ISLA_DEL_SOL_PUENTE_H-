@@ -449,9 +449,15 @@ Se dice aquí para que nadie crea que el módulo quedó cerrado:
 2. **El reparto fijo/ajustable del divisor** (A5, con los dos transformadores): si la dispersión pasa del 8 %, el trimmer sube a 5 kΩ y cambia la resistencia fija que lo acompaña.
 3. **La decisión de la protección de A7 al aire** (B1), que puede agregar una resistencia al cobre.
 4. **Confirmación de que el bias por canal se aguanta solo** (A1), o la necesidad de separarlo.
-5. **Recomendaciones que no dependen de ninguna medición**, porque cuestan casi nada y cubren la única prueba que no se puede hacer antes de imprimir (el ruido del puente conmutando):
+5. **Tres recomendaciones que no dependen de ninguna medición**, porque cuestan casi nada y cubren la única prueba que no se puede hacer antes de imprimir (el ruido del puente conmutando):
    - **Footprint del electrolítico del bias holgado, para 220 µF.** Es la alternativa que la aritmética señaló como la buena, y poblarlo con 100 µF o con 220 µF después no cuesta nada si el espacio ya está. Un footprint para 10 µF cierra esa puerta.
    - **Footprint del seguidor de bias (LM358, dos canales) presente y puenteado con un jumper.** Es el último recurso, no el primero — el capacitor le gana a 24 kHz — pero son dos almohadillas y un jumper, y evita una reimpresión en el caso de que el problema resulte ser acoplamiento y no impedancia.
+   - **Footprint de un capacitor X2 (paso 15 mm) entre L y N del primario de cada transformador, sin poblar.** Si A1 o A7 muestran que el ruido de la red está llegando al ADC, ahí se puebla. Tres advertencias que van en la serigrafía o en la nota del esquemático, porque esta posición se presta a sustituciones peligrosas:
+     1. **Sólo capacitor de seguridad clase X2 certificado, 275 VAC** (IEC 60384-14). Un poliéster genérico de 250 V no sirve aunque el número alcance: no tiene modo de falla validado ni ensayo de impulso, y en posición X una falla en corto deja un arco sostenido entre L y N. El riesgo es incendio, no choque.
+     2. **0.1 µF, no 1 µF.** Un microfaradio a 127 V son 47.9 mA de corriente reactiva permanente; 0.1 µF son 4.8 mA.
+     3. **El mismo valor en los dos transformadores.** Poblar uno y el otro no los desfasa entre sí, y A7 lo marcaría como asimetría de filtros — mandando a revisar cobre que está bien.
+
+   Nada de esto aplica a la placa de transferencia, que conmuta corriente de carga de verdad y necesita su propio amortiguamiento. Ahí un capacitor solo **no** es snubber: a través de un contacto que cierra en el pico de la onda, 1 µF da entre 99 y 396 A de pico según la resistencia del cableado, y eso castiga el contacto en vez de protegerlo. Un snubber lleva **R en serie** (lo típico, 100 Ω + 0.1 µF). Es otra decisión de diseño y va por su cuenta.
 
 ---
 
