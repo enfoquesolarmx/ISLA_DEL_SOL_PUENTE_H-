@@ -44,7 +44,8 @@ Derivada de las corridas de abajo, no de un catálogo. Si algo ya está en el ca
 | 1 | Transformador 120 → 12 VAC, ~500 mA, **con tap central (3 hilos)** | A2 a A8 | **La pieza que manda.** Sin él no hay parte A. Se usa el devanado completo; el tap queda como contingencia (ver A2) |
 | 2 | Resistencia 100 kΩ ¼ W | Divisor AC, rama de arriba | El valor final lo decide **A3**; lleva también 2 × 120 kΩ y 2 × 150 kΩ por si sale alto |
 | 2 | Resistencia 8.2 kΩ | Divisor AC, rama de abajo (parte fija) | |
-| 2 | Trimmer 2 kΩ multivuelta (Bourns 3296W o equivalente) | Ajuste del divisor AC | Se conecta **como reóstato**: cursor unido a un extremo (DC-006) |
+| 2 | Trimmer 2 kΩ multivuelta (Bourns 3296W o 3362P) | Ajuste del divisor AC | Se conecta **como reóstato**: cursor unido a un extremo (DC-006). **No es artículo de Steren** — es de AG Electrónica, tiendas de electrónica o MercadoLibre |
+| 1 | *Sustituto, si no hay multivuelta:* potenciómetro de una vuelta de 10 kΩ sin switch (Steren 101-10K, ~$9) | Herramienta de banco para A4, A5 y A6 | ⚠️ **No se suelda en la tarjeta**: en serie con los 8.2 kΩ se pasa del riel. Ver la nota al final de A4 |
 | 6 | Resistencia 10 kΩ | Bias de 2.5 V (2 por canal) + P9 | |
 | 2 | Capacitor electrolítico 10 µF | Bias de 2.5 V, valor de DC-006 | |
 | 2 | **Capacitor electrolítico 100 µF** | Bias de 2.5 V, **la alternativa buena** | Ver "Alternativas del bias" abajo |
@@ -223,10 +224,40 @@ Cuentas de pico a pico a **línea nominal** (127 V), de las 1024 del ADC. El ren
 
 **Montaje.** Transformador → `Rt` (la elegida en A3) → nodo → (8.2 kΩ + trimmer 2 kΩ) → bias de 2.5 V. Del nodo, 1 kΩ al pin del ADC, y **10 nF pegado al pin**.
 
+> ⚠️ **Orden de conexión. El Nano se conecta al último.** Primero se arma el divisor y se mide el pico **con el multímetro**, con el pin del ADC **al aire**. Sólo cuando el pico confirmado esté abajo de 4.60 V se conecta el Nano. Armar al revés —Nano puesto y después girar el ajuste— es la forma fácil de pasarse del riel sin enterarse.
+
 **Procedimiento.**
-1. Trimmer al tope. Medir el pico en el pin. Si hay osciloscopio, directo; si solo hay multímetro, medir en AC y multiplicar por √2 (la red es senoidal, el error es pequeño).
+1. Trimmer al tope, **pin del ADC al aire**. Medir el pico. Si hay osciloscopio, directo; si solo hay multímetro, medir en AC y multiplicar por √2 (la red es senoidal, el error es pequeño).
 2. Trimmer al mínimo. Medir otra vez.
 3. Repetir en el segundo canal.
+4. Con los dos canales confirmados abajo de 4.60 V, conectar el Nano.
+
+### Si no se consigue el trimmer multivuelta
+
+En noviembre de 2026, Steren —que es donde muchos van a comprar— **no tiene trimmer multivuelta de 2 kΩ**. Lo que tiene es un **potenciómetro de una vuelta de 10 kΩ sin switch** (SKU 101-10K, ~$9 MXN). Sirve, pero **como herramienta de banco, no como pieza de la tarjeta.**
+
+**Por qué no va en la tarjeta.** En serie con los 8.2 kΩ fijos, ese pot da un `Rb` de 8.2 a 18.2 kΩ, y el extremo alto revienta el riel:
+
+| `Rb` | Pin absoluto | |
+| --- | --- | --- |
+| 10.2 kΩ — trimmer de 2 kΩ al tope, lo que pide DC-006 | 4.594 V | dentro |
+| 13.2 kΩ — pot de 10 kΩ a media vuelta | 5.139 V | **pasa el riel**, inyecta 0.14 mA |
+| 18.2 kΩ — pot de 10 kΩ al tope | **5.984 V** | **pasa el riel**, inyecta **0.98 mA** |
+
+El máximo absoluto del ATmega328P son **±1.0 mA inyectados por pin**: al tope queda en 0.98. Sobrevive, pero eso no es margen, es suerte. *(Comprimirlo con 2.2 kΩ en paralelo sí arregla el rango —`Rb` de 8.20 a 10.00 kΩ— pero a media vuelta ya recorrió el 85 % del recorrido, así que todo el ajuste útil se aprieta en el primer cuarto de giro. Peor para calibrar, no mejor.)*
+
+**Por qué sí sirve de herramienta.** La resolución alcanza de sobra:
+
+| | Ω por grado | Giro para ajustar 1 % |
+| --- | --- | --- |
+| Pot de 10 kΩ, una vuelta (270°) | 37.0 | **2.5°** |
+| Trimmer de 2 kΩ, 25 vueltas | 0.22 | 414° |
+
+Lo que compra el multivuelta **no es precisión: es que no se mueva solo.** Para dejarlo en una tarjeta que va a vibrar, eso importa. Para encontrar un número en la mesa, no.
+
+**El método.** Girar el pot en A4, A5 y A6 hasta que el ADC cuadre con el multímetro → **desconectarlo y medirlo con el óhmetro** → soldar una resistencia fija de ese valor. **El pot nunca llega al PCB.** Es el método clásico y esquiva los tres problemas de arriba.
+
+**Y puede que el trimmer sobre.** A6 dice que el error residual se corrige por software, a la EEPROM. Entonces el trimmer no está para calibrar: está para que la señal **quepa en la ventana del ADC** a pesar de la variación entre unidades, porque el software corrige ganancia pero no recupera una señal recortada. **Eso es justo lo que mide A5.** Si la dispersión sale chica, una `Rb` fija más la calibración por software alcanza y el trimmer **desaparece de la lista de materiales**: nada que ajustar, nada que se mueva, nada que conseguir. Para la trinchera eso vale más que el trimmer — una pieza que no se consigue es un problema, y ninguna pieza es mejor que una pieza difícil.
 
 **Criterio de aceptación.**
 - Trimmer al tope: pin absoluto **≤ 4.60 V**.
@@ -244,6 +275,8 @@ Cuentas de pico a pico a **línea nominal** (127 V), de las 1024 del ADC. El ren
 **Objetivo.** Confirmar que ±10 % de ajuste alcanza para la dispersión real del transformador, y que el cursor no salta.
 
 **Procedimiento.** Girar el trimmer de tope a tope **despacio**, midiendo cada media vuelta. Anotar la lectura mínima, la máxima y si hubo algún salto.
+
+> **Esta parte necesita el trimmer de verdad.** Con el potenciómetro de una vuelta sustituto (ver A4) se puede hacer todo lo demás del protocolo, pero **no esto**: el ±8 % de recorrido es una propiedad del trimmer que va a quedar en la tarjeta, y un pot de 10 kΩ de una vuelta no responde esa pregunta. Si no consiguió el multivuelta, **salte al apartado de los dos transformadores** —que sí se puede hacer— y deje este criterio pendiente. Puede que A5 lo vuelva innecesario: ver el final de A4.
 
 **Criterio de aceptación.**
 - El recorrido cubre al menos **±8 %** alrededor del centro.
