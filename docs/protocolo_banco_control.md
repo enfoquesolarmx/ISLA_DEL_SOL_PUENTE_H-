@@ -234,17 +234,26 @@ Cuentas de pico a pico a **línea nominal** (127 V), de las 1024 del ADC. El ren
 
 ### Si no se consigue el trimmer multivuelta
 
-En noviembre de 2026, Steren —que es donde muchos van a comprar— **no tiene trimmer multivuelta de 2 kΩ**. Lo que tiene es un **potenciómetro de una vuelta de 10 kΩ sin switch** (SKU 101-10K, ~$9 MXN). Sirve, pero **como herramienta de banco, no como pieza de la tarjeta.**
+En noviembre de 2026, Steren —que es donde muchos van a comprar— **no tiene trimmer multivuelta de 2 kΩ**. Lo que tiene son **potenciómetros de una vuelta sin switch** de 5 kΩ y de 10 kΩ (el de 10 kΩ es el SKU 101-10K, ~$9 MXN). Sirven, pero **como herramienta de banco, no como pieza de la tarjeta** — y entre los dos, **el de 5 kΩ es el bueno.**
 
 **Por qué no va en la tarjeta.** En serie con los 8.2 kΩ fijos, ese pot da un `Rb` de 8.2 a 18.2 kΩ, y el extremo alto revienta el riel:
 
-| `Rb` | Pin absoluto | |
+| `Rb` | Pin absoluto | Corriente inyectada |
 | --- | --- | --- |
-| 10.2 kΩ — trimmer de 2 kΩ al tope, lo que pide DC-006 | 4.594 V | dentro |
-| 13.2 kΩ — pot de 10 kΩ a media vuelta | 5.139 V | **pasa el riel**, inyecta 0.14 mA |
-| 18.2 kΩ — pot de 10 kΩ al tope | **5.984 V** | **pasa el riel**, inyecta **0.98 mA** |
+| 10.2 kΩ — trimmer de 2 kΩ al tope, lo que pide DC-006 | 4.594 V | ninguna |
+| 13.2 kΩ — **pot de 5 kΩ al tope** | 5.139 V | **ninguna** |
+| 18.2 kΩ — pot de 10 kΩ al tope | 5.984 V | 30 µA |
 
-El máximo absoluto del ATmega328P son **±1.0 mA inyectados por pin**: al tope queda en 0.98. Sobrevive, pero eso no es margen, es suerte. *(Comprimirlo con 2.2 kΩ en paralelo sí arregla el rango —`Rb` de 8.20 a 10.00 kΩ— pero a media vuelta ya recorrió el 85 % del recorrido, así que todo el ajuste útil se aprieta en el primer cuarto de giro. Peor para calibrar, no mejor.)*
+> **Corregido el 20 de noviembre de 2026.** Esta tabla decía que el pot de 10 kΩ inyecta **0.98 mA**, al borde del máximo absoluto de ±1.0 mA del ATmega328P, y de ahí concluía que «sobrevive, pero eso no es margen, es suerte». **El número estaba 33 veces alto.** El error: se dividió la sobretensión sólo entre la resistencia de 1 kΩ en serie, ignorando los **15.4 kΩ de Thévenin del propio divisor**, que están en el mismo camino. La impedancia real vista desde el pin son 16.4 kΩ, así que la inyección son **30 µA**. Eléctricamente los tres casos son seguros; el diodo de protección ni siquiera conduce en los dos primeros, porque su umbral son ~5.5 V.
+
+**Entonces, ¿por qué preferir el de 5 kΩ?** No por seguridad: **por recorrido útil.** El ajuste sirve mientras `Rb` va de 8.2 kΩ a 10.23 kΩ, que es donde el pin toca el techo de 4.60 V. Eso son 2.03 kΩ de pista:
+
+| | Giro útil, de los 270° |
+| --- | --- |
+| **Pot de 5 kΩ** | **110°** |
+| Pot de 10 kΩ | 55° |
+
+Con el de 10 kΩ, todo el ajuste cabe en un sexto de vuelta y el resto de la pista no sirve. Con el de 5 kΩ hay el doble de recorrido para el mismo ajuste. **Si hay que escoger uno para el banco, es el de 5 kΩ.** *(Comprimirlo con 2.2 kΩ en paralelo sí arregla el rango —`Rb` de 8.20 a 10.00 kΩ— pero a media vuelta ya recorrió el 85 % del recorrido, así que todo el ajuste útil se aprieta en el primer cuarto de giro. Peor para calibrar, no mejor.)*
 
 **Por qué sí sirve de herramienta.** La resolución alcanza de sobra:
 
