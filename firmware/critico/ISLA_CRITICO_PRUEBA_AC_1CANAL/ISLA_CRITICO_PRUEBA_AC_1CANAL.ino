@@ -159,7 +159,12 @@ ISR(ADC_vect)
   if (n >= MUESTRAS_VENTANA && !hayVentana) {
     sSuma = suma; sSumaCuad = sumaCuad; sSumaAbs = sumaAbs; sN = n; sPico = pico;
     suma = 0; sumaCuad = 0; sumaAbs = 0; n = 0; pico = 0;
-    dPrevValida = false;
+    // dPrev NO se invalida: la onda es continua entre ventanas y sólo los
+    // acumuladores se reinician. Invalidarla ciega una muestra por ventana,
+    // veinte por reporte, y si un cruce cae ahí se pierde. Medido en banco:
+    // eso pasaba en el 15 % de los reportes, y un cruce perdido a media
+    // medición deja el divisor corto en uno y la frecuencia 1.4 % baja
+    // (59.17 en vez de 60.02).
     hayVentana = true;
   }
 }
