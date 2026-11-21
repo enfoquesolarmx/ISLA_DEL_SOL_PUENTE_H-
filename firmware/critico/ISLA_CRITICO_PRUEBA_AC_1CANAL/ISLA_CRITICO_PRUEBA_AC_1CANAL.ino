@@ -243,6 +243,7 @@ void loop()
   static uint32_t rmsAcum = 0, biasAcum = 0, absAcum = 0;
   static uint16_t picoRep = 0;
   static uint32_t segundos = 0;
+  static uint32_t msAnt = 0, muestrasAnt = 0;
 
   if (!hayVentana) return;
 
@@ -330,9 +331,31 @@ void loop()
     Serial.print(F(" | sin cruces (senal ausente?)"));
   }
 
-  uint32_t perd;
-  noInterrupts(); perd = perdidos; perdidos = 0; interrupts();
-  Serial.print(F(" | perdidos ")); Serial.println(perd);
+  // DIAGNOSTICO DE BASE DE TIEMPO. El contador de muestras avanza una por
+  // conversion ENTREGADA; si alguna se pierde sin que 'perdidos' la vea, el
+  // tiempo deducido de las muestras se queda corto y la frecuencia sale
+  // inflada. millis() corre del Timer0, que es independiente del ADC, asi
+  // que comparar los dos relojes separa "cruces de mas" de "base de tiempo
+  // mal": si las muestras por segundo no son 8008, el problema es el reloj.
+  uint32_t perd, muAhora;
+  noInterrupts(); perd = perdidos; perdidos = 0; muAhora = muestras; interrupts();
+  const uint32_t ms = millis();
+  Serial.print(F(" | perdidos ")); Serial.print(perd);
+  if (msAnt && ms > msAnt) {
+    const uint32_t dms = ms - msAnt;
+    const uint32_t dmu = muAhora - muestrasAnt;
+    const uint32_t tasa = (dmu * 1000UL) / dms;
+    Serial.print(F(" | ")); Serial.print(tasa);
+    Serial.print(F(" muestras/s (esperadas 8008)"));
+    // Frecuencia con el reloj bueno: cruces contra milisegundos reales.
+    if (nc >= 2) {
+      Serial.print(F(" | f(millis) "));
+      imprimeDec((int32_t)(((uint32_t)(nc - 1) * 1000000UL) / dms), 1000, 3);
+      Serial.print(F(" Hz"));
+    }
+  }
+  msAnt = ms; muestrasAnt = muAhora;
+  Serial.println();
 
   ventanas = 0; rmsAcum = 0; absAcum = 0; biasAcum = 0; picoRep = 0;
 }
