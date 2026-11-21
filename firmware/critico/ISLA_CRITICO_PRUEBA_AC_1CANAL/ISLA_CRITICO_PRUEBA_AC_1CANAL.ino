@@ -77,8 +77,13 @@
 //   ±0.04 %) y sólo 3 en el secundario (14.2 ±0.05 V, ±0.35 %). Calibrar con
 //   el cociente 119.9/14.2 arrastraría ese ±0.35 % al número de la red.
 //
-//   Banco 2026-11-20:  119.9 V / 14.26 VAC × 1000 = 8408
-#define RELACION_X1000         8408
+//   Banco 2026-11-20, calibrado contra FLUKE (valor eficaz verdadero):
+//     Fluke 119.7-119.8 -> 119.75 V ;  este sketch 14.2914 VAC (22 reportes)
+//     119.75 / 14.2914 × 1000 = 8379
+//
+//   El multímetro anterior decía 119.9 y daba 8408, que reportaba 120.16 V.
+//   Los dos instrumentos difieren 0.125 % entre ellos; se manda el Fluke.
+#define RELACION_X1000         8379
 //   Frecuencia nominal de la fuente. Sólo sirve para descartar lecturas
 //   absurdas; la frecuencia que se reporta sale de los cruces medidos.
 #define HZ_NOMINAL             60
@@ -355,16 +360,36 @@ void loop()
 
   // Factor de forma: un multímetro de VALOR MEDIO mide la media de |v| y la
   // multiplica por 1.1107, el factor de forma de una senoidal. Si la onda no
-  // es senoidal, se equivoca exactamente en 1.1107/FF − 1. Esto no estima la
-  // distorsión: mide el error del patrón contra el que se va a calibrar.
+  // es senoidal se equivoca en 1.1107/FF − 1.
+  //
+  // OJO, ESTE NÚMERO NO ES FINO. Al pasar de 3 a 4 periodos por disparo —
+  // misma onda, mismo transformador, mismo divisor, misma fuente — el FF se
+  // movió de 1.1096 a 1.1140 y el error deducido brincó de +0.10 % a −0.30 %.
+  // Un corrimiento de 0.40 % habiendo cambiado SÓLO la tasa de muestreo: es
+  // un sistemático del método, no una propiedad de la onda.
+  //
+  // Hipótesis (sin medir): a 6006 muestras/s y 60.06 Hz salen 100.00 muestras
+  // por ciclo EXACTAS. El muestreo quedó coherente con la onda y cada ciclo
+  // cae en los mismos 100 puntos de fase, lo que congela el sesgo de esa
+  // rejilla. A 8008/60.02 = 133.4 la rejilla se corría y promediaba.
+  //
+  // Así que el FF sirve para decir "la onda está dentro de ~0.4 % de la forma
+  // de una senoidal", y NO para certificar un patrón al 0.1 %. Esa afirmación
+  // se retiró el 2026-11-20 al ver el corrimiento.
+  //
+  // Lo que la coherencia sí regala: repetibilidad. Vsec σ = 0.011 V (0.077 %),
+  // FF σ = 0.0004, cresta σ = 0.0019 en 22 reportes. Para un lazo de control
+  // la varianza baja vale más que la exactitud absoluta, porque lo absoluto lo
+  // arregla RELACION_X1000 — pero obliga a medir esa constante a la MISMA tasa
+  // a la que va a correr el firmware.
   if (mab16 && rms16) {
     const uint32_t ff  = (rms16 * 10000UL) / mab16;
     const int32_t  err = (int32_t)((11107UL * 10000UL) / ff) - 10000;
     const uint32_t cf  = ((uint32_t)picoRep * 16000UL) / rms16;
     Serial.print(F(" | FF ")); imprimeDec(ff, 10000, 4);
-    Serial.print(F(" -> multimetro "));
+    Serial.print(F(" (sen 1.1107) -> patron "));
     if (err >= 0) Serial.print('+');
-    imprimeDec(err, 100, 2); Serial.print(F(" %"));
+    imprimeDec(err, 100, 2); Serial.print(F(" % +-0.4"));
     Serial.print(F(" | cresta ")); imprimeDec(cf, 1000, 3);
   }
 
