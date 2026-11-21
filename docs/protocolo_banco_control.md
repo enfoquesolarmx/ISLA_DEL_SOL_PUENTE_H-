@@ -222,10 +222,12 @@ Con los números **medidos** en A6 (razón del transformador 8.3986, divisor 10.
 | --- | --- | --- | --- |
 | 120 V (lo de hoy) | 14.29 V | 4.444 V | pasa |
 | 127 V (nominal) | 15.12 V | 4.558 V | pasa, apretado |
-| 130 V | 15.48 V | **4.606 V** | **ya se pasa** |
-| 140 V (red alta) | 16.67 V | **4.768 V** | **se pasa feo** |
+| 130 V | 15.48 V | **4.606 V** | **se pasa** (con cresta senoidal: 4.532 V, pasa) |
+| 140 V (red alta) | 16.67 V | **4.768 V** | **se pasa** (con cresta senoidal: 4.688 V, **también se pasa**) |
 
-**Con 100 kΩ la cadena recorta en red alta**, y ni siquiera hace falta llegar a 140: a 130 V ya está en el techo. La resistencia mínima para quedar dentro a 140 V sale de
+> **Cuál renglón es robusto y cuál no.** El de 140 V se pasa **con cualquiera de las dos crestas**, así que la conclusión no depende del supuesto. El de 130 V sólo se pasa con la cresta medida de 1.466, y esa cresta está inflada: `pico` guarda un *extremo* de 6000 muestras y el filtro antialias flojo deja entrar contenido impulsivo (ver el hallazgo 4 de A6). **La decisión se toma por el renglón de 140 V**, que es además el criterio que A3 ya tenía escrito.
+
+**Con 100 kΩ la cadena recorta en red alta.** La resistencia mínima para quedar dentro a 140 V sale de
 
 ```
   Rt ≥ Rb × ( Vsec_max × cresta / 2.10 − 1 )     con Rb = 10 231 Ω
