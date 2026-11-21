@@ -308,28 +308,17 @@ void loop()
     Serial.print(F(" | cresta ")); imprimeDec(cf, 1000, 3);
   }
 
-  // Frecuencia: span entre el primer y el último cruce del reporte. Con ~60
-  // cruces en un segundo, la resolución no la pone un ciclo sino todo el span.
+  // Frecuencia. El span entre el primer y el ultimo cruce se mide en
+  // MUESTRAS, y el tiempo real de una muestra NO es el supuesto: en banco se
+  // pierde el 17 % de las conversiones y el intervalo real resulto de 151 us
+  // en vez de 124.875. Por eso el intervalo se mide contra millis(), que
+  // corre del Timer0 y no depende del ADC. Asi la frecuencia sale bien
+  // aunque se pierdan muestras.
   uint32_t ini, fin; uint16_t nc;
   noInterrupts();
   ini = cruceIni; fin = cruceFin; nc = nCruces;
   cruceIni = 0; cruceFin = 0; nCruces = 0;
   interrupts();
-  if (nc >= 2 && fin > ini) {
-    const uint32_t perS256 = (fin - ini) / (nc - 1);           // en 1/256 de muestra
-    const uint32_t perNs   = (perS256 * ENTRE_MUESTRAS_NS) / 256UL;
-    const uint32_t nomNs   = 1000000000UL / HZ_NOMINAL;
-    if (perNs > (nomNs / 2) && perNs < (nomNs * 2)) {
-      Serial.print(F(" | f = "));
-      imprimeDec((int32_t)(1000000000000ULL / perNs), 1000, 3);
-      Serial.print(F(" Hz"));
-    } else {
-      Serial.print(F(" | f fuera de rango"));
-    }
-    Serial.print(F(" (")); Serial.print(nc); Serial.print(F(" cruces)"));
-  } else {
-    Serial.print(F(" | sin cruces (senal ausente?)"));
-  }
 
   // DIAGNOSTICO DE BASE DE TIEMPO. El contador de muestras avanza una por
   // conversion ENTREGADA; si alguna se pierde sin que 'perdidos' la vea, el
@@ -346,12 +335,17 @@ void loop()
     const uint32_t dmu = muAhora - muestrasAnt;
     const uint32_t tasa = (dmu * 1000UL) / dms;
     Serial.print(F(" | ")); Serial.print(tasa);
-    Serial.print(F(" muestras/s (esperadas 8008)"));
-    // Frecuencia con el reloj bueno: cruces contra milisegundos reales.
-    if (nc >= 2) {
-      Serial.print(F(" | f(millis) "));
-      imprimeDec((int32_t)(((uint32_t)(nc - 1) * 1000000UL) / dms), 1000, 3);
-      Serial.print(F(" Hz"));
+    Serial.print(F(" muestras/s de 8008"));
+    if (nc >= 2 && fin > ini && dmu) {
+      const uint32_t intervaloNs = (dms * 1000000UL) / dmu;   // ns por muestra, REAL
+      const uint32_t perS256 = (fin - ini) / (nc - 1);        // en 1/256 de muestra
+      const uint32_t perNs = (uint32_t)(((uint64_t)perS256 * intervaloNs) / 256ULL);
+      Serial.print(F(" ("));
+      imprimeDec(intervaloNs, 1000, 2); Serial.print(F(" us c/u) | f = "));
+      if (perNs) imprimeDec((int32_t)(1000000000000ULL / perNs), 1000, 3);
+      Serial.print(F(" Hz (")); Serial.print(nc); Serial.print(F(" cruces)"));
+    } else {
+      Serial.print(F(" | sin cruces (senal ausente?)"));
     }
   }
   msAnt = ms; muestrasAnt = muAhora;
