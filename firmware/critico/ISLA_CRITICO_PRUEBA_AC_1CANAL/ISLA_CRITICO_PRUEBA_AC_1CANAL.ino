@@ -77,16 +77,18 @@ constexpr uint32_t ENTRE_MUESTRAS_NS = PERIODO_PORT_NS * PERIODOS_POR_DISPARO;
 constexpr uint16_t MUESTRAS_VENTANA = 400;
 constexpr uint8_t  VENTANAS_POR_REPORTE = 20;          // ~1 s
 
-// Margen mínimo en cuentas para aceptar un cruce. Sin él, con la señal ausente
-// el ruido de una cuenta produce cruces falsos.
-constexpr int16_t  UMBRAL_CRUCE = 3;
-
 // ======================== ESTADO =============================================
 static volatile uint32_t suma, sumaCuad, sumaAbs;
 static volatile uint16_t n, pico;
 static volatile int16_t  dPrev;
 static volatile bool     dPrevValida;
 static volatile int16_t  mediaRef = 512;
+// Histéresis del detector de cruce: hay que subir por encima de umbralArmar
+// antes de aceptar el siguiente cruce. Se recalcula cada ventana a la mitad
+// del RMS, que queda muy por arriba de cualquier pico y muy por debajo del
+// pico de la onda.
+static volatile int16_t  umbralArmar = 60;
+static volatile bool     armado = true;
 
 // Instantáneas que el lazo principal consume
 static volatile uint32_t sSuma, sSumaCuad, sSumaAbs;
@@ -125,15 +127,31 @@ ISR(ADC_vect)
   sumaAbs += ad;
   if (ad > pico) pico = ad;
 
+  // HISTÉRESIS. Sin ella un pico cerca del cruce produce cruces de más: ahí
+  // la señal pasa de −18 a 0 a +18 cuentas por muestra, y veinte cuentas de
+  // pico bastan para cruzar dos veces. Medido en banco: 62 a 71 cruces por
+  // segundo donde debía haber 60, con el factor de cresta en 1.55.
+  // Después de un cruce no se acepta otro hasta que la señal suba
+  // claramente, y "claramente" se saca del RMS de la ventana anterior, así
+  // que el umbral se adapta solo al nivel de señal que haya.
+  if (!armado && d > umbralArmar) armado = true;
+
   // Cruce por cero ascendente, interpolado entre las dos muestras que lo
   // encierran. El tiempo queda en 1/256 de intervalo de muestreo.
-  if (dPrevValida && dPrev < -UMBRAL_CRUCE && d >= 0) {
+  // Sin umbral sobre dPrev: pedirle a la muestra anterior que estuviera por
+  // debajo de −3 PIERDE cruces buenos. Cerca del cruce la señal avanza ~18
+  // cuentas por muestra, así que una de cada tres cae dentro de esa banda y
+  // el cruce se descarta. Simulado con senoidal limpia: 52 cruces de 60.
+  // La histéresis ya cubre el caso sin señal: con el umbral de armado en 10
+  // cuentas como piso, el ruido dispara un cruce y nunca vuelve a armar.
+  if (armado && dPrevValida && dPrev < 0 && d >= 0) {
     const int16_t salto = d - dPrev;                       // > 0 por construcción
     const uint32_t frac = ((uint32_t)(-dPrev) * 256UL) / (uint32_t)salto;
     const uint32_t t = (muestras - 1UL) * 256UL + frac;
     if (nCruces == 0) cruceIni = t;
     cruceFin = t;
     nCruces++;
+    armado = false;
   }
   dPrev = d;
   dPrevValida = true;
@@ -250,8 +268,12 @@ void loop()
   biasAcum += media;
   if (vPico > picoRep) picoRep = vPico;
 
+  const uint16_t rmsV = raiz(var);
   noInterrupts();
   mediaRef = (int16_t)media;            // referencia para la ventana siguiente
+  // La mitad del RMS: con señal son ~135 cuentas, y el umbral se cae solo
+  // si la señal se cae. Nunca abajo de 10 para que el ruido no arme.
+  umbralArmar = (rmsV > 20) ? (int16_t)(rmsV / 2) : (int16_t)10;
   interrupts();
 
   if (++ventanas < VENTANAS_POR_REPORTE) return;
