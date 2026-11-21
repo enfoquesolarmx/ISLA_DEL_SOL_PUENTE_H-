@@ -401,18 +401,21 @@ Son cuatro lecturas y cierran una pregunta que si no se mide aquí nadie va a vo
 
 **Separarlas importa.** Antes `RELACION_X1000` estaba calibrada de punta a punta y absorbía el error del divisor, el del riel de 5 V y la razón del transformador, todo revuelto: la línea salía bien pero ninguna constante decía lo que su nombre promete. Con eso no se podía calcular el margen del pin contra el riel (A3), que necesita el divisor solo, y cambiar de transformador obligaba a recalibrar las dos. El efecto en el voltaje de la línea al separarlas fue de **−0.04 %**: no se trataba de exactitud, se trataba de que los números signifiquen algo.
 
-**Lo medido, 25 reportes de un segundo:**
+**Lo medido.** La corrida que cierra A6 es la de **31 reportes con `Rt` = 110 kΩ ya calibrada**:
 
 | | Valor | Nota |
 | --- | --- | --- |
-| Línea | **119.96 V** media | Fluke: 119.9 → **+0.05 %** |
-| Secundario | 14.29 VAC | |
-| Repetibilidad | **σ = 0.077 %** | 25 veces mejor que la exactitud del Fluke |
-| Frecuencia | 60.04 Hz, σ = 0.034 Hz | portal del inversor: 59.95–60.00 |
-| Factor de forma | 1.1140 | senoidal = 1.1107 |
-| Factor de cresta | 1.429 | √2 = 1.4142, o sea +1.05 % |
-| Disparos perdidos | **0** | con 4 periodos por disparo |
-| Muestras entregadas | 5992 de 6006 (99.76 %) | |
+| Línea | **120.005 V** media | Fluke: 120.1 → **−0.079 %** |
+| Secundario | **14.288 VAC** | Fluke: 14.3 → **−0.087 %** |
+| Repetibilidad | **σ = 0.069 %** (82.8 mV) | 28 veces mejor que la exactitud del Fluke |
+| Frecuencia | 60.038 Hz, σ = 0.032 Hz | portal del inversor: 59.95–60.00 |
+| Factor de forma | 1.1139, **σ = 0.0003** | senoidal = 1.1107 |
+| Factor de cresta | 1.4294, σ = 0.0049 | √2 = 1.4142, o sea +1.05 % |
+| Disparos perdidos | **0 en los 31** | el `1` del primer reporte es el arranque |
+| Cruces por reporte | **60** (61 en cuatro) | ni uno perdido |
+| Muestras entregadas | 5991 de 6006 (99.76 %) | |
+
+> **Pagar 8 % de señal no costó repetibilidad.** Al subir `Rt` de 100 a 110 kΩ las cuentas bajaron de 271 a 249.7, un 8 % menos de rango de ADC — y la σ relativa se quedó **idéntica, en 0.069 %**. Era la predicción: la dispersión no la limita la cuantización (que sola daría 8.7 mV contra los 82.8 observados), sino el batido del hallazgo 3. Se pagó margen contra el riel y no se perdió nada a cambio.
 
 **El patrón, y lo que no es.** El Fluke 324 **sí** es de valor eficaz verdadero, pero su exactitud en volts AC es **1.5 % ± 5 dígitos** en un rango único de 600.0 V, o sea **±2.30 V a 120 V (±1.92 %)**. Y «5 dígitos» son medio volt: **Fluke no garantiza el dígito de los décimos**. De ahí dos cosas: que no tiene sentido perseguir la cuarta cifra de las constantes, y que la **exactitud absoluta de esta cadena está limitada por el instrumento del usuario, no por el circuito**. La tarjeta es un instrumento más *preciso* que el Fluke (σ 0.077 % contra 1.92 %); nomás no más *exacto*, porque la exactitud necesita un patrón. **En producción, la calibración de voltaje tiene que ser una perilla del usuario.**
 
@@ -422,7 +425,21 @@ Son cuatro lecturas y cierran una pregunta que si no se mide aquí nadie va a vo
 
 **2. La frecuencia no se estabilizó por bajar la tasa, sino porque dejaron de perderse muestras.** Los cuatro reportes malos de antes (59.170, 59.173, 59.192, 59.226) son `60.0 × 72/73 = 59.178`: **un cruce perdido cada uno**. El detector necesita dos muestras consecutivas que abracen el cero; si la de junto al cruce se pierde, el cruce se pierde. La precisión del cruce **no depende de la tasa** — es una cuenta del ADC entre la pendiente, 6.85 µs a 166.5 µs y 6.86 µs a 124.875.
 
-**3. El bamboleo de ±0.08 V no es ruido: es un batido.** La autocorrelación da periodo 8 reportes (79 % de la varianza), y la aritmética lo predice: la ventana de 300 muestras son **3.00616 ciclos**, no 3.00000, así que el pedacito sobrante rota de fase. Separado: **73 mV de batido determinístico y 37.6 mV de ruido real (0.031 %)**. Se quita con ventana delimitada por cruces por cero.
+**3. El bamboleo de ±0.08 V no es ruido: es un batido, y su periodo son 4 reportes.** La ventana de 300 muestras son **3.00616 ciclos**, no 3.00000, así que el pedacito sobrante rota de fase. La aritmética:
+
+```
+  corrimiento por ventana          +0.00616 ciclo
+  por reporte (20 ventanas)        +0.1232  ciclo
+  la FASE se repite cada            8.12 reportes
+  pero el error del RMS va como cos(2 x fase), asi que se repite cada
+                                    4.06 reportes   <-- esto es lo observable
+```
+
+La autocorrelación de los 31 reportes da exactamente eso: `r(2) = −0.81`, `r(4) = +0.81`, `r(6) = −0.72`, `r(8) = +0.66` — un periodo 4 de libro, que explica el **86.4 %** de la varianza.
+
+> **Corregido.** La primera lectura de este hallazgo (20 de noviembre, con 25 reportes) dijo «periodo 8». El 8 también puntuaba alto porque es múltiplo de 4, pero el periodo verdadero es 4: **la fase de la ventana se repite cada 8.12 reportes, y el error del RMS va con el coseno del doble de esa fase.** La corrida de 31 reportes con 110 kΩ lo separó sin ambigüedad.
+
+Separado: **77 mV de batido determinístico y 30.6 mV de ruido real (0.025 % de la línea)**. Se quita con ventana delimitada por cruces por cero.
 
 **4. El filtro antialias está flojo.** El nodo tiene 9.26 kΩ de Thévenin y C7 son 10 nF → **fc = 1719 Hz**, con Nyquist en 3003: apenas **−6.1 dB** en Nyquist. Probablemente explica por qué el factor de forma se corrió 0.397 % al cambiar sólo la tasa de muestreo (el aliasing depende de la tasa), y por qué la cresta brincó 2.6 % sin que el FF la siguiera. **Pendiente de decidir**, y hay tensión: subir C7 a 33 nF da −15 dB en Nyquist pero se come el 29 % del 13º armónico y mete 6.6° de fase a 60 Hz, que le pega al comparador de cruce por cero. Un polo solo no puede hacer las dos cosas.
 
@@ -585,7 +602,7 @@ Se llena en el banco, con lápiz, y después se pasa aquí.
 | A3 resistencia elegida | 2026-11-21 | `Rt` = **110 kΩ**, montada y verificada (`DIVISOR_X100` = 1171) | ✅ | **decidido con números medidos, no estimados.** Con 100 kΩ el pin se pasa de 4.60 V a 140 V de red, con cresta senoidal. Montada como **100 k + 10 k en serie**; la `Rt` efectiva es 109.6 kΩ y el margen a 140 V queda en +67 mV |
 | A4 atenuador y recorte | | tope ___ V / mínimo ___ V | | **no corrida**: faltó barrer el trimmer de tope a tope |
 | A5 rango del trimmer | | ___ % | | **no corrida**: necesita el trimmer multivuelta y un segundo transformador |
-| A6 ADC vs multímetro | 2026-11-20/21 | error **+0.42 %** sin calibrar (criterio 1 %) | ✅ | línea 119.96 V vs Fluke 119.9 · σ = 0.077 % · `perdidos` 0 · **con `Rt` = 110 kΩ: `DIVISOR_X100` 1171, `RELACION_X1000` 8399**, las dos medidas y **separadas** · ver «Resultado de banco» en A6 |
+| A6 ADC vs multímetro | 2026-11-21 | **−0.08 %** calibrada con `Rt` = 110 kΩ (criterio 1 %) · +0.42 % sin calibrar |  ✅ | línea 120.005 V vs Fluke 120.1 · σ = 0.069 % · `perdidos` 0 y **ni un cruce perdido** en 31 reportes · `DIVISOR_X100` 1171, `RELACION_X1000` 8399, las dos medidas y **separadas** · ver «Resultado de banco» en A6 |
 | A7 simetría entre canales | | ___ µs (esperado 124.9) | | **no corrida**: necesita los DOS canales conectados. Un pin al aire lee el canal anterior, no cero |
 | A8 fs e instante | 2026-11-20 | **166.5 µs** nominal / **166.8 µs** medido | ⚠️ | con 3 periodos se perdía el **17.5 %**; con 4 periodos `perdidos` = 0 y la tasa es 99.76 %. Falta explicar el **0.24 %** restante → B5 |
 | B1 P9 con R reales | 2026-11-20 | 1023 / 705 / 511 / 417 cuentas (esperado 1023 / 704 / 512 / 417 con `R14` = 22 kΩ) | ✅ | los 4 estados clasifican correcto con la sustitución de 22 kΩ · **faltan los estados 5 y 6** (pin A7 al aire y a GND): el 5 decide la pregunta abierta de DC-011 |
