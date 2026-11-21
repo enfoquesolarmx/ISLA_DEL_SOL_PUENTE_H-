@@ -237,6 +237,21 @@ y da **104.6 kΩ** con cresta senoidal y **108.8 kΩ** con la cresta medida. **L
 
 Esto es exactamente lo que el viaje al banco existía para contestar, y se contestó **antes de imprimir el PCB**. Costo: 65 cuentas de ADC, un 6 % del rango.
 
+**Montado y verificado el mismo día.** No había una resistencia de 110 kΩ en el banco, así que se puso **100 kΩ + 10 kΩ en serie** — eléctricamente idéntico: mismo ruido térmico que una sola del valor total, 1.9 mW de disipación y décimas de picofaradio de parásita contra los 10 nF que ya tiene el nodo.
+
+| | Predicho | **Medido** (18 reportes) |
+| --- | --- | --- |
+| Pin del ADC | 1215 mV | **1220.7 mV** |
+| Cuentas RMS | 249 | **249.75** |
+| `DIVISOR_X100` | 1175 | **1171** |
+| `Rt` efectiva | 110.0 kΩ | **109.6 kΩ** (el 10 kΩ resultó 3.8 % bajo, dentro de ±5 %) |
+
+Verificado por los dos lados, y los dos coinciden: con 1171 el sketch reporta **14.294 V** de secundario (Fluke 14.3) y **120.06 V** de red (Fluke 120.1).
+
+Margen a 140 V con la `Rt` real: **+88 mV** con cresta senoidal, **+67 mV** con la cresta medida y **+14 mV** con la peor cresta observada en cuatro corridas. Pasa con las tres, aun con la resistencia 3.8 % baja.
+
+> **Y `RELACION_X1000` no se tocó**, porque el transformador es el mismo. Esa es la ganancia concreta de haber separado las dos constantes: con la constante revuelta habría que recalibrar ambas contra el Fluke cada vez que se cambia una resistencia del divisor.
+
 > **Lo que sigue abierto es el transitorio del propio inversor**, que es harina de otro costal: a 156 V el pin iría a 4.94 V aun con 110 kΩ. Eso depende del techo de amplitud por flujo de DC-021 — **ese techo se decide primero**, porque si se implementa, la salida máxima posible baja de 188 a ~138 V y el problema desaparece solo. El canal de la red no necesita ese margen, pero DC-006 exige canales idénticos.
 
 ---
@@ -567,10 +582,10 @@ Se llena en el banco, con lápiz, y después se pasa aquí.
 | --- | --- | --- | --- | --- |
 | A1 bias 2.5 V | | | | |
 | A2 secundario en vacío | 2026-11-20 | `Vsec` (extremo a extremo) = **14.3 V** a `Vlínea` = **120.1 V** → razón **8.3986**, `Vsec_max` (a 140 V) = **16.67 V** | ✅ | 3 hilos con tap central, identificados en tienda · medio devanado ≈ 6 V, **no se usa** (hereda dos tolerancias) · se usó el devanado completo |
-| A3 resistencia elegida | 2026-11-21 | `Rt` = **110 kΩ** (mínima calculada 108.8 kΩ con la cresta medida) | ✅ | **decidido con números medidos, no estimados.** Con 100 kΩ el pin se pasa de 4.60 V ya a 130 V de línea. Lo construido en banco trae 100 kΩ |
+| A3 resistencia elegida | 2026-11-21 | `Rt` = **110 kΩ**, montada y verificada (`DIVISOR_X100` = 1171) | ✅ | **decidido con números medidos, no estimados.** Con 100 kΩ el pin se pasa de 4.60 V a 140 V de red, con cresta senoidal. Montada como **100 k + 10 k en serie**; la `Rt` efectiva es 109.6 kΩ y el margen a 140 V queda en +67 mV |
 | A4 atenuador y recorte | | tope ___ V / mínimo ___ V | | **no corrida**: faltó barrer el trimmer de tope a tope |
 | A5 rango del trimmer | | ___ % | | **no corrida**: necesita el trimmer multivuelta y un segundo transformador |
-| A6 ADC vs multímetro | 2026-11-20/21 | error **+0.42 %** sin calibrar (criterio 1 %) | ✅ | línea 119.96 V vs Fluke 119.9 · σ = 0.077 % · `perdidos` 0 · `DIVISOR_X100` 1077, `RELACION_X1000` 8399, las dos medidas y **separadas** · ver «Resultado de banco» en A6 |
+| A6 ADC vs multímetro | 2026-11-20/21 | error **+0.42 %** sin calibrar (criterio 1 %) | ✅ | línea 119.96 V vs Fluke 119.9 · σ = 0.077 % · `perdidos` 0 · **con `Rt` = 110 kΩ: `DIVISOR_X100` 1171, `RELACION_X1000` 8399**, las dos medidas y **separadas** · ver «Resultado de banco» en A6 |
 | A7 simetría entre canales | | ___ µs (esperado 124.9) | | **no corrida**: necesita los DOS canales conectados. Un pin al aire lee el canal anterior, no cero |
 | A8 fs e instante | 2026-11-20 | **166.5 µs** nominal / **166.8 µs** medido | ⚠️ | con 3 periodos se perdía el **17.5 %**; con 4 periodos `perdidos` = 0 y la tasa es 99.76 %. Falta explicar el **0.24 %** restante → B5 |
 | B1 P9 con R reales | 2026-11-20 | 1023 / 705 / 511 / 417 cuentas (esperado 1023 / 704 / 512 / 417 con `R14` = 22 kΩ) | ✅ | los 4 estados clasifican correcto con la sustitución de 22 kΩ · **faltan los estados 5 y 6** (pin A7 al aire y a GND): el 5 decide la pregunta abierta de DC-011 |
