@@ -115,7 +115,21 @@ constexpr uint16_t MUESTRAS_POR_S = (uint16_t)(1000000000UL / ENTRE_MUESTRAS_NS)
 // Son los MISMOS 49.95 ms que con 3 periodos y 400 muestras, porque
 // 400/8008 = 300/6006. La ventana no se movió: sólo se aflojó el ADC.
 constexpr uint16_t MUESTRAS_VENTANA = 300;
-constexpr uint8_t  VENTANAS_POR_REPORTE = 20;          // ~1 s
+// 20 ventanas ≈ 1 s por reporte.
+//
+// MODO CAPTURA: ponerlo en 1 y cada ventana sale sola — 20 lecturas de RMS por
+// segundo, que es la resolución temporal que el instrumento DE VERDAD tiene. El
+// promedio de un segundo es una decisión de impresión, no un límite.
+//
+// Sirve para agarrar la forma de un escalón de carga (el compresor del
+// refrigerador arrancando, la cafetera, la aspiradora): profundidad, duración y
+// tiempo de recuperación. Con el promedio de un segundo, un hundimiento de
+// 200 ms se diluye a una quinta parte y se ve plano.
+//
+// En captura la frecuencia NO se imprime: con ~3 cruces por ventana no hay con
+// qué, y 'dms' de 50 ms hace que el milisegundo entero de millis() valga 2 %.
+constexpr uint8_t  VENTANAS_POR_REPORTE = 20;
+constexpr uint16_t CRUCES_MINIMOS = 20;                // para fiarse de la f
 
 // ======================== ESTADO =============================================
 static volatile uint32_t suma, sumaCuad, sumaAbs;
@@ -340,22 +354,51 @@ void loop()
   const uint32_t rms16 = rmsAcum / ventanas;
   const uint32_t mab16 = absAcum / ventanas;
   const uint32_t bias  = biasAcum / ventanas;
-  const uint32_t mv    = (rms16 * VCC_MV) / (1023UL * 16UL);
-  const uint32_t cv    = (mv * DIVISOR_X100) / 1000UL;
+  // ---------------------------------------------------------------------------
+  // VOLTAJE: de rms16 a la línea en UNA sola expresión.
+  //
+  // La cadena anterior truncaba tres veces — cuentas → mV entero → cV entero →
+  // línea entera — y cada truncada tiraba resolución. Peor: cv = mv × 1.08
+  // avanza 1.08 por paso, así que la división entera SE SALTA un cv cada doce
+  // pasos. Con RELACION 8379 el cv 1430 quedaba inalcanzable y 119.8 V NO SE
+  // PODÍA DESPLEGAR: la lectura tenía que brincar 119.7 ↔ 119.9 aunque la línea
+  // estuviera perfectamente quieta en 119.8. Se vio en banco el 2026-11-20 con
+  // el Fluke marcando 119.8 fijo.
+  //
+  // El paso visible quedaba en ~200 mV, SIETE VECES más grueso que los 27.6 mV
+  // que el promedio de 6000 muestras realmente resuelve.
+  //
+  //   sec[mV]   = rms16/16 × VCC_MV/1023 × DIVISOR_X100/100
+  //             = rms16 × VCC_MV × DIVISOR_X100 / (16 × 1023 × 100)
+  //   linea[cV] = sec[mV] × RELACION_X1000/1000 / 10
+  //
+  // El numerador pasa de 32 bits (~1.9e14), así que va en 64. Corre una vez por
+  // reporte, no en la ISR: el costo no importa.
+  constexpr uint64_t DEN_SEC = 16ULL * 1023ULL * 100ULL;       // -> mV del secundario
+  constexpr uint64_t DEN_RED = DEN_SEC * 1000ULL * 10ULL;      // -> cV de la línea
+  const uint64_t numSec = (uint64_t)rms16 * VCC_MV * DIVISOR_X100;
+  const uint32_t sec = (uint32_t)((numSec + DEN_SEC / 2) / DEN_SEC);
+  const uint32_t red = (uint32_t)((numSec * RELACION_X1000 + DEN_RED / 2) / DEN_RED);
+  const uint32_t mv  = (uint32_t)((rms16 * VCC_MV + 8184UL) / (1023UL * 16UL));
 
-  Serial.print(F("t=")); Serial.print(segundos);
-  Serial.print(F("s  bias ")); Serial.print(bias);
-  Serial.print(F("  rms ")); imprimeDec(rms16, 16, 2);
+  // Y el RMS en cuentas. imprimeDec supone que la escala es potencia de diez;
+  // con escala 16 imprimía el RESTO módulo diez, no un decimal: "270.5" quería
+  // decir 270 + 5/16 = 270.31. Se escala a centésimas antes de imprimir.
+  const uint32_t rmsCent = (rms16 * 100UL + 8UL) / 16UL;
+
+  // Con 20 ventanas el contador son segundos; en modo captura son reportes, y
+  // etiquetarlos "s" mentiría. El compilador resuelve la comparación en frío.
+  if (VENTANAS_POR_REPORTE == 20) { Serial.print(F("t=")); Serial.print(segundos);
+                                    Serial.print(F("s")); }
+  else                            { Serial.print(F("#")); Serial.print(segundos); }
+  Serial.print(F("  bias ")); Serial.print(bias);
+  Serial.print(F("  rms ")); imprimeDec(rmsCent, 100, 2);
   Serial.print(F(" cnt = ")); Serial.print(mv);
-  Serial.print(F(" mV = ")); imprimeDec(cv, 100, 2);
-  Serial.print(F(" VAC"));
-
-  // El voltaje de la RED. cv está en centivolts del secundario; la relación
-  // viene × 1000, así que el resultado queda otra vez en centivolts, ahora del
-  // primario. Se imprime con UN decimal: la calibración no da para más —
-  // los 119.9 del multímetro traen ±0.05 V de cuantización de pantalla.
-  const uint32_t red = (cv * RELACION_X1000 + 500UL) / 1000UL;
-  Serial.print(F("  ->  RED ")); imprimeDec(red, 100, 1);
+  // Tres decimales en el secundario y dos en la línea: es la resolución que de
+  // verdad hay (3.3 mV y 27.6 mV). Son dígitos de RESOLUCIÓN, no de exactitud
+  // — la exactitud absoluta la limita el patrón, ±1.9 % con el Fluke 324.
+  Serial.print(F(" mV = ")); imprimeDec(sec, 1000, 3);
+  Serial.print(F(" VAC  ->  RED ")); imprimeDec(red, 100, 2);
   Serial.print(F(" V"));
 
   // Factor de forma: un multímetro de VALOR MEDIO mide la media de |v| y la
@@ -424,7 +467,7 @@ void loop()
     const uint32_t tasa = (dmu * 1000UL) / dms;
     Serial.print(F(" | ")); Serial.print(tasa);
     Serial.print(F(" muestras/s de ")); Serial.print(MUESTRAS_POR_S);
-    if (nc >= 2 && fin > ini && dmu) {
+    if (nc >= CRUCES_MINIMOS && fin > ini && dmu) {
       const uint32_t intervaloNs = (dms * 1000000UL) / dmu;   // ns por muestra, REAL
       const uint32_t perS256 = (fin - ini) / (nc - 1);        // en 1/256 de muestra
       const uint32_t perNs = (uint32_t)(((uint64_t)perS256 * intervaloNs) / 256ULL);
@@ -432,8 +475,13 @@ void loop()
       imprimeDec(intervaloNs, 1000, 2); Serial.print(F(" us c/u) | f = "));
       if (perNs) imprimeDec((int32_t)(1000000000000ULL / perNs), 1000, 3);
       Serial.print(F(" Hz (")); Serial.print(nc); Serial.print(F(" cruces)"));
-    } else {
+    } else if (nc == 0) {
       Serial.print(F(" | sin cruces (senal ausente?)"));
+    } else {
+      // Pocos cruces: en modo captura es lo normal, no es falla.
+      Serial.print(F(" | f omitida (")); Serial.print(nc);
+      Serial.print(F(" cruces, se piden ")); Serial.print(CRUCES_MINIMOS);
+      Serial.print(F(")"));
     }
   }
   msAnt = ms; muestrasAnt = muAhora;
