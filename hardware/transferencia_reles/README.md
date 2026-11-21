@@ -121,6 +121,27 @@ INV y CARG al mismo tiempo **no existe**: Q1 lo impide (sección 4).
 
 Todas las órdenes entran por **1 kΩ en serie** (R10, R11, R13) para proteger los pines del microcontrolador si el cable se pela contra 15 V.
 
+### ⚠️ Q2 hace dos trabajos, no uno — no lo quite
+
+Desde **DC-023** (21 de noviembre de 2026), `TN_CMD` sale del **D13** del CRÍTICO, no del D6. D6 se liberó para `AIN0`, la entrada del comparador analógico, que está cableada en silicio y no se puede mover.
+
+**Y D13 es el pin del LED del Nano, que el bootloader parpadea en cada arranque y en cada reset.** Sin protección, eso serían pulsos al relé K5 de unión N–PE en cada reinicio.
+
+**Q2 es lo que lo vuelve inofensivo:**
+
+```
+  reset -> todos los pines del CRITICO en alta impedancia
+        -> INV_CMD sin manejar  ->  base de Q2 sin excitar
+        -> el bootloader parpadea D13 (TN_CMD)
+        -> colector con senal, base sin ella  ->  TN_OK se queda BAJO
+```
+
+El orden lo garantiza: **el bootloader corre antes que la aplicación**, así que `INV_CMD` todavía no existe cuando D13 parpadea. Lo mismo vale para la programación por ICSP, donde D13 es **SCK** y conmuta a la frecuencia del programador.
+
+> Q2 ya no es sólo el candado contra la doble unión N–PE: **también es lo que hace seguro poner `TN_CMD` en D13.** Quitarlo por «redundante» reintroduce el problema sin que se note.
+
+**De pilón:** el LED de la tarjeta del CRÍTICO queda como **indicador de la unión N–PE**. Para una señal de seguridad eso es bueno — de un vistazo se ve si el puente está comandado.
+
 ### 4.1 Unión N–PE: automática según el modo que elige el instalador
 
 **La unión N–PE se hace sola.** El instalador (trinchero) solo elige **una vez**, en el menú del SETUP, cómo trabaja el inversor. Desde ahí, el microcontrolador de la tarjeta de control manda o no la orden TN cada vez que pasa a inversor:
