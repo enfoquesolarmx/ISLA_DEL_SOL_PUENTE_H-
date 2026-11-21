@@ -130,6 +130,11 @@ constexpr uint32_t ENTRE_MUESTRAS_NS = ENTRE_DISPAROS_NS * 2UL;
 constexpr uint16_t HZ_NOMINAL = 60;
 constexpr uint32_t PERIODO_LINEA_NS = 1000000000UL / HZ_NOMINAL;
 
+// Margen mínimo, en cuentas, para aceptar un cruce por cero. Protege contra
+// cruces falsos cuando no hay señal; con señal la pendiente es de decenas de
+// cuentas por muestra, así que no quita cruces buenos.
+constexpr int16_t UMBRAL_CRUCE = 3;
+
 constexpr uint16_t MUESTRAS_VENTANA = 200;
 constexpr uint8_t  VENTANAS_POR_REPORTE = 20;      // ~1 s (20 × 50 ms)
 
@@ -231,7 +236,12 @@ ISR(ADC_vect)
   a.sumaAbs += ad;
   if (ad > a.pico) a.pico = ad;
 
-  if (a.dPrevValida && !a.cruceListo && a.dPrev < 0 && d >= 0) {
+  // El cruce exige que la muestra anterior venga de ABAJO POR UN MARGEN. Con
+  // sólo dPrev<0 y d>=0, una señal ausente da cruces falsos: mediaRef se
+  // actualiza desde loop() a media ventana, así que una muestra constante
+  // puede pasar de −1 a 0 y registrarse como cruce. Con señal real, la
+  // pendiente es de decenas de cuentas por muestra y este umbral no estorba.
+  if (a.dPrevValida && !a.cruceListo && a.dPrev < -UMBRAL_CRUCE && d >= 0) {
     const int16_t salto = d - a.dPrev;                 // > 0 por construcción
     a.fracCruce  = (uint8_t)(((int32_t)(-a.dPrev) * 256) / salto);
     a.perCruce   = perDisparo - PERIODOS_POR_DISPARO * 2;   // disparo anterior
@@ -479,7 +489,10 @@ void loop()
     const uint32_t bias = biasAcum[k] / ventanas;
     // cuentas -> mV en el pin -> VAC del secundario (centivolts)
     const uint32_t mv  = (rms16 * VCC_MV) / (1023UL * 16UL);
-    const uint32_t cv  = (mv * DIVISOR_X100) / 10000UL;
+    // mV en el pin -> centivolts del secundario.
+    //   V_sec[mV] = mv × DIVISOR_X100/100   y   1 cv = 10 mV
+    //   => cv = mv × DIVISOR_X100 / 1000
+    const uint32_t cv  = (mv * DIVISOR_X100) / 1000UL;
     Serial.print(NOMBRE[k]);
     Serial.print(F(": bias ")); Serial.print(bias);
     Serial.print(F("  rms ")); imprimeDec(rms16, 16, 2);
@@ -534,6 +547,7 @@ void loop()
   Serial.println();
 
   ventanas = 0; cruces = 0; rechazados = 0; sumaSesgoNs = 0;
+  noInterrupts(); perdidos = 0; interrupts();   // la tasa se lee por reporte
   rmsAcum[0] = rmsAcum[1] = 0;
   biasAcum[0] = biasAcum[1] = 0;
   absAcum[0] = absAcum[1] = 0;
