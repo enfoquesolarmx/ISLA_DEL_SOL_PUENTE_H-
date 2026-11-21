@@ -214,6 +214,29 @@ Cuentas de pico a pico a **línea nominal** (127 V), de las 1024 del ADC. El ren
 
 **Por qué igual no es catastrófico si sale alto.** En THT una resistencia se cambia desoldando. Lo que sí sería caro es descubrirlo con la tarjeta ya poblada y el firmware persiguiendo un RMS equivocado.
 
+### ✅ Decidido en banco — 21 de noviembre de 2026: **110 kΩ**
+
+Con los números **medidos** en A6 (razón del transformador 8.3986, divisor 10.774, bias 2.50 V) y el factor de cresta medido de 1.466:
+
+| Línea | Secundario | Pico en el pin | Contra el techo de 4.60 V |
+| --- | --- | --- | --- |
+| 120 V (lo de hoy) | 14.29 V | 4.444 V | pasa |
+| 127 V (nominal) | 15.12 V | 4.558 V | pasa, apretado |
+| 130 V | 15.48 V | **4.606 V** | **ya se pasa** |
+| 140 V (red alta) | 16.67 V | **4.768 V** | **se pasa feo** |
+
+**Con 100 kΩ la cadena recorta en red alta**, y ni siquiera hace falta llegar a 140: a 130 V ya está en el techo. La resistencia mínima para quedar dentro a 140 V sale de
+
+```
+  Rt ≥ Rb × ( Vsec_max × cresta / 2.10 − 1 )     con Rb = 10 231 Ω
+```
+
+y da **104.6 kΩ** con cresta senoidal y **108.8 kΩ** con la cresta medida. **Las dos apuntan al mismo valor comercial: 110 kΩ.** El resultado es robusto a la duda sobre la cresta, que es lo que lo hace decidible.
+
+Esto es exactamente lo que el viaje al banco existía para contestar, y se contestó **antes de imprimir el PCB**. Costo: 65 cuentas de ADC, un 6 % del rango.
+
+> **Lo que sigue abierto es el transitorio del propio inversor**, que es harina de otro costal: a 156 V el pin iría a 4.94 V aun con 110 kΩ. Eso depende del techo de amplitud por flujo de DC-021 — **ese techo se decide primero**, porque si se implementa, la salida máxima posible baja de 188 a ~138 V y el problema desaparece solo. El canal de la red no necesita ese margen, pero DC-006 exige canales idénticos.
+
 ---
 
 ## A4. Atenuador completo y prueba de recorte
@@ -316,7 +339,9 @@ Son cuatro lecturas y cierran una pregunta que si no se mide aquí nadie va a vo
 
 ## A6. ADC contra multímetro — calibración
 
-**Firmware:** ✅ ya existe — [`ISLA_CRITICO_PRUEBA_ADC_AC`](../firmware/critico/ISLA_CRITICO_PRUEBA_ADC_AC/ISLA_CRITICO_PRUEBA_ADC_AC.ino). Antes de cargar, llenar las perillas `VCC_MV` (el riel de 5 V medido) y `DIVISOR_X100` (la relación del divisor elegido en A3).
+**Firmware:** ✅ ya existe — [`ISLA_CRITICO_PRUEBA_AC_1CANAL`](../firmware/critico/ISLA_CRITICO_PRUEBA_AC_1CANAL/ISLA_CRITICO_PRUEBA_AC_1CANAL.ino), **un solo canal**. Antes de cargar, llenar las perillas `VCC_MV` (el riel de 5 V medido), `DIVISOR_X100` (la relación del divisor) y `RELACION_X1000` (la razón del transformador).
+
+> **No usar el sketch de dos canales para A6.** Un pin de ADC al aire **no lee cero: lee el canal anterior**, porque el capacitor de muestreo y retención guarda la carga de la conversión pasada. En banco el canal conectado daba 14.26 VAC y el canal al aire daba 14.12 — el 99 %, un número perfectamente creíble que no mide nada. Con un solo canal esa trampa no existe por construcción.
 
 **Objetivo.** Que el número que reporta el ATmega coincida con el multímetro.
 
@@ -329,6 +354,68 @@ Son cuatro lecturas y cierran una pregunta que si no se mide aquí nadie va a vo
 **Criterio de aceptación.** Coinciden dentro de **1 %** después de ajustar.
 
 > ⚠️ **Un multímetro de valor medio** (no *true RMS*) está calibrado para senoidal. Para la **red** vale. Para la **salida del inversor** no: ahí la onda es SPWM filtrada y un multímetro de valor medio miente. Esa calibración se hace aparte, cuando haya potencia.
+
+### ✅ Resultado de banco — 20 y 21 de noviembre de 2026
+
+**PASA.** Error sin calibrar **+0.42 %** contra el criterio de 1 %.
+
+**Montaje tal como se armó** (el del esquemático, con una sustitución):
+
+| | Diseño | En el banco |
+| --- | --- | --- |
+| `R27` (rama de arriba) | 100 kΩ | 100 kΩ |
+| `R9` (rama de abajo, fija) | 8.2 kΩ | 8.2 kΩ |
+| `RV2` (ajuste) | trimmer 2 kΩ multivuelta | **potenciómetro de una vuelta de 5 kΩ** (Steren), medido en **2.03 kΩ** |
+| `C7` | 10 nF al nodo | 10 nF al nodo |
+| Bias `R29`/`R30` | 10 k / 10 k | 10 k / 10 k |
+| `C2` / `C3` | 10 µF / 100 nF | 10 µF / 100 nF |
+| Resistencia de 1 kΩ al pin | **la pide el montaje de A4, no está en el esquemático** | no se puso |
+| Fuente | — | red de casa, por un inversor offgrid de onda pura |
+| Canal | — | **A6**, un solo canal |
+
+**Constantes, y cómo salieron.** Las dos se midieron con el Fluke 324 en **los dos lados** del transformador, lo que cancela su error de ganancia porque es un cociente del mismo instrumento:
+
+```
+  razón del transformador = 120.1 V / 14.3 V       = 8.3986   -> RELACION_X1000 8399
+  secundario con la línea en 119.9                 = 14.276 V
+  divisor = 14 276 mV / 1325 mV (pin del ADC)      = 10.774   -> DIVISOR_X100    1077
+  Rb = 100k / (10.774 - 1)                         = 10 231 Ω = 8.2k + 2.03k
+```
+
+**Separarlas importa.** Antes `RELACION_X1000` estaba calibrada de punta a punta y absorbía el error del divisor, el del riel de 5 V y la razón del transformador, todo revuelto: la línea salía bien pero ninguna constante decía lo que su nombre promete. Con eso no se podía calcular el margen del pin contra el riel (A3), que necesita el divisor solo, y cambiar de transformador obligaba a recalibrar las dos. El efecto en el voltaje de la línea al separarlas fue de **−0.04 %**: no se trataba de exactitud, se trataba de que los números signifiquen algo.
+
+**Lo medido, 25 reportes de un segundo:**
+
+| | Valor | Nota |
+| --- | --- | --- |
+| Línea | **119.96 V** media | Fluke: 119.9 → **+0.05 %** |
+| Secundario | 14.29 VAC | |
+| Repetibilidad | **σ = 0.077 %** | 25 veces mejor que la exactitud del Fluke |
+| Frecuencia | 60.04 Hz, σ = 0.034 Hz | portal del inversor: 59.95–60.00 |
+| Factor de forma | 1.1140 | senoidal = 1.1107 |
+| Factor de cresta | 1.429 | √2 = 1.4142, o sea +1.05 % |
+| Disparos perdidos | **0** | con 4 periodos por disparo |
+| Muestras entregadas | 5992 de 6006 (99.76 %) | |
+
+**El patrón, y lo que no es.** El Fluke 324 **sí** es de valor eficaz verdadero, pero su exactitud en volts AC es **1.5 % ± 5 dígitos** en un rango único de 600.0 V, o sea **±2.30 V a 120 V (±1.92 %)**. Y «5 dígitos» son medio volt: **Fluke no garantiza el dígito de los décimos**. De ahí dos cosas: que no tiene sentido perseguir la cuarta cifra de las constantes, y que la **exactitud absoluta de esta cadena está limitada por el instrumento del usuario, no por el circuito**. La tarjeta es un instrumento más *preciso* que el Fluke (σ 0.077 % contra 1.92 %); nomás no más *exacto*, porque la exactitud necesita un patrón. **En producción, la calibración de voltaje tiene que ser una perilla del usuario.**
+
+### Lo que esta corrida encontró de paso
+
+**1. El 17.5 % de las conversiones se perdía, y era el presupuesto del ADC.** Con 3 periodos por disparo el presupuesto entre muestras son 124.875 µs y la conversión a 125 kHz se come 104: el ADC al **83 %**, y los 20.9 µs que sobran tienen que absorber tres ISR del Timer1 más la del ADC. No cabía — y eso **sin SPWM**, que en el firmware real vive dentro de esa misma ISR. Con **4 periodos** el ADC baja al 62 %, `perdidos` cae a cero y la tasa sube a 99.76 %. La ventana no se movió: 300 muestras a 6006/s son los mismos 49.95 ms que 400 a 8008/s.
+
+**2. La frecuencia no se estabilizó por bajar la tasa, sino porque dejaron de perderse muestras.** Los cuatro reportes malos de antes (59.170, 59.173, 59.192, 59.226) son `60.0 × 72/73 = 59.178`: **un cruce perdido cada uno**. El detector necesita dos muestras consecutivas que abracen el cero; si la de junto al cruce se pierde, el cruce se pierde. La precisión del cruce **no depende de la tasa** — es una cuenta del ADC entre la pendiente, 6.85 µs a 166.5 µs y 6.86 µs a 124.875.
+
+**3. El bamboleo de ±0.08 V no es ruido: es un batido.** La autocorrelación da periodo 8 reportes (79 % de la varianza), y la aritmética lo predice: la ventana de 300 muestras son **3.00616 ciclos**, no 3.00000, así que el pedacito sobrante rota de fase. Separado: **73 mV de batido determinístico y 37.6 mV de ruido real (0.031 %)**. Se quita con ventana delimitada por cruces por cero.
+
+**4. El filtro antialias está flojo.** El nodo tiene 9.26 kΩ de Thévenin y C7 son 10 nF → **fc = 1719 Hz**, con Nyquist en 3003: apenas **−6.1 dB** en Nyquist. Probablemente explica por qué el factor de forma se corrió 0.397 % al cambiar sólo la tasa de muestreo (el aliasing depende de la tasa), y por qué la cresta brincó 2.6 % sin que el FF la siguiera. **Pendiente de decidir**, y hay tensión: subir C7 a 33 nF da −15 dB en Nyquist pero se come el 29 % del 13º armónico y mete 6.6° de fase a 60 Hz, que le pega al comparador de cruce por cero. Un polo solo no puede hacer las dos cosas.
+
+**5. Tres defectos del instrumento, encontrados y corregidos.** (a) El voltaje se convertía en tres truncadas encadenadas y `cv = mv × 1.08` se saltaba un valor cada doce pasos: con `RELACION` 8379 el cv 1430 era inalcanzable y **119.8 V no se podía desplegar** — la lectura brincaba 119.7 ↔ 119.9 con la línea quieta. Se tiraban 7× de resolución. Ahora es una sola expresión y el paso es de 30 mV. (b) `imprimeDec` supone escala potencia de diez; con escala 16 imprimía el resto módulo diez, así que «270.5 cuentas» quería decir 270.31. (c) La frecuencia suponía el intervalo nominal entre muestras y con la pérdida real salía inflada a 72.77 Hz.
+
+### Lo que queda abierto de A6
+
+- **El 0.24 % de muestras que no cuadra** (5992 de 6006). Puede ser unas pocas ISR que llegan tarde, o el mecanismo de `hayVentana` —que es una bandera, no una cola— soltando una ventana durante el `Serial.print`. Es 74 veces más chico que lo que traíamos; se mide en B5.
+- **La frecuencia absoluta.** El sketch da 60.041 Hz y el portal del inversor 59.95–60.00: **+0.11 %**. No se puede decir quién tiene razón — el sketch mide con el cristal del Nano y el inversor *genera* con el suyo. Dos relojes sin juez. El jitter que queda (σ 0.034 Hz) es **la resolución de un milisegundo de `millis()`**, no la línea: la correlación entre la frecuencia reportada y la tasa de muestreo es **+0.996**. Se arregla usando el intervalo nominal, pero **no antes** de entender el 0.24 %, porque entonces ese 0.24 % se vuelve un sesgo de +0.14 Hz.
+- **La resistencia de 1 kΩ al pin** está en el montaje de A4 y no en el esquemático. Eléctricamente casi da igual (el Thévenin del divisor domina: la inyección en sobretensión pasa de 30 a 33 µA), pero el documento y la tarjeta tienen que decir lo mismo.
 
 ---
 
@@ -477,14 +564,14 @@ Se llena en el banco, con lápiz, y después se pasa aquí.
 | Corrida | Fecha | Valor medido | ¿Pasa? | Notas |
 | --- | --- | --- | --- | --- |
 | A1 bias 2.5 V | | | | |
-| A2 secundario en vacío | | `Vsec` (extremo a extremo) = ___ a `Vlínea` = ___ → `Vsec_max` = ___ | — | marca del transformador: ___ · hilos identificados: sí / no · medio devanado: ___ V |
-| A3 resistencia elegida | | `Rt` = ___ | — | |
-| A4 atenuador y recorte | | tope ___ V / mínimo ___ V | | |
-| A5 rango del trimmer | | ___ % | | dispersión completo: ___ % · dispersión medio devanado: ___ % |
-| A6 ADC vs multímetro | | error ___ % | | |
-| A7 simetría entre canales | | ___ µs (esperado 124.9) | | invertido: ___ µs |
-| A8 fs e instante | | ___ µs / ___ µs | | disparos perdidos: |
-| B1 P9 con R reales | | | | protección de A7 al aire: |
+| A2 secundario en vacío | 2026-11-20 | `Vsec` (extremo a extremo) = **14.3 V** a `Vlínea` = **120.1 V** → razón **8.3986**, `Vsec_max` (a 140 V) = **16.67 V** | ✅ | 3 hilos con tap central, identificados en tienda · medio devanado ≈ 6 V, **no se usa** (hereda dos tolerancias) · se usó el devanado completo |
+| A3 resistencia elegida | 2026-11-21 | `Rt` = **110 kΩ** (mínima calculada 108.8 kΩ con la cresta medida) | ✅ | **decidido con números medidos, no estimados.** Con 100 kΩ el pin se pasa de 4.60 V ya a 130 V de línea. Lo construido en banco trae 100 kΩ |
+| A4 atenuador y recorte | | tope ___ V / mínimo ___ V | | **no corrida**: faltó barrer el trimmer de tope a tope |
+| A5 rango del trimmer | | ___ % | | **no corrida**: necesita el trimmer multivuelta y un segundo transformador |
+| A6 ADC vs multímetro | 2026-11-20/21 | error **+0.42 %** sin calibrar (criterio 1 %) | ✅ | línea 119.96 V vs Fluke 119.9 · σ = 0.077 % · `perdidos` 0 · `DIVISOR_X100` 1077, `RELACION_X1000` 8399, las dos medidas y **separadas** · ver «Resultado de banco» en A6 |
+| A7 simetría entre canales | | ___ µs (esperado 124.9) | | **no corrida**: necesita los DOS canales conectados. Un pin al aire lee el canal anterior, no cero |
+| A8 fs e instante | 2026-11-20 | **166.5 µs** nominal / **166.8 µs** medido | ⚠️ | con 3 periodos se perdía el **17.5 %**; con 4 periodos `perdidos` = 0 y la tasa es 99.76 %. Falta explicar el **0.24 %** restante → B5 |
+| B1 P9 con R reales | 2026-11-20 | 1023 / 705 / 511 / 417 cuentas (esperado 1023 / 704 / 512 / 417 con `R14` = 22 kΩ) | ✅ | los 4 estados clasifican correcto con la sustitución de 22 kΩ · **faltan los estados 5 y 6** (pin A7 al aire y a GND): el 5 decide la pregunta abierta de DC-011 |
 | B2 batería en A3 | | error ___ V | | corte del BMS: ___ V |
 | B3 protocolo v2 | | ___ errores / 1000 tramas | | |
 | B4 LCD y botonera | | | | |
