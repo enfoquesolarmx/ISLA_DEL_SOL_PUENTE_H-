@@ -63,7 +63,21 @@
 //   Relación del divisor AC × 100, es decir (Rt + Rb) / Rb × 100.
 //     Rt = 100 k y Rb = 10.2 k  ->  110.2/10.2 = 10.80  ->  1080
 //     Rt = 110 k y Rb = 10.2 k  ->  120.2/10.2 = 11.78  ->  1178
-#define DIVISOR_X100           1080
+//
+//   MEDIDO el 2026-11-21, no nominal. Con el Fluke en los DOS lados del
+//   transformador la razón sale sin el error de ganancia del instrumento
+//   (es un cociente del mismo aparato), y de ahí se despeja el divisor:
+//
+//     razón del transformador = 120.1 / 14.3        = 8.3986
+//     secundario con la línea en 119.9              = 14.276 V
+//     divisor = 14 276 mV / 1325 mV (pin del ADC)   = 10.774  -> 1077
+//     Rb = 100k / (10.774 - 1)                      = 10 231 ohm
+//          = 8.2k fijos + 2 031 de RV2 (41 % de un pot de 5 k)
+//
+//   Esto cerró la duda de los 2.9 kΩ que midió el Fluke en RV2: no era RV2
+//   en circuito. La otra hipótesis (Rb = 11.1 k, divisor 1001) queda 7.1 %
+//   fuera de lo medido, y la incertidumbre de la medición es 0.35 %.
+#define DIVISOR_X100           1077
 //   Relación del transformador × 1000, para reportar el voltaje de la RED.
 //
 //   NO es la relación de placa ni el cociente de dos lecturas del multímetro:
@@ -77,13 +91,31 @@
 //   ±0.04 %) y sólo 3 en el secundario (14.2 ±0.05 V, ±0.35 %). Calibrar con
 //   el cociente 119.9/14.2 arrastraría ese ±0.35 % al número de la red.
 //
-//   Banco 2026-11-20, calibrado contra FLUKE (valor eficaz verdadero):
-//     Fluke 119.7-119.8 -> 119.75 V ;  este sketch 14.2914 VAC (22 reportes)
-//     119.75 / 14.2914 × 1000 = 8379
+//   AHORA ES LA RAZÓN DE VUELTAS DE VERDAD, no una calibración de punta a
+//   punta. El 2026-11-21 se midió con el Fluke en LOS DOS LADOS:
 //
-//   El multímetro anterior decía 119.9 y daba 8408, que reportaba 120.16 V.
-//   Los dos instrumentos difieren 0.125 % entre ellos; se manda el Fluke.
-#define RELACION_X1000         8379
+//     120.1 V en el primario / 14.3 V en el secundario = 8.3986  -> 8399
+//
+//   Es un cociente del mismo instrumento, así que su error de ganancia se
+//   cancela. Eso es lo que permitió separar esta constante de DIVISOR_X100.
+//
+//   POR QUÉ IMPORTA LA SEPARACIÓN. Hasta el 2026-11-20 esta constante valía
+//   8379 y estaba calibrada de punta a punta contra el Fluke: absorbía el
+//   error del divisor, el del riel de 5 V y la razón del transformador, todo
+//   revuelto. La línea salía bien, pero ninguna de las dos constantes decía
+//   lo que su nombre promete. Con eso:
+//     · no se podía calcular el margen del pin contra el riel (criterio A3),
+//       porque eso necesita el divisor solo;
+//     · cambiar de transformador obligaba a recalibrar las dos.
+//   Separadas, cada una se mide y se corrige por su cuenta.
+//
+//   El efecto en el voltaje de la línea es de -0.04 %: no se trata de
+//   exactitud, se trata de que los números signifiquen algo.
+//
+//   Ojo con el dígito fino: el Fluke despliega 14.3 ±0.05 V en el secundario,
+//   que son ±0.35 %, o sea ±29 cuentas de esta constante. No vale la pena
+//   perseguir la cuarta cifra.
+#define RELACION_X1000         8399
 //   Frecuencia nominal de la fuente. Sólo sirve para descartar lecturas
 //   absurdas; la frecuencia que se reporta sale de los cruces medidos.
 #define HZ_NOMINAL             60
