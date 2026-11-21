@@ -13,6 +13,31 @@
  *      A8  Pin de traza que sube al disparar la conversión y baja al
  *          terminarla, para que el analizador mida fs y la duración.
  *
+ *    Y una segunda línea de reporte que contesta algo que A6 da por hecho:
+ *    CUÁL DE LOS DOS INSTRUMENTOS ES EL PATRÓN.
+ *
+ *      A6 dice "girar el trimmer hasta que el ADC coincida con el
+ *      multímetro", suponiendo que el multímetro tiene la razón. Eso vale
+ *      con la red pública. NO vale cuando la fuente es un inversor, que es
+ *      lo que hay en muchas casas de la trinchera: un multímetro de VALOR
+ *      MEDIO (no true RMS) mide la media de |v| y la multiplica por 1.1107,
+ *      que es el factor de forma de una senoidal. Si la onda no es
+ *      senoidal, ese 1.1107 ya no corresponde.
+ *
+ *      El sketch mide el factor de forma REAL de la onda, FF = RMS/media|v|,
+ *      y de ahí sale el error del multímetro EXACTO, sin estimar nada:
+ *
+ *              error = 1.1107 / FF − 1
+ *
+ *      No es una medición de distorsión: es la medición del error del
+ *      patrón. Si sale por debajo de ±0.5 %, el multímetro sirve para
+ *      calibrar en A6. Si sale arriba de ±1 %, no sirve, y la calibración
+ *      tiene que pasar por la relación del divisor medida con el óhmetro.
+ *
+ *      Se reportan también el factor de cresta (1.414 en una senoidal; más
+ *      bajo delata una onda con la punta achatada) y la FRECUENCIA medida
+ *      sobre los cruces del canal 0.
+ *
  *    NO corre el SPWM. Configura el Timer1 en modo 8 con el mismo TOP, para
  *    que la base de tiempo sea idéntica, pero deja los pines del puente como
  *    GPIO: en el banco no hay 48 V y no hace falta mover compuertas.
@@ -99,6 +124,12 @@ constexpr uint32_t ENTRE_MUESTRAS_NS = ENTRE_DISPAROS_NS * 2UL;
 //   1 ciclo = 400 periodos de portadora; cada canal se muestrea cada 6
 //   periodos; 1200 / 6 = 200. Al caer en número entero de ciclos, el RMS no
 //   tiene rizo de ventana.
+// Frecuencia nominal de la fuente, sólo para contar cuántos ciclos de línea
+// caben entre dos cruces consecutivos. No se usa para medir: la frecuencia
+// medida sale de los cruces y puede diferir de ésta.
+constexpr uint16_t HZ_NOMINAL = 60;
+constexpr uint32_t PERIODO_LINEA_NS = 1000000000UL / HZ_NOMINAL;
+
 constexpr uint16_t MUESTRAS_VENTANA = 200;
 constexpr uint8_t  VENTANAS_POR_REPORTE = 20;      // ~1 s (20 × 50 ms)
 
@@ -129,6 +160,8 @@ static const char* const NOMBRE[2] = { "A0 inversor", "A6 red     " };
 struct Acumulador {
   uint32_t suma;          // Σx     (para la media = el bias)
   uint32_t sumaCuad;      // Σx²    (para el RMS por varianza, en una pasada)
+  uint32_t sumaAbs;       // Σ|x−bias|  (para el FACTOR DE FORMA, ver abajo)
+  uint16_t pico;          // máx |x−bias|  (para el factor de cresta)
   uint16_t n;
   int16_t  dPrev;         // muestra anterior menos el bias de referencia
   uint32_t perCruce;      // cuenta de portadora del disparo previo al cruce
@@ -191,6 +224,13 @@ ISR(ADC_vect)
   // Cruce por cero ascendente, interpolando entre las dos muestras que lo
   // encierran. El bias de referencia es la media de la ventana anterior.
   const int16_t d = (int16_t)x - mediaRef[c];
+
+  // Factor de forma y de cresta. Cuestan una resta, una suma y una comparación,
+  // y con ellos se contesta si el multímetro sirve de patrón (ver cabecera).
+  const uint16_t ad = (d < 0) ? (uint16_t)(-d) : (uint16_t)d;
+  a.sumaAbs += ad;
+  if (ad > a.pico) a.pico = ad;
+
   if (a.dPrevValida && !a.cruceListo && a.dPrev < 0 && d >= 0) {
     const int16_t salto = d - a.dPrev;                 // > 0 por construcción
     a.fracCruce  = (uint8_t)(((int32_t)(-a.dPrev) * 256) / salto);
@@ -205,6 +245,7 @@ ISR(ADC_vect)
     for (uint8_t k = 0; k < 2; k++) {
       *(Acumulador *)&snap[k] = *(Acumulador *)&acc[k];
       acc[k].suma = 0; acc[k].sumaCuad = 0; acc[k].n = 0;
+      acc[k].sumaAbs = 0; acc[k].pico = 0;
       acc[k].cruceListo = false; acc[k].dPrevValida = false;
     }
     hayVentana = true;
@@ -329,7 +370,15 @@ void loop()
   static uint16_t rechazados = 0;
   static uint32_t rmsAcum[2] = { 0, 0 };
   static uint32_t biasAcum[2] = { 0, 0 };
+  static uint32_t absAcum[2] = { 0, 0 };
+  static uint16_t picoMax[2] = { 0, 0 };
   static uint32_t segundos = 0;
+  // Frecuencia: se mide sobre el canal 0, entre cruces de ventanas seguidas.
+  static uint32_t perCruceAnt = 0;
+  static uint8_t  fracCruceAnt = 0;
+  static bool     antValida = false;
+  static uint32_t sumaDeltaNs = 0;
+  static uint32_t sumaCiclos = 0;
 
   if (!hayVentana) return;
 
@@ -350,8 +399,13 @@ void loop()
     const uint32_t cuadMedia = (uint32_t)(((uint64_t)v[k].suma * v[k].suma) / n);
     const uint32_t var = (v[k].sumaCuad > cuadMedia)
                        ? (v[k].sumaCuad - cuadMedia) / n : 0;
-    rmsAcum[k]  += raiz(var);
+    // RMS y media|x| se acumulan en DIECISEISAVOS de cuenta. Redondear a
+    // cuenta entera cada ventana le metía ±0.4 % al factor de forma, que es
+    // del tamaño de la decisión que el factor de forma tiene que resolver.
+    rmsAcum[k]  += raiz(var << 8);                    // = rms × 16
     biasAcum[k] += media;
+    absAcum[k]  += (v[k].sumaAbs * 16UL + n / 2) / n; // = media|x−bias| × 16
+    if (v[k].pico > picoMax[k]) picoMax[k] = v[k].pico;
     // Escritura de 16 bits: no es atómica en AVR y la ISR la lee.
     noInterrupts();
     mediaRef[k] = (int16_t)media;         // referencia para la ventana siguiente
@@ -385,6 +439,35 @@ void loop()
     }
   }
 
+  // --- Frecuencia de la fuente, sobre el canal 0 ---------------------------
+  // Entre dos ventanas seguidas pasa un número entero de ciclos de línea (tres,
+  // con esta ventana a 60 Hz). Se cuenta ese entero y se divide: así la
+  // resolución no la pone un solo ciclo sino todo el intervalo del reporte.
+  if (v[0].cruceListo) {
+    if (antValida) {
+      const int32_t dPer  = (int32_t)v[0].perCruce - (int32_t)perCruceAnt;
+      const int32_t dFrac = (int32_t)v[0].fracCruce - (int32_t)fracCruceAnt;
+      const int32_t dNs = dPer * (int32_t)PERIODO_PORT_NS
+                        + (dFrac * (int32_t)ENTRE_MUESTRAS_NS) / 256;
+      if (dNs > 0) {
+        const uint32_t ciclos = ((uint32_t)dNs + PERIODO_LINEA_NS / 2) / PERIODO_LINEA_NS;
+        if (ciclos > 0) {
+          const uint32_t perMedido = (uint32_t)dNs / ciclos;
+          // Sólo se acepta si cae dentro del ±10 % de lo nominal: si no, el
+          // conteo de ciclos enteros está mal y el dato no sirve.
+          if (perMedido > (PERIODO_LINEA_NS * 9) / 10 &&
+              perMedido < (PERIODO_LINEA_NS * 11) / 10) {
+            sumaDeltaNs += (uint32_t)dNs;
+            sumaCiclos  += ciclos;
+          }
+        }
+      }
+    }
+    perCruceAnt  = v[0].perCruce;
+    fracCruceAnt = v[0].fracCruce;
+    antValida    = true;
+  }
+
   if (++ventanas < VENTANAS_POR_REPORTE) return;
   segundos++;
 
@@ -392,14 +475,14 @@ void loop()
   Serial.print(F("t=")); Serial.print(segundos); Serial.print(F("s  "));
 
   for (uint8_t k = 0; k < 2; k++) {
-    const uint32_t rms  = rmsAcum[k] / ventanas;
+    const uint32_t rms16 = rmsAcum[k] / ventanas;     // rms × 16
     const uint32_t bias = biasAcum[k] / ventanas;
     // cuentas -> mV en el pin -> VAC del secundario (centivolts)
-    const uint32_t mv  = (rms * VCC_MV) / 1023UL;
+    const uint32_t mv  = (rms16 * VCC_MV) / (1023UL * 16UL);
     const uint32_t cv  = (mv * DIVISOR_X100) / 10000UL;
     Serial.print(NOMBRE[k]);
     Serial.print(F(": bias ")); Serial.print(bias);
-    Serial.print(F("  rms ")); Serial.print(rms);
+    Serial.print(F("  rms ")); imprimeDec(rms16, 16, 2);
     Serial.print(F(" cnt = ")); Serial.print(mv);
     Serial.print(F(" mV = ")); imprimeDec(cv, 100, 2);
     Serial.print(F(" VAC | "));
@@ -419,7 +502,41 @@ void loop()
 
   Serial.print(F("perdidos ")); Serial.println(perdidos);
 
+  // --- Segunda línea: forma de onda y frecuencia ---------------------------
+  // El FACTOR DE FORMA es RMS / media|x|. Un multímetro de VALOR MEDIO (no
+  // true RMS) mide la media y la multiplica por 1.1107, que es el factor de
+  // forma de una senoidal. Si la onda no es senoidal, ese 1.1107 ya no
+  // corresponde y el multímetro se equivoca EXACTAMENTE en 1.1107/FF − 1.
+  // Por eso esta línea no estima la distorsión: mide el error del patrón.
+  Serial.print(F("        "));
+  for (uint8_t k = 0; k < 2; k++) {
+    const uint32_t rms16 = rmsAcum[k] / ventanas;          // rms × 16
+    const uint32_t mab16 = absAcum[k] / ventanas;          // media|x| × 16
+    Serial.print(NOMBRE[k]); Serial.print(F(": "));
+    if (mab16 == 0 || rms16 == 0) { Serial.print(F("sin senal | ")); continue; }
+    const uint32_t ff = (rms16 * 10000UL) / mab16;         // x10000; el ×16 se cancela
+    const int32_t  err = (int32_t)((11107UL * 10000UL) / ff) - 10000;
+    const uint32_t cf = ((uint32_t)picoMax[k] * 16000UL) / rms16;
+    Serial.print(F("FF ")); imprimeDec(ff, 10000, 4);
+    Serial.print(F(" (sen 1.1107) -> error del multimetro "));
+    if (err >= 0) Serial.print('+');
+    imprimeDec(err, 100, 2); Serial.print(F(" %"));
+    Serial.print(F(", cresta ")); imprimeDec(cf, 1000, 3);
+    Serial.print(F(" (sen 1.414) | "));
+  }
+  if (sumaCiclos) {
+    const uint32_t perNs = sumaDeltaNs / sumaCiclos;
+    const uint32_t mHz = (uint32_t)(1000000000000ULL / perNs);
+    Serial.print(F("f = ")); imprimeDec(mHz, 1000, 3); Serial.print(F(" Hz"));
+  } else {
+    Serial.print(F("f: sin dato"));
+  }
+  Serial.println();
+
   ventanas = 0; cruces = 0; rechazados = 0; sumaSesgoNs = 0;
   rmsAcum[0] = rmsAcum[1] = 0;
   biasAcum[0] = biasAcum[1] = 0;
+  absAcum[0] = absAcum[1] = 0;
+  picoMax[0] = picoMax[1] = 0;
+  sumaDeltaNs = 0; sumaCiclos = 0;
 }
