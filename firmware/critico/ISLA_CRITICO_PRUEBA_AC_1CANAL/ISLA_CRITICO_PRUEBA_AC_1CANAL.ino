@@ -77,7 +77,23 @@
 //   Esto cerró la duda de los 2.9 kΩ que midió el Fluke en RV2: no era RV2
 //   en circuito. La otra hipótesis (Rb = 11.1 k, divisor 1001) queda 7.1 %
 //   fuera de lo medido, y la incertidumbre de la medición es 0.35 %.
-#define DIVISOR_X100           1077
+//
+//   ---------------------------------------------------------------------
+//   ACTUALIZADO el 2026-11-21: Rt subió a 110 kΩ (100 k + 10 k en serie).
+//
+//   A3 lo pidió: con 100 kΩ el pico del pin llega a 4.69 V a 140 V de red —
+//   con cresta senoidal, no sólo con la medida — y el techo son 4.60 V.
+//
+//     divisor = 14.3 V / 1220.7 mV (pin, media de 18 reportes) = 11.714
+//     Rt = 10 231 × (11.714 − 1) = 109 619 Ω
+//          -> el 10 k que se agregó vale 9 619 Ω, un 3.8 % bajo (dentro de ±5 %)
+//
+//   Comprobado por los dos lados: con 1171 el sketch reporta 14.29 V de
+//   secundario (Fluke 14.3) y 120.06 V de red (Fluke 120.1).
+//
+//   Y RELACION_X1000 NO se tocó: el transformador es el mismo. Esa es la
+//   ganancia de haberlas separado — antes habría que recalibrar las dos.
+#define DIVISOR_X100           1171
 //   Relación del transformador × 1000, para reportar el voltaje de la RED.
 //
 //   NO es la relación de placa ni el cociente de dos lecturas del multímetro:
