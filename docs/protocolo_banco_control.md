@@ -552,7 +552,9 @@ Los cuatro casos de la sección 7.2 de [`identificacion_dt_pin9.md`](identificac
 
 ## B5. Duración de la ISR del SPWM — sale gratis
 
-**Firmware:** ⚠️ falta una línea (levantar D7 al entrar a la ISR, bajarlo al salir). D7 está libre y reservado para esto por DC-017.
+**Firmware:** ⚠️ falta una línea (levantar un pin al entrar a la ISR, bajarlo al salir).
+
+> ⚠️ **Corregido por DC-023.** Esta prueba decía originalmente «D7, que está libre y reservado para esto por DC-017». **Ya no lo está:** D7 es ahora `AIN1`, la entrada negativa del comparador, y D6 es `AIN0`. El pin de traza sale de otro lado — ver [Parte C](#parte-c--todo-corriendo-al-mismo-tiempo-cabe-en-tiempo-y-está-equilibrado), que absorbe esta prueba como su etapa 1.
 
 **Criterio.** El ancho del pulso cabe en el periodo de portadora de 41.6 µs **con espacio de sobra para el ADC y para el Timer0 de `millis()`**. Si no cabe, hay que optimizar la multiplicación de 32 bits antes de meterle el ADC.
 
@@ -565,6 +567,202 @@ Esta es la medición más barata del viaje: un pin, una línea de firmware y el 
 Confirmar con el analizador lo que GTKWave ya mostró: el primer ciclo arranca sin complementario (amplitud 0), y el pulso solitario de la pierna A aparece donde el modelo lo predice.
 
 **Criterio.** Coincide con la traza de `firmware/critico/img/primer_ciclo_amplitud_cero.png`. Si coincide, el modelo de registros de la PC queda validado contra fierro por segunda vez.
+
+---
+
+# Parte C — Todo corriendo al mismo tiempo: ¿cabe en tiempo y está equilibrado?
+
+Las partes A y B miden cada cosa por separado. La Parte C hace la única pregunta que no se puede contestar por partes:
+
+> **Con el SPWM generando, el ADC muestreando tres canales, el I2C hablando con el AUX y el comparador marcando los cruces de la red — ¿alcanza el tiempo, y le toca a cada quien lo que le toca?**
+
+Todo lo que hemos escrito del presupuesto del ADC descansa en **un número que seguimos estimando y nunca medimos**: cuánto dura de verdad la ISR del SPWM. De ese número dependen el margen de [DC-024](decisiones_criticas.md#dc-024-análisis-armónico-selectivo-goertzel-fuera-de-la-v1-y-qué-haría-falta-para-la-v2), el reparto de [DC-025](decisiones_criticas.md#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben) y el presupuesto de [DC-017](decisiones_criticas.md#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809).
+
+Esta parte absorbe la prueba **B5**.
+
+## C0. La condición de seguridad: J15 desconectado
+
+En el CRÍTICO **no sobra un solo pin**: los veinte están asignados, D0–D13 y A0–A7. El pin de traza tiene que salir de algún lado, y sale de las tres órdenes a la tarjeta de transferencia:
+
+| Pin | Puerto | Red | Qué manda normalmente |
+| --- | --- | --- | --- |
+| **D4** | PD4 | `INV_D4` | INV_CMD — la casa pasa al inversor (K4 + K2) |
+| **D5** | PD5 | `CARG_CMD` | CARG_CMD — el cargador (K1 + K3) |
+| **D13** | PB5 | `TN_CMD` | TN_CMD — la unión N–PE (K5) |
+
+Desconectando **J15**, los tres quedan libres y no mandan nada a ningún relé. Son puertos directos, así que `PORTD |= (1<<PD4)` son **2 ciclos, 125 ns**: la sonda no distorsiona lo que mide.
+
+> ⚠️ **J15 desconectado durante toda la Parte C.** Con la tarjeta de transferencia puesta, alternar `CARG_CMD` a 24 kHz sería castañetear K1 y K3 cuarenta y ocho mil veces por segundo. No es un detalle de procedimiento: es **la** condición de la prueba. Antes de energizar, verificar a ojo que J15 está fuera.
+
+Consecuencia que hay que tener presente: **con J15 fuera no hay transferencia**, así que la salida del inversor no llega a la casa en ninguna etapa de la Parte C. Es lo correcto para banco.
+
+## C1. El presupuesto que hay que probar
+
+A 16 MHz, con el Timer1 en modo 8 y TOP = ICR1 = 333:
+
+```
+periodo de portadora   41.625 µs   =  666 ciclos
+conversión del ADC    104 µs       (reloj /128 = 125 kHz, 13 ciclos de ADC)
+disparo del ADC       cada 4 periodos = 166.5 µs  → 62.4 % ocupado, 62.5 µs libres
+ISR del comparador    cada 8.33 ms  = cada 200 periodos
+```
+
+**El AVR no anida interrupciones.** La que está corriendo bloquea a las demás. Entonces el caso peor no es el promedio de ocupación — es la **colisión**: que en un mismo periodo de portadora caigan encima la ISR de Timer1, la del ADC, la de TWI y la del Timer0 de `millis()`.
+
+El criterio duro sale de ahí:
+
+```
+T(Timer1) + T(ADC) + T(TWI) + T(Timer0)  <  41.625 µs
+```
+
+Si la suma se pasa, **se pierde una actualización de OCR** y el SPWM salta un paso de la tabla. El criterio de diseño va más apretado, para dejar margen a lo que todavía no existe:
+
+| | Umbral | Por qué |
+| --- | --- | --- |
+| **Pase** | suma ≤ **29 µs** (70 % del periodo) | queda 30 % para crecer |
+| **Aviso** | 29–37 µs (70–90 %) | cabe hoy, no cabe mañana: congelar funciones nuevas |
+| **Falla** | > 37 µs | optimizar antes de seguir |
+
+## C2. Las dos piernas fallan distinto — y por eso se miden distinto
+
+Esto es lo que vuelve útil a la Parte C, y es fácil pasarlo por alto:
+
+**Pierna A (HA/LA, D9/D10) — la genera el hardware.** `OCR1A` y `OCR1B` están de doble búfer y se actualizan en BOTTOM. Una ISR que entra **tarde pero termina** antes del siguiente BOTTOM produce pulsos **perfectos**: el jitter de entrada no se ve en el pin. Lo que sí se ve es la ISR que **no termina**: ahí se pierde la actualización y el ancho del periodo anterior **se repite**.
+
+> **Firma de falla de la pierna A: dos anchos consecutivos iguales donde la tabla senoidal dice que deben diferir.** No es un glitch, no es un pulso deforme — es un ancho repetido. Si se busca «pulsos raros» no se encuentra nada y se da por buena una prueba que falló.
+
+**Pierna B (HB/LB, D11/D3) — la escribe el software dentro de la ISR.** Esos pines cargan el jitter de entrada **uno a uno**. Y el error cae justo en el cruce por cero, que es donde nace la asimetría entre semiciclos.
+
+Eso no es cosmético. En el estudio de A6 quedó medido que el RMS de medio ciclo es exacto a **0.0000 %** para cualquier onda con sólo armónicos impares — y que se rompe con armónicos pares (−1.65 %) y con CD (+6.15 %). **La asimetría de la pierna B es exactamente lo que produce armónicos pares y CD.** O sea: el jitter de esta pierna degrada la onda *y además* envenena el instrumento que la mide.
+
+| Pierna | Qué la daña | Qué se mide | Criterio |
+| --- | --- | --- | --- |
+| **A** (24 kHz) | ISR que no termina | secuencia de anchos contra la tabla | **cero anchos repetidos** en 10 s |
+| **B** (60 Hz) | jitter de entrada a la ISR | duración de semiciclos consecutivos | diferencia ≤ **20 µs** (0.24 %) |
+
+El criterio de la pierna B tiene comprobación cruzada gratis: el propio firmware puede comparar el RMS de semiciclos consecutivos. Si el cobre dice 20 µs y el RMS dice asimetría, coinciden dos medidas independientes.
+
+## C3. Las ocho puntas
+
+```
+CH1   D9    HA      pierna A, lado alto   24 kHz
+CH2   D10   LA      pierna A, lado bajo   24 kHz   ← el par que nunca debe traslaparse
+CH3   D11   HB      pierna B, lado alto   60 Hz
+CH4   D3    LB      pierna B, lado bajo   60 Hz
+CH5   D4    traza de la ISR de Timer1
+CH6   D5    traza de la ISR del ADC
+CH7   D13   traza de la ISR de TWI (etapa 3) / del comparador (etapas 4–5)
+CH8   A5    SCL     ← ancla temporal: dónde cae el I2C respecto a todo lo demás
+```
+
+El **CH7 se reasigna por etapa** a propósito: no hay un cuarto pin, y las dos ISR que interesan no se miden en la misma etapa. El **CH8** es el que amarra todo — cuando aparezca una anomalía, de un vistazo se ve si había tráfico I2C encima.
+
+Probar en el **pin del microcontrolador**, no después de R39/R25: el resistor y el LED del Nano redondean los flancos sin agregar información.
+
+## C4. Los tres parches de firmware
+
+**1. Las trazas.** Macros, no funciones, para que no quede una llamada:
+
+```c
+#define TRZ_T1_ALTO    (PORTD |=  (1 << PD4))
+#define TRZ_T1_BAJO    (PORTD &= ~(1 << PD4))
+#define TRZ_ADC_ALTO   (PORTD |=  (1 << PD5))
+#define TRZ_ADC_BAJO   (PORTD &= ~(1 << PD5))
+#define TRZ_AUX_ALTO   (PORTB |=  (1 << PB5))   // TWI o comparador, según la etapa
+#define TRZ_AUX_BAJO   (PORTB &= ~(1 << PB5))
+```
+
+Primera línea y última línea de cada ISR. **Los 125 ns de la propia traza se restan al final**; se miden una vez con una ISR vacía.
+
+**2. El contador de cruces rechazados — sin esto la etapa 5 no prueba nada.** El sketch del comparador trae el candado:
+
+```c
+if (t - ultimoCruce < CANDADO_DESB) return;      // 280 desbordes = 11.65 ms
+```
+
+Ese candado **se traga los cruces espurios en silencio**. Si la conmutación del puente se acopla a la pista de 44 mm que corre junto a `AC_FB_GRID_A6`, el comparador dispara de más, el candado lo tapa, y el reporte sale limpio — con nosotros creyendo que no hay acoplamiento. El parche es una palabra:
+
+```c
+if (t - ultimoCruce < CANDADO_DESB) { rechazados++; return; }
+```
+
+y `rechazados` al reporte. **En etapas 1–4 debe ser 0. Lo que aparezca en la etapa 5 es acoplamiento, medido.**
+
+**3. Contadores por canal, para «equilibrado».** [DC-025](decisiones_criticas.md#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben) reparte `A0, A6, A0, A3` → 50.1 / 25.0 / 25.0 muestras por ciclo. Un contador por canal en el reporte convierte eso de intención en medición.
+
+## C5. Las cinco etapas
+
+Prenderlo todo de golpe y ver jitter no sirve: no se sabe quién lo causó. **Cada etapa suma un contribuyente, y la resta entre dos etapas es el costo de ese contribuyente.**
+
+| Etapa | Qué corre | Qué contesta | CH7 |
+| --- | --- | --- | --- |
+| **C1** | SPWM solo | **B5**: la ISR limpia, sin nadie estorbando | — |
+| **C2** | + ADC (3 canales) | cuánto cuesta el ADC, y si el reparto se cumple | ADC |
+| **C3** | + I2C con el AUX | cuánto cuesta TWI — **la incógnita grande** | TWI |
+| **C4** | + red y comparador | si la medición coincide con el Fluke | comparador |
+| **C5** | + etapa de potencia conmutando | acoplamiento al canal de red | comparador |
+
+### C5.1 Etapa 1 — el SPWM solo
+
+Sin ADC, sin I2C, sin comparador. Es **B5** en estado puro.
+
+**Criterio.** El ancho de CH5 es el valor de referencia de todo lo demás. Anotarlo con tres cifras. Si ya aquí pasa de 29 µs, no tiene caso seguir: hay que optimizar primero la multiplicación de 32 bits.
+
+### C5.2 Etapa 2 — entra el ADC
+
+**Criterio.** (a) Ancho de CH6 ≤ **15 µs**. (b) Suma CH5 + CH6 ≤ 29 µs cuando se traslapan. (c) **Cero anchos repetidos** en la pierna A durante 10 s. (d) Los contadores por canal dan 50/25/25 ± 1 % — eso es «equilibrado».
+
+### C5.3 Etapa 3 — entra el I2C
+
+El CRÍTICO es **esclavo** ([DC-010](decisiones_criticas.md#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms), línea 842: «el CRÍTICO nunca espera al bus»). Eso evita que *espere*, pero **la ISR de TWI sigue corriendo en el CRÍTICO**, una vez por byte, y cae donde caiga.
+
+A 100 kHz un byte son 90 µs de bus — más que un periodo de portadora. Durante una trama hay una ISR de TWI cada ~2.2 periodos. **El riesgo no es la ocupación promedio, que es mínima: es la colisión.**
+
+**Criterio.** (a) Ancho de CH7 (TWI) anotado. (b) La suma de las tres en el peor traslape observado ≤ 29 µs. (c) Cero anchos repetidos en 60 s — un minuto, no diez segundos, porque la colisión es rara y hay que darle oportunidad de ocurrir. (d) 0 errores de CRC, que enlaza con **B3**.
+
+### C5.4 Etapa 4 — entra la red y el comparador
+
+**Criterio.** (a) `cruces` = **120/s exactos** (60 Hz × 2). (b) `rechazados` = **0**. (c) Frecuencia dentro de **0.01 Hz** del reporte de la Parte A. (d) RMS dentro de **±0.3 V** del Fluke, recordando que el Fluke sólo garantiza ±2.30 V a 120 V y no avala el dígito de las décimas. (e) σ del RMS en el orden de los **12.5 mV** que dio el comparador en A6; si se disparó, algo la está estorbando.
+
+### C5.5 Etapa 5 — conmutando de verdad
+
+La etapa de potencia trabajando, con J15 todavía fuera.
+
+**Criterio.** (a) `rechazados` **sigue en 0** — cualquier cosa distinta es acoplamiento, y ya sabemos dónde buscarlo: los 44 mm de pista paralela. (b) Las dos piernas conservan su tiempo muerto; **HA y LA nunca altos a la vez**, ni un solo flanco. (c) Diferencia entre semiciclos consecutivos ≤ 20 µs. (d) El RMS de la red no se mueve cuando el puente arranca: si se mueve, el canal de red está viendo al inversor y no a la red.
+
+## C6. Si no cabe: el orden de los remedios
+
+Del más barato al más caro. **No saltarse pasos**: cada uno se mide antes de pasar al siguiente.
+
+| # | Remedio | Costo |
+| --- | --- | --- |
+| 1 | Sacar de la ISR de Timer1 todo lo que no sea tiempo-crítico | horas |
+| 2 | Quitar la multiplicación de 32 bits de la ruta caliente (tabla pre-escalada) | un día |
+| 3 | Subir el disparo del ADC de 4 a 5 o 6 periodos | pierde muestras por ciclo; choca con DC-025 |
+| 4 | Bajar el tráfico I2C: menos tramas por segundo, o tramas más cortas | toca el protocolo v2 (**B3**) |
+| 5 | Bajar la portadora de 24 kHz | toca [DC-018](decisiones_criticas.md#dc-018-modulación-híbrida-a-24-khz-también-en-el-cargador-y-socket-multimodelo-atmega328p--atmega4809) y el ruido audible |
+| 6 | Nano Every (ATmega4809), mismo socket | la alternativa que [DC-017](decisiones_criticas.md#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809) dejó abierta |
+
+Que el remedio 6 exista y esté en el mismo socket es la razón de que esta prueba no dé miedo: si no cabe, **ya hay plan**.
+
+## C7. Hoja de registro de la Parte C
+
+| | Etapa 1 | Etapa 2 | Etapa 3 | Etapa 4 | Etapa 5 |
+| --- | --- | --- | --- | --- | --- |
+| ISR Timer1 (µs) | | | | | |
+| ISR ADC (µs) | — | | | | |
+| ISR TWI (µs) | — | — | | — | — |
+| ISR comparador (µs) | — | — | — | | |
+| **Peor suma observada (µs)** | | | | | |
+| Anchos repetidos en pierna A | | | | | |
+| Dif. entre semiciclos (µs) | | | | | |
+| Muestras A0 / A6 / A3 por ciclo | — | | | | |
+| `cruces` por segundo | — | — | — | | |
+| **`rechazados`** | — | — | — | | |
+| RMS red vs Fluke (V) | — | — | — | | |
+| Errores de CRC | — | — | | | |
+
+**Antes de empezar:** J15 fuera ☐ · trazas compiladas ☐ · `rechazados` en el reporte ☐ · contadores por canal en el reporte ☐ · ISR vacía medida para restar los 125 ns ☐
 
 ---
 
