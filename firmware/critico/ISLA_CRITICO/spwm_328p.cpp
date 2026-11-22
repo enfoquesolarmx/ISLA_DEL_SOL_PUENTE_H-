@@ -76,6 +76,17 @@
 #include "spwm.h"
 #include "tabla_seno.h"
 
+// --- Enganches de medición (DC-017 / protocolo de banco, Parte C) -----------
+// En producción NO EXISTEN: se expanden a nada y el código compilado queda
+// byte por byte igual. El sketch ISLA_CRITICO_PRUEBA_ISR_SPWM los define
+// antes de incluir este archivo para medir la ISR sin copiarla.
+#ifndef SPWM_TRAZA_ENTRA
+#define SPWM_TRAZA_ENTRA()
+#endif
+#ifndef SPWM_TRAZA_SALE
+#define SPWM_TRAZA_SALE()
+#endif
+
 // ============================ PINES ==========================================
 #define BIT_HA   PB1   // D9,  OC1A
 #define BIT_LA   PB2   // D10, OC1B
@@ -109,6 +120,7 @@ static const uint16_t *tablaSeno         = TABLA_SENO_60_Q16;   // en flash
 
 // ============================ INTERRUPCIÓN DE PORTADORA ======================
 ISR(TIMER1_OVF_vect) {
+  SPWM_TRAZA_ENTRA();
   // ---- 1) Periodo que acaba de empezar: pierna B ---------------------------
   // La pierna A ya está apagada en estos dos periodos (se programó antes).
   if (muestra == ultimaMuestra) {
@@ -153,6 +165,7 @@ ISR(TIMER1_OVF_vect) {
 
   muestra   = sig;
   semiciclo = sem;
+  SPWM_TRAZA_SALE();
 }
 
 // ============================ FUNCIONES PÚBLICAS =============================
