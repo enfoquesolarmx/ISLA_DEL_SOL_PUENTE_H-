@@ -103,7 +103,9 @@ La tarjeta de control lleva **dos microcontroladores** (módulos Arduino Nano co
 
 **Comparador analógico del CRÍTICO (DC-023).** `AIN0` = D6 y `AIN1` = D7 están **cableados en silicio** y no se pueden mover: por eso `TN_CMD` se mudó a D13. Detecta el cruce por cero del **canal de la red**; el canal del inversor no lo necesita, porque su periodo son un número entero de periodos de portadora por construcción y el firmware ya sabe dónde cruza.
 
-> ⚠️ **Ya no quedan pines digitales libres en el CRÍTICO, y eso se lleva el pin de traza de B5.** D7 estaba reservado para medir la duración de las ISR con el analizador lógico ([DC-017](../../docs/decisiones_criticas.md#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809)). **El reemplazo propuesto es D13**: durante una corrida de banco `INV_CMD` está bajo, así que Q2 bloquea y conmutar `TN_CMD` a 24 kHz no mueve el relé K5. Hay que **verificar que `INV_CMD` esté bajo antes de empezar**, y la corrida queda anotada como que usa una salida de seguridad de pin de traza.
+> ⚠️ **Ya no quedan pines digitales libres en el CRÍTICO, y eso se lleva el pin de traza de B5.** D7 estaba reservado para medir la duración de las ISR con el analizador lógico ([DC-017](../../docs/decisiones_criticas.md#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809)). Se propuso usar **D13**, aprovechando que en banco `INV_CMD` está bajo y Q2 bloquea el relé — **y el ruteo lo descartó.** `AC_FB_GRID_A6` acabó corriendo **44 mm paralelo a `TN_CMD` con 0.27 mm de separación**, así que conmutar D13 a 24 kHz serían 48 000 flancos por segundo junto a la entrada del comparador: lo dejaría inservible durante justo la medición que se busca.
+>
+> **La salida es medir las ISR en un Nano de protoboard** con el mismo firmware, sin tocar la tarjeta buena. No cuesta pines y además deja instrumentar con libertad.
 
 #### AUX (A2): comunicación, interfaz y vigilancia
 

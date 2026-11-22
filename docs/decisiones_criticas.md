@@ -1381,7 +1381,7 @@ El veredicto se reporta en el mismo idioma que ya usa el clasificador de [DC-011
 
 > **El cruce por cero es una medición de tiempo, y la estábamos sacando de un canal que mide amplitud.** El ADC no tiene problema de resolución: tiene problema de saber *cuándo* tomó la muestra.
 
-**Estado: vigente (V1), cobre por rutear.** Decidido el 21 de noviembre de 2026 con números medidos en banco los días 20 y 21. El esquemático y el ruteo de la tarjeta de control V0.1 están en proceso.
+**Estado: vigente (V1), ruteado y verificado el 22 de noviembre de 2026.** Decidido con números medidos en banco los días 20 y 21. El esquemático y el cobre de la tarjeta de control V0.1 ya traen el cambio; el resultado del ruteo está al final de esta entrada.
 
 ### La decisión
 
@@ -1467,6 +1467,48 @@ Eso es lo que permite usar el comparador interno, que es uno solo, en vez de un 
 | Ventana de medio ciclo y adelanto por pico en el lazo | pendiente de firmware |
 | [DC-022](#dc-022-socket-de-diagnóstico-autodiagnóstico-de-la-etapa-de-potencia-antes-de-la-primera-energización), ensayo de timbre | depende de esta entrada |
 | [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo), Q2 como compuerta Y | **vigente, y ahora también protege D13** |
+
+### ✅ Resultado del ruteo — 22 de noviembre de 2026
+
+**Los cuatro pads de A1, verificados leyendo el `.kicad_pcb`:**
+
+| Pad | | Net | |
+| --- | --- | --- | --- |
+| 9 | D6 — AIN0 | `AC_FB_GRID_A6` | ✅ |
+| 10 | D7 — AIN1 | `NEUTRO-GRID` | ✅ |
+| 16 | D13 | `TN_CMD` | ✅ |
+| 25 | A6 — ADC | `AC_FB_GRID_A6` | ✅ rama, no traslado |
+
+Y `NEUTRO-GRID` existe como **una sola net**: no se coló ningún carácter parecido al guion, que es la falla silenciosa típica al teclear etiquetas globales.
+
+**DRC:** 0 errores · 0 no conectados · 0 sin enrutar · 381 pads · 88 vías · 714 segmentos. Los 55 avisos son relleno aislado (ver abajo) y huellas que no coinciden con la biblioteca, que es contable y no eléctrico. Las 10 exclusiones son **serigrafía de J30 recortada por el borde**, cosmético.
+
+**Acoplamiento medido sobre la geometría del archivo** (tramos con ángulo < 30°, separación borde a borde):
+
+| Víctima | Agresor | mm paralelos | Sep. mín. | |
+| --- | --- | --- | --- | --- |
+| `AC_FB_GRID_A6` | `TN_CMD` | 44.1 | **0.27 mm** | lento |
+| `AC_FB_GRID_A6` | `D12_ON_OF` | 26.5 | 0.60 mm | lento |
+| `NEUTRO-GRID` | `D12_ON_OF` | 24.3 | **0.20 mm** | lento |
+| `NEUTRO-GRID` | `TN_CMD` | 22.5 | 0.67 mm | lento |
+| `AC_FB_GRID_A6` | `I2C_SCL` | 29.5 | 2.04 mm | |
+| `NEUTRO-GRID` | `HB_IN` | 10.1 | 3.58 mm | **rápido** |
+| `AC_FB_GRID_A6` | `HB_IN` | 14.9 | 6.12 mm | **rápido** |
+| `AC_FB_GRID_A6` | `LA_IN` / `LB_IN` / `HA_IN` | ≤ 5.2 | ≥ 12.4 mm | **rápido** |
+
+**Lo que importa de esa tabla: las señales rápidas quedaron lejos.** Las cuatro de compuerta —24 kHz con flancos de nanosegundos— están todas a 3.6 mm o más y con tramos cortos. Los tramos pegados son con `TN_CMD` y `D12_ON_OF`, que son órdenes de relé y de permiso: **cambian de estado en una transferencia, no continuamente.** El pico acoplado se estima en ~6 mV por flanco, unos 8 µs de señal equivalente, **una vez por transferencia** — y el candado de 12 ms del comparador se lo come.
+
+**Relleno de tierra:** 79 vías de GND más 65 pads pasantes. El punto analógico más lejano de una atadura queda a **11.9 mm**. Quedan 15 regiones de F.Cu de más de 20 mm² sin vía ni pad pasante adentro, pero **la más cercana a un trazo analógico está a 23.7 mm**: ya no son asunto del comparador. Antes del ajuste había una de **418 mm² a 9.7 mm**, y ésa se quitó.
+
+> **Corrección de un número de esta sesión.** Al revisar el ruteo se reportó «45–47 mm a la vía GND más cercana». Ese número contaba **sólo vías**, y en una tarjeta THT los **pads pasantes de GND también unen las dos caras** — hay 65. Contándolos, la peor distancia ya era **13.8 mm antes de tocar nada**, no 45. El problema real nunca fue la costura general sino la región de 418 mm² junto a las analógicas.
+
+### ⚠️ Consecuencia: B5 no puede usar D13 como pin de traza
+
+`AC_FB_GRID_A6` corre **44 mm paralelo a `TN_CMD`, con 0.27 mm de separación en el tramo más cerrado.** Conmutar D13 a 24 kHz para medir la duración de las ISR serían **48 000 flancos por segundo** junto a la entrada del comparador: lo dejaría inservible durante exactamente la medición que se quiere hacer.
+
+El reemplazo propuesto en el README de la tarjeta —usar D13— **queda descartado por este ruteo**. La salida es medir las ISR en **un Nano de protoboard** con el mismo firmware, sin tocar la tarjeta buena. Eso además no cuesta pines y permite instrumentar libremente.
+
+**Queda abierto en el DRC:** la **paridad con el esquemático** no se ejecutó. Sustituto aplicado mientras tanto: se compararon los **355 pads** de la tarjeta contra la versión previa y **ninguno cambió de net**, más la verificación directa de los cuatro pads de A1. Vale la pena correr la paridad cuando se abra el proyecto completo.
 
 **Referencias:** el registro de banco de A6 en [`protocolo_banco_control.md`](protocolo_banco_control.md), y las entradas [DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc), [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809), [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad) y [DC-022](#dc-022-socket-de-diagnóstico-autodiagnóstico-de-la-etapa-de-potencia-antes-de-la-primera-energización).
 
