@@ -590,6 +590,20 @@ En el CRÍTICO **no sobra un solo pin**: los veinte están asignados, D0–D13 y
 | **D5** | PD5 | `CARG_CMD` | CARG_CMD — el cargador (K1 + K3) |
 | **D13** | PB5 | `TN_CMD` | TN_CMD — la unión N–PE (K5) |
 
+Y hay un cuarto, que **sólo sirve en las etapas 1 a 4**:
+
+| Pin | Puerto | Red | Qué manda normalmente |
+| --- | --- | --- | --- |
+| **D12** | PB4 | `D12_ON_OF` | EN_HW — el permiso del puente, vía R25 y el interruptor J4 |
+
+**Por qué se puede.** U4 es un **74HC08** y cada salida es `PWM AND EN_HW` (sección 12 del README de la tarjeta). El 74HC08 está **aguas abajo** del microcontrolador, y este protocolo mide **en el pin del micro**. Alternar D12 recorta lo que sale del 74HC08, pero **no toca lo que medimos**.
+
+**Por qué no en la etapa 5.** Ahí el puente tiene que conmutar de verdad, así que EN_HW debe quedarse **alto y quieto**. En esa etapa D12 regresa a su trabajo.
+
+> ⚠️ **D12 como traza sólo con la etapa de potencia desconectada.** Con los gate drivers puestos y el bus energizado, alternar EN_HW a 24 kHz picaría las compuertas. Es la misma condición que ya tienen las etapas 1–4, pero conviene decirla aparte porque este pin **sí** llega al puente.
+>
+> Efecto lateral: **D8 (`EN_SENSE`) va a leer basura** mientras D12 sea traza, porque R38 lo trae de EN_HW. Si el firmware vigila que EN_SENSE concuerde con D12, hay que desactivar esa vigilancia en las etapas 1–4 — o va a disparar sola.
+
 Desconectando **J15**, los tres quedan libres y no mandan nada a ningún relé. Son puertos directos, así que `PORTD |= (1<<PD4)` son **2 ciclos, 125 ns**: la sonda no distorsiona lo que mide.
 
 > ⚠️ **J15 desconectado durante toda la Parte C.** Con la tarjeta de transferencia puesta, alternar `CARG_CMD` a 24 kHz sería castañetear K1 y K3 cuarenta y ocho mil veces por segundo. No es un detalle de procedimiento: es **la** condición de la prueba. Antes de energizar, verificar a ojo que J15 está fuera.
@@ -644,20 +658,25 @@ El criterio de la pierna B tiene comprobación cruzada gratis: el propio firmwar
 
 ## C3. Las ocho puntas
 
+Con D12 sumado, **las cuatro ISR se ven al mismo tiempo** y no hay que reasignar nada entre etapas:
+
 ```
-CH1   D9    HA      pierna A, lado alto   24 kHz
-CH2   D10   LA      pierna A, lado bajo   24 kHz   ← el par que nunca debe traslaparse
-CH3   D11   HB      pierna B, lado alto   60 Hz
-CH4   D3    LB      pierna B, lado bajo   60 Hz
-CH5   D4    traza de la ISR de Timer1
-CH6   D5    traza de la ISR del ADC
-CH7   D13   traza de la ISR de TWI (etapa 3) / del comparador (etapas 4–5)
-CH8   A5    SCL     ← ancla temporal: dónde cae el I2C respecto a todo lo demás
+                    ETAPAS 1–4                        ETAPA 5
+CH1   D9    HA      pierna A, lado alto 24 kHz        igual
+CH2   D10   LA      pierna A, lado bajo 24 kHz        igual   ← nunca traslapados
+CH3   D11   HB      pierna B, lado alto 60 Hz         igual
+CH4   D3    LB      pierna B, lado bajo 60 Hz         igual
+CH5   D4    ISR de Timer1                             igual
+CH6   D5    ISR del ADC                               igual
+CH7   D12   ISR de TWI                                A5 (SCL) — D12 vuelve a EN_HW
+CH8   D13   ISR del comparador                        igual
 ```
 
-El **CH7 se reasigna por etapa** a propósito: no hay un cuarto pin, y las dos ISR que interesan no se miden en la misma etapa. El **CH8** es el que amarra todo — cuando aparezca una anomalía, de un vistazo se ve si había tráfico I2C encima.
+**El SCL deja de hacer falta en las etapas 1–4.** Sólo decía *cuándo* ocurrió el I2C; la traza de TWI dice **cuándo y cuánto costó**, que es lo que buscamos. En la etapa 5, cuando D12 regresa a ser EN_HW, el SCL vuelve al CH7: ahí ya conocemos el costo de TWI de la etapa 3 y sólo necesitamos saber si había tráfico encima de una anomalía.
 
-Probar en el **pin del microcontrolador**, no después de R39/R25: el resistor y el LED del Nano redondean los flancos sin agregar información.
+Poder ver las cuatro ISR juntas es lo que permite cachar la colisión de tres —Timer1 + ADC + TWI en el mismo periodo— que es el caso peor del presupuesto de C1. Reasignando un canal, ese evento no se veía completo.
+
+Probar en el **pin del microcontrolador**, no después de R39/R25/R38: el resistor y el LED del Nano redondean los flancos sin agregar información.
 
 ## C4. Los tres parches de firmware
 
@@ -668,8 +687,10 @@ Probar en el **pin del microcontrolador**, no después de R39/R25: el resistor y
 #define TRZ_T1_BAJO    (PORTD &= ~(1 << PD4))
 #define TRZ_ADC_ALTO   (PORTD |=  (1 << PD5))
 #define TRZ_ADC_BAJO   (PORTD &= ~(1 << PD5))
-#define TRZ_AUX_ALTO   (PORTB |=  (1 << PB5))   // TWI o comparador, según la etapa
-#define TRZ_AUX_BAJO   (PORTB &= ~(1 << PB5))
+#define TRZ_TWI_ALTO   (PORTB |=  (1 << PB4))   // D12, solo etapas 1-4
+#define TRZ_TWI_BAJO   (PORTB &= ~(1 << PB4))
+#define TRZ_CMP_ALTO   (PORTB |=  (1 << PB5))
+#define TRZ_CMP_BAJO   (PORTB &= ~(1 << PB5))
 ```
 
 Primera línea y última línea de cada ISR. **Los 125 ns de la propia traza se restan al final**; se miden una vez con una ISR vacía.
@@ -694,13 +715,15 @@ y `rechazados` al reporte. **En etapas 1–4 debe ser 0. Lo que aparezca en la e
 
 Prenderlo todo de golpe y ver jitter no sirve: no se sabe quién lo causó. **Cada etapa suma un contribuyente, y la resta entre dos etapas es el costo de ese contribuyente.**
 
-| Etapa | Qué corre | Qué contesta | CH7 |
+| Etapa | Qué corre | Qué contesta | D12 |
 | --- | --- | --- | --- |
-| **C1** | SPWM solo | **B5**: la ISR limpia, sin nadie estorbando | — |
-| **C2** | + ADC (3 canales) | cuánto cuesta el ADC, y si el reparto se cumple | ADC |
-| **C3** | + I2C con el AUX | cuánto cuesta TWI — **la incógnita grande** | TWI |
-| **C4** | + red y comparador | si la medición coincide con el Fluke | comparador |
-| **C5** | + etapa de potencia conmutando | acoplamiento al canal de red | comparador |
+| **C1** | SPWM solo | **B5**: la ISR limpia, sin nadie estorbando | traza |
+| **C2** | + ADC (3 canales) | cuánto cuesta el ADC, y si el reparto se cumple | traza |
+| **C3** | + I2C con el AUX | cuánto cuesta TWI — **la incógnita grande** | traza |
+| **C4** | + red y comparador | si la medición coincide con el Fluke | traza |
+| **C5** | + etapa de potencia conmutando | acoplamiento al canal de red | **EN_HW**, alto y quieto |
+
+El cambio de la etapa 5 no es un detalle de instrumentación: **es la frontera entre "el puente no puede encender" y "el puente está conmutando".** Mientras D12 sea traza, EN_HW anda picado y el 74HC08 no deja pasar nada completo — que es justamente lo que vuelve seguras a las etapas 1–4.
 
 ### C5.1 Etapa 1 — el SPWM solo
 
@@ -751,7 +774,7 @@ Que el remedio 6 exista y esté en el mismo socket es la razón de que esta prue
 | --- | --- | --- | --- | --- | --- |
 | ISR Timer1 (µs) | | | | | |
 | ISR ADC (µs) | — | | | | |
-| ISR TWI (µs) | — | — | | — | — |
+| ISR TWI (µs) | — | — | | | — |
 | ISR comparador (µs) | — | — | — | | |
 | **Peor suma observada (µs)** | | | | | |
 | Anchos repetidos en pierna A | | | | | |
@@ -762,7 +785,9 @@ Que el remedio 6 exista y esté en el mismo socket es la razón de que esta prue
 | RMS red vs Fluke (V) | — | — | — | | |
 | Errores de CRC | — | — | | | |
 
-**Antes de empezar:** J15 fuera ☐ · trazas compiladas ☐ · `rechazados` en el reporte ☐ · contadores por canal en el reporte ☐ · ISR vacía medida para restar los 125 ns ☐
+**Antes de empezar (etapas 1–4):** J15 fuera ☐ · etapa de potencia desconectada ☐ · trazas compiladas ☐ · vigilancia de `EN_SENSE` desactivada ☐ · `rechazados` en el reporte ☐ · contadores por canal en el reporte ☐ · ISR vacía medida para restar los 125 ns ☐
+
+**Antes de la etapa 5:** D12 devuelto a **EN_HW** ☐ · vigilancia de `EN_SENSE` reactivada ☐ · CH7 movido a SCL ☐ · J15 **sigue** fuera ☐
 
 ---
 
