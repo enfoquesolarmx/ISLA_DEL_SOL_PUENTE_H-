@@ -238,7 +238,7 @@ Pendiente en el CRÍTICO: prueba de banco de la lectura de P9 (paso 3, ya escrit
 
 ## Herramientas
 
-- **KiCad** (esquemáticos y PCB).
+- **KiCad** (esquemáticos y PCB). La **tarjeta de control** está guardada en formato de **KiCad 10**; las ocho tarjetas restantes siguen en **KiCad 9** y se migrarán en cuanto se validen. KiCad 10 abre las dos; KiCad 9 **no** abre la de control.
 - Firmware: **ATmega328P a 5 V** (ecosistema Arduino; se abre con el Arduino IDE, un archivo por módulo) para la misión actual. Pruebas del firmware en la PC con `g++`; la interfaz J1 de los gate drivers es **lógica de 5 V**. STM32 o ESP32 (3.3 V) en etapas posteriores, cambiando la compuerta de corte por 74HCT08.
 
 ## Estado
