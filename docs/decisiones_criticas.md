@@ -50,6 +50,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no) | Transformador fuera de rango: qué pasa, qué se detecta solo y qué no | Potencia | 2026-11-18 | Vigente |
 | [DC-022](#dc-022-socket-de-diagnóstico-autodiagnóstico-de-la-etapa-de-potencia-antes-de-la-primera-energización) | Socket de diagnóstico: autodiagnóstico de la etapa de potencia antes de la primera energización | Control + potencia | 2026-11-21 | Objetivo (no vigente) |
 | [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13) | Comparador analógico interno para el cruce por cero, y `TN_CMD` se muda a D13 | Control | 2026-11-21 | Vigente (V1, cobre por rutear) |
+| [DC-024](#dc-024-análisis-armónico-selectivo-goertzel-fuera-de-la-v1-y-qué-haría-falta-para-la-v2) | Análisis armónico selectivo (Goertzel): fuera de la V1, y qué haría falta para la V2 | Control | 2026-11-22 | Objetivo (V2, no vigente) |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -1511,6 +1512,81 @@ El reemplazo propuesto en el README de la tarjeta —usar D13— **queda descart
 **Queda abierto en el DRC:** la **paridad con el esquemático** no se ejecutó. Sustituto aplicado mientras tanto: se compararon los **355 pads** de la tarjeta contra la versión previa y **ninguno cambió de net**, más la verificación directa de los cuatro pads de A1. Vale la pena correr la paridad cuando se abra el proyecto completo.
 
 **Referencias:** el registro de banco de A6 en [`protocolo_banco_control.md`](protocolo_banco_control.md), y las entradas [DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc), [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809), [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad) y [DC-022](#dc-022-socket-de-diagnóstico-autodiagnóstico-de-la-etapa-de-potencia-antes-de-la-primera-energización).
+
+---
+
+## DC-024. Análisis armónico selectivo (Goertzel): fuera de la V1, y qué haría falta para la V2
+
+> **Ya tenemos el 90 % del valor, gratis.** El factor de forma y el de cresta dicen *que* la onda está deformada. Goertzel dice *cuál* armónica. Lo primero cuesta una suma por muestra; lo segundo cuesta cinco microsegundos por bin por muestra.
+
+**Estado: objetivo a futuro (V2), no vigente.** La V1 se queda con factor de forma y factor de cresta. Esta entrada asienta por qué, con los números, para que la V2 arranque con la cuenta hecha en vez de rehacerla.
+
+**Origen de la idea:** una revisión externa del proyecto (Gemini 3, 21 de noviembre de 2026) propuso usar el algoritmo de Goertzel en vez de una FFT completa. La propuesta es buena y los índices de bin que daba resultaron correctos; se verificaron aquí. El resto de aquel documento traía errores que están anotados abajo.
+
+### Qué compraría
+
+El factor de forma y el de cresta son **indicadores de distorsión**: dicen que la onda se apartó de una senoidal y cuánto. Lo que no dicen es **de qué armónica viene**, que es lo que hace falta para un THD de corriente o de voltaje, y para distinguir un motor con triac de una fuente conmutada.
+
+Goertzel evalúa **un bin del espectro** con un resonador de segundo orden, sin construir la FFT completa. Para dos o tres bins es muchísimo más barato que una FFT, que además no cabría en 2 KB de RAM.
+
+### El costo, calculado
+
+Una multiplicación de 32 × 16 bits en AVR anda en ~45 ciclos; con las sumas y los movimientos del resonador, **~80 ciclos por bin por muestra = 5.0 µs a 16 MHz.**
+
+**Opción A — dentro de la ISR del ADC:**
+
+| | ISR del ADC | CPU | Peor caso con el SPWM |
+| --- | --- | --- | --- |
+| hoy | **13.0 µs** | — | 25 µs de 41.6 |
+| + 1 bin | 18.0 µs | 3.0 % | 30 µs |
+| + 2 bins (3ª y 5ª) | **23.0 µs** | 6.0 % | 35 µs |
+
+Cabe, pero **devuelve exactamente lo que [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13) acababa de ganar**: esa ISR estaba en 28 µs y bajó a 13 al sacarle la división de 32 bits de la interpolación del cruce. Volver a subirla a 23 desperdicia el trabajo, y deja 6.6 µs de margen contra un plazo de 41.6 µs cuya otra mitad —la duración real de la ISR del SPWM— **todavía no se ha medido** (B5).
+
+**Opción B — en bloque, en el lazo principal:** cero impacto en la latencia de interrupciones, ~3 ms de cálculo. El problema se muda a la RAM:
+
+| Ventana | Muestras | Buffer | De los 2048 B |
+| --- | --- | --- | --- |
+| 3 ciclos | 300 | **600 B** | 29 % |
+| 60 ciclos | 6002 | 12 004 B | **586 %** |
+
+**La ventana de 60 ciclos no se puede bufferear.** Goertzel obliga a ventana corta de 3 ciclos. 600 bytes es factible pero es mucho en un chip que además lleva pantalla, I2C, menú y pila.
+
+### El comparador es requisito, no lujo
+
+Con una ventana de **C ciclos enteros** —que es lo que [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13) entrega— la fundamental cae en el bin `k = C` y la armónica *n* en `k = n·C`, **sin importar la frecuencia de la línea**:
+
+```
+  C = 3 ciclos  ->  fundamental k=3,  3a k=9,  5a k=15,  7a k=21
+```
+
+Sin ventana coherente hay fuga espectral y el número no vale. Los `k = 9` y `k = 15` de la propuesta original son correctos para 300 muestras a 6006/s (resolución 20.02 Hz); conviene saber que **la 7ª a 420 Hz no cae en bin** con esa resolución si la ventana no es coherente — con ventana coherente sí, en `k = 21`.
+
+### Lo que la V1 se queda, y por qué alcanza
+
+**Factor de forma y factor de cresta**, que ya se calculan y cuestan una suma y una comparación por muestra.
+
+No es un consuelo: el 22 de noviembre detectaron el efecto de una carga resistiva de 1000 W sobre la forma de onda con **+0.083 % y 7.5 σ**, y el efecto resultó **reversible** al quitar la carga. Para una alerta de «la onda está deformada» eso basta y sobra.
+
+El espectro es **refinamiento de diagnóstico, no insumo de control.** Y si algún día se quiere, no tiene que correr todo el tiempo: una vez cada varios segundos, o sólo con una pantalla de diagnóstico abierta, cuesta prácticamente nada.
+
+### Qué haría falta para la V2
+
+Más RAM y más ciclos. Eso es decisión de [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809), que ya tiene el hilo del socket multimodelo abierto; esta entrada sólo aporta el requisito: **600 bytes de buffer y ~3 ms de cálculo por ventana**, o bien margen de ISR suficiente para los 5 µs por bin.
+
+**Y el número que decide es B5**, la duración real de la ISR del SPWM con el analizador lógico. Hasta tenerlo, todo este presupuesto se apoya en una estimación de 12 µs que nunca se midió.
+
+### Lo que NO se toma de aquella revisión
+
+Por si el documento vuelve a circular, queda anotado lo que traía mal:
+
+- **Llamaba al diseño *transformerless*.** No lo es: es bus de 48 V → puente H → **transformador** → 127 V, y todo [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no) trata de esa razón de vueltas. No es error de etiqueta: sin transformador no hay aislamiento galvánico, y toda la arquitectura de unión N–PE de [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo) existe porque sí lo hay.
+- **Atribuía a nuestro puente H lo que midió el inversor comercial de la casa.** Nuestro puente nunca se ha energizado; todos esos factores de forma salieron del canal A6, que mide la red.
+- **Daba un FF de 1.070–1.080 para carga inductiva que no sale de ninguna medición.** Nada en ningún reporte se acerca; lo medido anda en 1.116–1.117.
+- **Y construía un umbral de protección sobre ese número** («FF < 1.090 → desconectar motores»). Una protección calibrada contra un valor que nadie midió o nunca dispara, o dispara mal.
+- Dos números suyos quedaron obsoletos esa misma noche: «140 V → 4.69 V en el pin» era con `Rt` = 100 kΩ (hoy son **4.51 V** con 110 kΩ), y «300 muestras = 3 ciclos exactos» son **2.997**, que es justo el supuesto que produjo el batido de 77 mV.
+
+**Referencias:** [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13), y el registro de banco de A6 en [`protocolo_banco_control.md`](protocolo_banco_control.md).
 
 ---
 
