@@ -486,7 +486,7 @@ Dos canales iguales:
 - **Placa:** 91 × 170 mm, 2 capas, 4 barrenos M2.5. **Versión V0.1** (serigrafía: "VER 0.1.J.G NOV 2026").
 - **Conectores en las orillas:** sensores a la izquierda, SPWM A/B a la derecha, y relés, ventilador y gate drivers abajo.
 - **Zonas de GND en las dos caras**, unidas por los pines THT.
-- **Verificado con script:** el esquemático y el PCB coinciden pin por pin, todas las redes están completas y no hay pistas ni pads a menos de 0.2 mm de otra red. **DRC: 0 errores** (solo el aviso de serigrafía en los barrenos de J12, que viene de la huella de la biblioteca).
+- **Verificado con script:** el esquemático y el PCB coinciden pin por pin, todas las redes están completas y no hay pistas ni pads a menos de 0.2 mm de otra red. **DRC: 0 errores, 0 redes sin conectar, 0 pistas sin rutear.** Quedan 55 avisos (relleno de zona aislado y desajustes de huella contra la biblioteca) y 10 exclusiones de serigrafía en **J30**, que son los solapamientos del jack del CT: cosméticas, no afectan fabricación.
 
 ![Cara inferior 3D](img/vista_3d_inferior.png)
 
@@ -497,6 +497,8 @@ Dos canales iguales:
 | Cobre de componentes (F.Cu) | Cobre de soldadura (B.Cu) | Serigrafía y contornos |
 | --- | --- | --- |
 | ![F.Cu](img/layout_fcu.png) | ![B.Cu](img/layout_bcu.png) | ![Serigrafía](img/layout_serigrafia.png) |
+
+*Caras actuales, ya con el ruteo de **DC-023**: TN_CMD movido a **D13**, **D6/D7 libres como AIN0/AIN1** del comparador, y **AC_FB_GRID_A6** conectado directo al nodo del divisor con la pista corta. La serigrafía sigue diciendo "VER 0.1.J.G NOV 2026".*
 
 ---
 
