@@ -451,6 +451,16 @@ Separado: **77 mV de batido determinístico y 30.6 mV de ruido real (0.025 % de 
 - **La frecuencia absoluta.** El sketch da 60.041 Hz y el portal del inversor 59.95–60.00: **+0.11 %**. No se puede decir quién tiene razón — el sketch mide con el cristal del Nano y el inversor *genera* con el suyo. Dos relojes sin juez. El jitter que queda (σ 0.034 Hz) es **la resolución de un milisegundo de `millis()`**, no la línea: la correlación entre la frecuencia reportada y la tasa de muestreo es **+0.996**. Se arregla usando el intervalo nominal, pero **no antes** de entender el 0.24 %, porque entonces ese 0.24 % se vuelve un sesgo de +0.14 Hz.
 - **La resistencia de 1 kΩ al pin** está en el montaje de A4 y no en el esquemático. Eléctricamente casi da igual (el Thévenin del divisor domina: la inyección en sobretensión pasa de 30 a 33 µA), pero el documento y la tarjeta tienen que decir lo mismo.
 
+### 📄 Caracterización contra cargas reales
+
+El 22 de noviembre la cadena se puso a prueba contra tres eventos de carga de la casa —resistiva de 1000 W, motor universal de 700 W en régimen, y el **arranque** de ese motor— usando la ventana por comparador. **Los cinco detectores hicieron su trabajo**, y uno de ellos sólo sirvió cuando se le dio la resolución temporal correcta.
+
+El análisis completo está en **[`caso_estudio_sensado_ac.md`](caso_estudio_sensado_ac.md)**. Los tres resultados que más pesan:
+
+- **El factor de forma distingue el tipo de carga por el signo**: +0.083 % con la resistiva, **−0.533 % con el motor** (46 σ), cruzando por debajo del valor de una senoidal. Los dos reversibles.
+- **El canal de CD atrapó algo por primera vez**: +2.40 V transitorios en el arranque, y **sólo visibles con ventana de 50 ms** — con un segundo se promedian a cero.
+- **La ventana decide lo que se puede ver.** El mismo arranque midió **−3.51 %** con ventana de 1 s y **−12.57 %** con ventana de 50 ms. Un promedio no miente, pero contesta otra pregunta.
+
 ---
 
 ## A7. Simetría entre canales — la prueba estrella
