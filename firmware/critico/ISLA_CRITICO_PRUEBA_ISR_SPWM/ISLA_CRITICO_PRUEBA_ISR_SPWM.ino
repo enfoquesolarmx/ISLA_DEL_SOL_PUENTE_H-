@@ -12,13 +12,16 @@
  *    número que salga es el piso: todo lo que se agregue después se suma.
  *
  *  POR QUÉ NO ES UNA COPIA DE LA ISR
- *    Este sketch INCLUYE el módulo real (../ISLA_CRITICO/spwm_328p.cpp). No
- *    reimplementa nada. Mide la ISR que se va a producción, no una versión
- *    parecida que se desincroniza en tres semanas.
+ *    En la carpeta del sketch está el módulo REAL, spwm_328p.cpp, tal como
+ *    sale del repositorio. No se reimplementa nada: se mide la ISR que se va
+ *    a producción, no una versión parecida que se desincroniza en tres
+ *    semanas.
  *
- *    El módulo trae dos enganches, SPWM_TRAZA_ENTRA() y SPWM_TRAZA_SALE(),
- *    que en producción se expanden a NADA. Está verificado: el .o compilado
- *    con y sin ellos da el mismo md5. Aquí se definen antes de incluirlo.
+ *    El módulo trae dos enganches, SPWM_TRAZA_ENTRA() y SPWM_TRAZA_SALE().
+ *    Los busca con __has_include("traza_isr.h"): si el archivo está —y sólo
+ *    está en esta carpeta— toma las macros de ahí; si no está, como en
+ *    producción, las macros quedan vacías. Verificado: el .o compilado con
+ *    y sin el archivo da el mismo md5.
  *
  *  LAS DOS MEDICIONES, Y POR QUÉ HACEN FALTA LAS DOS
  *
@@ -100,28 +103,25 @@
 #define RELOJ_MHZ        16UL
 
 // ========================= EL MÓDULO REAL, CON ENGANCHES =====================
+//
+// spwm_328p.cpp y sus cabeceras viven en ESTA MISMA CARPETA y el IDE los
+// compila como cualquier otro archivo del sketch. El módulo encuentra el
+// traza_isr.h de al lado con __has_include y de ahí toma las macros.
+//
+// Antes esto incluía el .cpp directamente desde el .ino. Estaba mal: el IDE
+// de Arduino compila por su cuenta todo .cpp de la carpeta, así que el
+// módulo quedaba compilado DOS veces y el enlazador se caía con
+// "multiple definition of __vector_13".
 
-// Las dos macros tienen que quedar definidas ANTES de incluir el módulo.
-// Nota sobre el orden: la traza del pin sube ANTES de leer TCNT1 y baja
-// DESPUÉS de guardarlo, para que el pin nunca mida menos que el software.
-volatile uint16_t isr_t0;          // TCNT1 al entrar (vector + prólogo ya idos)
-volatile uint16_t isr_t1;          // TCNT1 al salir, antes del epílogo
-volatile uint8_t  isr_lista;       // bandera: hay una muestra nueva
+#include "spwm.h"
+#include "config_spwm.h"
+#include "traza_isr.h"
 
-#define SPWM_TRAZA_ENTRA()                      \
-  do {                                          \
-    TRZ_PORT |= _BV(TRZ_BIT);                   \
-    isr_t0 = TCNT1;                             \
-  } while (0)
-
-#define SPWM_TRAZA_SALE()                       \
-  do {                                          \
-    isr_t1 = TCNT1;                             \
-    isr_lista = 1;                              \
-    TRZ_PORT &= ~_BV(TRZ_BIT);                  \
-  } while (0)
-
-#include "../ISLA_CRITICO/spwm_328p.cpp"
+// Las variables que el enganche escribe. Las declara traza_isr.h y las
+// define aquí, una sola vez.
+volatile uint16_t isr_t0;
+volatile uint16_t isr_t1;
+volatile uint8_t  isr_lista;
 
 // ============================== ESTADÍSTICAS =================================
 

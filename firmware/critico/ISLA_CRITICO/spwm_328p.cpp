@@ -77,9 +77,18 @@
 #include "tabla_seno.h"
 
 // --- Enganches de medición (DC-017 / protocolo de banco, Parte C) -----------
-// En producción NO EXISTEN: se expanden a nada y el código compilado queda
-// byte por byte igual. El sketch ISLA_CRITICO_PRUEBA_ISR_SPWM los define
-// antes de incluir este archivo para medir la ISR sin copiarla.
+// En producción NO EXISTEN: no hay traza_isr.h, las macros se expanden a nada
+// y el código compilado queda byte por byte igual (verificado: mismo md5 del
+// .o con y sin ellas).
+//
+// El sketch de la Parte C pone un traza_isr.h junto a este archivo y ahí las
+// define. Así el módulo se compila como un .cpp NORMAL —nada de incluir un
+// .cpp desde el .ino, que produce símbolos duplicados en el IDE de Arduino.
+#if defined(__has_include)
+#  if __has_include("traza_isr.h")
+#    include "traza_isr.h"
+#  endif
+#endif
 #ifndef SPWM_TRAZA_ENTRA
 #define SPWM_TRAZA_ENTRA()
 #endif
