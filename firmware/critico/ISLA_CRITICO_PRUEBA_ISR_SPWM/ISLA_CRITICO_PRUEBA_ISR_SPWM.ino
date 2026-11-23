@@ -3,6 +3,9 @@
  *  ISLA_CRITICO_PRUEBA_ISR_SPWM  -  Isla del Sol, micro CRÍTICO (A1)
  *  Protocolo de banco, Parte C — ETAPA 1: el SPWM solo, y cuánto dura su ISR
  *
+ *  v5 — sección crítica mínima: comprueba el diagnóstico y mide lo que
+ *       cuesta cada byte leído bajo cli()
+ *
  *  v4 — histograma de la latencia de entrada: identifica a cada ladrón por
  *       el ANCHO de su bloqueo, y cuenta las vueltas del lazo para saber
  *       cuánto robo mete la propia instrumentación
@@ -117,12 +120,38 @@
  */
 #define TRAZA_SECCION_CRITICA   1
 
-/*  Ciclos que mi propia sección crítica tiene las interrupciones apagadas.
- *  Contados en el binario con:
- *      avr-objdump -d firmware.elf   y buscar el cli ... out 0x3f del lazo
- *  Sirve para que el sketch calcule cuánto robo se debe a sí mismo.
+/*  Ciclos que mi propia sección crítica tiene las interrupciones apagadas,
+ *  para que el sketch calcule cuánto robo se debe a sí mismo. Se cuentan en
+ *  el binario:  avr-objdump -d firmware.elf  y buscar el cli ... out 0x3f.
+ *  Con la sección mínima de la v5 son 10, y cada relleno agrega 14.
+ *  Los dos números están contados en el binario, no estimados.
  */
-#define CLI_PROPIO_CICLOS       18
+#define CLI_PROPIO_CICLOS       (10 + 14 * CLI_RELLENO)
+
+/*  CLI_RELLENO — lecturas de relleno DENTRO de la sección crítica, para
+ *  alargarla a propósito.
+ *
+ *  Para qué: el histograma se corta en el ancho del bloqueo. Si corremos con
+ *  0, 4 y 8 de relleno y el corte se mueve proporcionalmente, queda probado
+ *  que el bloqueo es la sección crítica y, de paso, sale medido LO QUE
+ *  CUESTA CADA BYTE LEÍDO BAJO cli() — que es el número que el firmware de
+ *  producción necesita para presupuestar sus propias secciones críticas.
+ *
+ *  Anchos contados en el binario, exactamente lineales:
+ *
+ *      relleno 0 ->  10 ciclos        relleno 4 ->  66 ciclos
+ *      relleno 2 ->  38 ciclos        relleno 8 -> 122 ciclos
+ *
+ *  El corte del histograma debe caer en esos valores. Si los sigue, el
+ *  mecanismo queda probado y de paso sale la pendiente en ciclos por byte.
+ */
+#define CLI_RELLENO             0
+
+/*  Cada cuántas muestras recogidas se leen los contadores de 32 bits.
+ *  Leerlos en cada vuelta era lo que inflaba la sección crítica: ahora se
+ *  consultan 46 veces por segundo en vez de 55 000.
+ */
+#define VERIFICA_CADA           512
 
 /*  EPILOGO_CICLOS — lo que el compilador gasta DESPUÉS de la última lectura
  *  de TCNT1 y que por lo tanto no se puede medir desde adentro.
@@ -208,6 +237,8 @@ static Serie cuerpo;      // isr_t1 - isr_t0   : costo propio del SPWM
 static Serie ocupa;       // isr_t1 + epílogo  : lo que hay que caber
 static uint32_t tarde;    // entradas por encima de UMBRAL_TARDE
 static uint32_t vueltas;  // vueltas del lazo, para calcular el robo propio
+static uint16_t desdeCheck;        // muestras desde la última lectura de isr_n
+volatile uint16_t relleno;         // destino de las lecturas de relleno
 static uint32_t isrPrev;  // isr_n del reporte anterior
 static uint32_t isrCorte; // cuándo toca el siguiente reporte
 
@@ -316,6 +347,11 @@ void setup()
   Serial.println(F("encendido"));
 #endif
 
+  Serial.print(F("  cli propio: "));
+  Serial.print(CLI_PROPIO_CICLOS);
+  Serial.print(F(" ciclos nominales, relleno = "));
+  Serial.println(CLI_RELLENO);
+
   Serial.print(F("  reporte   : cada "));
   Serial.print(SEGUNDOS_POR_REPORTE);
   Serial.println(F(" s (base de tiempo: desbordes del SPWM, no millis)"));
@@ -343,12 +379,20 @@ void setup()
 
 void loop()
 {
-  uint16_t t0, t1, sob;
-  uint32_t n;
+  uint16_t t0, t1;
   uint8_t  hay;
 
   vueltas++;
 
+  /*  SECCIÓN CRÍTICA MÍNIMA — ésta es la diferencia de la v5.
+   *
+   *  La v4 leía aquí también los dos contadores (isr_n de 32 bits y
+   *  isr_sobrepasos), once bytes en total, y lo hacía 55 000 veces por
+   *  segundo. Eso era el bloqueo que llenaba el cajón de 21-40 ciclos.
+   *
+   *  Ahora sólo salen las tres cosas que cambian en cada ISR: cinco bytes.
+   *  Los contadores se consultan cada VERIFICA_CADA muestras, más abajo.
+   */
 #if TRAZA_SECCION_CRITICA
   PORTB |= _BV(PB4);
 #endif
@@ -356,9 +400,31 @@ void loop()
     hay = isr_lista;
     t0  = isr_t0;
     t1  = isr_t1;
-    n   = isr_n;
-    sob = isr_sobrepasos;
     isr_lista = 0;
+#if CLI_RELLENO >= 1
+    relleno += isr_t1;
+#endif
+#if CLI_RELLENO >= 2
+    relleno += isr_t0;
+#endif
+#if CLI_RELLENO >= 3
+    relleno += isr_t1;
+#endif
+#if CLI_RELLENO >= 4
+    relleno += isr_t0;
+#endif
+#if CLI_RELLENO >= 5
+    relleno += isr_t1;
+#endif
+#if CLI_RELLENO >= 6
+    relleno += isr_t0;
+#endif
+#if CLI_RELLENO >= 7
+    relleno += isr_t1;
+#endif
+#if CLI_RELLENO >= 8
+    relleno += isr_t0;
+#endif
   }
 #if TRAZA_SECCION_CRITICA
   PORTB &= ~_BV(PB4);
@@ -370,6 +436,18 @@ void loop()
     mete(ocupa,   (uint16_t)(t1 + EPILOGO_CICLOS));
     histoMete((t0 > PISO_CICLOS) ? (uint16_t)(t0 - PISO_CICLOS) : 0);
     if (t0 > UMBRAL_TARDE) tarde++;
+  }
+
+  // Los contadores de 32 bits, fuera de la ruta caliente: 46 veces por
+  // segundo en vez de 55 000.
+  if (++desdeCheck < VERIFICA_CADA) return;
+  desdeCheck = 0;
+
+  uint32_t n;
+  uint16_t sob;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    n   = isr_n;
+    sob = isr_sobrepasos;
   }
 
   if (n < isrCorte) return;
@@ -444,6 +522,25 @@ void loop()
     else                      { Serial.print(TOPE[i]); Serial.print('='); }
     Serial.print(histo[i]);
   }
+
+  // El CORTE: donde el histograma acumula 99.5 %. Es el ancho del bloqueo
+  // mas grande que ocurre con frecuencia apreciable, y es lo que identifica
+  // al culpable. Con 0 relleno deberia caer mucho mas abajo que en la v4.
+  {
+    const uint32_t meta = ((uint32_t)cuerpo.n * 995UL) / 1000UL;
+    uint32_t ac = 0;
+    uint8_t  i  = 0;
+    for (; i < CAJONES; i++) { ac += histo[i]; if (ac >= meta) break; }
+    Serial.print(F("   corte<="));
+    if (i >= CAJONES - 1) Serial.print(F(">160"));
+    else                  Serial.print(TOPE[i]);
+    Serial.print('c');
+  }
+
+  // Fraccion que sufrio ALGUN retraso, en partes por mil.
+  Serial.print(F(" bloqueadas="));
+  Serial.print((uint16_t)(((cuerpo.n - histo[0]) * 1000UL) / cuerpo.n));
+  Serial.print(F("/1000"));
 
   // Cuanto robo le toca a MI PROPIA seccion critica:
   //    fraccion = CLI_PROPIO_CICLOS x vueltas / F_CPU
