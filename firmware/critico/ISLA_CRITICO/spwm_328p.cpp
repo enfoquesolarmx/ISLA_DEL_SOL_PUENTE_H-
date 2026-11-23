@@ -96,6 +96,21 @@
 #define SPWM_TRAZA_SALE()
 #endif
 
+// --- Enganche de periodo: lo que otros módulos necesitan hacer en cada
+//     desborde de la portadora ---------------------------------------------
+// El ADC se dispara desde aquí (DC-020): el desborde del Timer1 es la única
+// base de tiempo que queda, porque OCR1B es el tiempo muerto e ICR1 es el TOP
+// del modo 8. Si existe gancho_spwm.h junto a este archivo se usa; si no, la
+// macro queda vacía y este módulo sigue siendo independiente.
+#if defined(__has_include)
+#  if __has_include("gancho_spwm.h")
+#    include "gancho_spwm.h"
+#  endif
+#endif
+#ifndef SPWM_CADA_PERIODO
+#define SPWM_CADA_PERIODO()
+#endif
+
 // ============================ PINES ==========================================
 #define BIT_HA   PB1   // D9,  OC1A
 #define BIT_LA   PB2   // D10, OC1B
@@ -130,6 +145,8 @@ static const uint16_t *tablaSeno         = TABLA_SENO_60_Q16;   // en flash
 // ============================ INTERRUPCIÓN DE PORTADORA ======================
 ISR(TIMER1_OVF_vect) {
   SPWM_TRAZA_ENTRA();
+  SPWM_CADA_PERIODO();   // el disparo del ADC va aquí: lo más cerca posible
+                         // de BOTTOM, para que el instante sea repetible
   // ---- 1) Periodo que acaba de empezar: pierna B ---------------------------
   // La pierna A ya está apagada en estos dos periodos (se programó antes).
   if (muestra == ultimaMuestra) {
