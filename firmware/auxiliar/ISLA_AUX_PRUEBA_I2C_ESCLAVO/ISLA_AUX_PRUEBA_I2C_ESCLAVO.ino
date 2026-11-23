@@ -67,6 +67,7 @@
 #include <Wire.h>
 #include <util/atomic.h>
 #include "enlace_protocolo.h"
+#include "watchdog_avr.h"
 
 // La dirección del AUX como esclavo. No se reusa 0x20 a propósito: así una
 // tarjeta con firmware viejo no contesta por error.
@@ -93,7 +94,10 @@ static uint8_t  seqAnterior;
 enum Enlace : uint8_t { ENLACE_NUNCA, ENLACE_OK, ENLACE_PERDIDO, ENLACE_CONGELADO };
 static Enlace enlace = ENLACE_NUNCA;
 
+static uint32_t rescates;                // veces que se destrabó el bus a mano
+
 constexpr uint16_t MS_PERDIDO   = 500;   // el CRÍTICO manda cada 100 ms
+constexpr uint16_t MS_RESCATE   = 1000;  // cada cuánto se reintenta el rescate
 constexpr uint16_t MS_CONGELADO = 600;   // responde, pero su secuencia no avanza
 
 // ===================== LAS DOS INTERRUPCIONES, MÍNIMAS =======================
@@ -134,6 +138,41 @@ static void servirComando(uint8_t tipo, uint8_t dato)
   }
 }
 
+/*  RESCATE DEL BUS — y esto NO lo hace el watchdog.
+ *
+ *  Si el TWI se quedó agarrado a SDA, el lazo sigue corriendo igual (la
+ *  máquina de estados del esclavo vive en la interrupción), así que el perro
+ *  nunca vence. La salida directa es bajar TWEN: `Wire.end()` llama a
+ *  `twi_disable()`, que apaga el periférico y deja los dos pines en alta
+ *  impedancia. Con las pull-up de 8.2 kΩ las líneas suben y el bus queda
+ *  libre, sin reiniciar nada y sin perder el estado.
+ *
+ *  ⚠️ Si las dos líneas siguen en bajo después de esto, el AUX no era el que
+ *  las tenía: lo más probable es que el otro Nano esté sin alimentar — un AVR
+ *  apagado jala SDA y SCL por sus diodos de protección, sin estar trabado.
+ */
+static void rescatar_bus(void)
+{
+  Wire.end();
+  delayMicroseconds(10);
+
+  const bool sda = digitalRead(A4), scl = digitalRead(A5);
+
+  Wire.begin(ENLACE_DIRECCION_AUX);
+  Wire.onReceive(alRecibir);
+  Wire.onRequest(alPedir);
+  rescates++;
+
+  Serial.print(F(">>> bus rescatado ("));
+  Serial.print(rescates);
+  Serial.print(F("): SDA="));
+  Serial.print(sda);
+  Serial.print(F(" SCL="));
+  Serial.print(scl);
+  Serial.println((!sda && !scl) ? F("  <<< las dos en bajo: revisar si el CRITICO esta alimentado")
+                                : F("  (lineas libres)"));
+}
+
 static void avisar(const __FlashStringHelper *msg)
 {
   Serial.print(F(">>> [")); Serial.print(millis()); Serial.print(F(" ms] "));
@@ -171,13 +210,31 @@ void setup()
   Serial.println(F("=== Isla del Sol - AUX - enlace I2C (esclavo del bus, 0x21) ==="));
   Serial.println(F("El CRITICO lleva el reloj del bus; el que manda es el AUX."));
   Serial.println(F("El CRITICO abre, reporta su estado y recoge ordenes."));
+  Serial.print(F("Arranque: "));
+  Serial.println(wdt_texto_arranque());
+  if (wdt_fue_watchdog()) {
+    Serial.println(F(">>> OJO: el arranque anterior lo corto el WATCHDOG."));
+    Serial.println(F("    Si esto se repite solo, hay un cuelgue que hay que buscar."));
+  }
   Serial.println(F("Teclear 0, 1 o 2 para pedir un perfil de bateria."));
+  Serial.println(F("Teclear h para colgarlo a proposito y probar el watchdog."));
+
+  /*  El perro se prende AL FINAL, con todo ya inicializado. Si el Nano trae
+   *  el cargador de arranque viejo, el salvavidas de `.init3` es lo que
+   *  evita que un reinicio nos deje en bucle. Ver watchdog_avr.h.
+   */
+  wdt_arrancar();
 }
 
 // ================================== LAZO =====================================
 
 void loop()
 {
+  /*  Patear al perro, una sola vez y aquí. Ponerlo en varios lugares del lazo
+   *  esconde justo el cuelgue que se quiere detectar.
+   */
+  wdt_patear();
+
   // ---- 1) una foto nueva? se valida aquí, nunca en la interrupción --------
   if (hayFoto) {
     uint8_t g[ENLACE_LARGO_ESTADO];
@@ -208,6 +265,25 @@ void loop()
       Serial.print(F(" seq "));
       Serial.println(seqCmd);
     }
+    /*  PRUEBA DEL WATCHDOG — teclear 'h' (de "hang", colgarse).
+     *
+     *  Se cuelga a propósito, sin patear al perro. Si el watchdog está bien
+     *  puesto, la tarjeta se reinicia en ~1 s y el banner del arranque dice
+     *  POR WATCHDOG. Es la única forma de comprobarlo: un watchdog que nunca
+     *  se probó es una suposición.
+     *
+     *  ⚠️ Aquí también se descubre si este Nano trae el cargador de arranque
+     *  viejo. Si lo trae, el salvavidas de `.init3` es lo que evita que este
+     *  cuelgue deje la tarjeta en bucle de reinicio. Si después de teclear
+     *  'h' el Nano NO vuelve a imprimir el banner, hay que reprogramarlo y el
+     *  salvavidas no funcionó — reportarlo, porque entonces el CRÍTICO no
+     *  lleva watchdog hasta entenderlo.
+     */
+    else if (k == 'h' || k == 'H') {
+      Serial.println(F(">>> colgandome a proposito. El watchdog debe reiniciarme en ~1 s..."));
+      Serial.flush();
+      for (;;) { }               // ni un wdt_patear() aquí
+    }
   }
 
   // ---- 3) estado del enlace: avisos sólo cuando cambia --------------------
@@ -218,7 +294,12 @@ void loop()
     if (enlace != ENLACE_PERDIDO) {
       enlace = ENLACE_PERDIDO;
       avisar(F("ENLACE PERDIDO: el CRITICO dejo de mandar la foto"));
+      rescatar_bus();
     }
+    // Mientras siga perdido se reintenta cada segundo: puede ser que el
+    // CRÍTICO esté reiniciándose, o que el bus se haya trabado otra vez.
+    static uint32_t tRescate = 0;
+    if (millis() - tRescate > MS_RESCATE) { tRescate = millis(); rescatar_bus(); }
   } else if ((millis() - tSeqCambio) > MS_CONGELADO) {
     if (enlace != ENLACE_CONGELADO) {
       enlace = ENLACE_CONGELADO;
@@ -243,6 +324,7 @@ void loop()
   Serial.print(F(" | CRCmalo ")); Serial.print(crcMalo);
   Serial.print(F(" ver ")); Serial.print(versionMala);
   Serial.print(F(" largo ")); Serial.print(lm);
+  Serial.print(F(" | rescates ")); Serial.print(rescates);
   Serial.print(F(" | cmd servido seq ")); Serial.println(seqCmd);
 
   if (fotos == 0) {
