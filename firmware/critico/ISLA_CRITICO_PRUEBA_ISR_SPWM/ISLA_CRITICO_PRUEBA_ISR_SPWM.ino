@@ -2,64 +2,66 @@
  * =============================================================================
  *  ISLA_CRITICO_PRUEBA_ISR_SPWM  -  Isla del Sol, micro CRÍTICO (A1)
  *  Protocolo de banco, Parte C — ETAPA 1: el SPWM solo, y cuánto dura su ISR
+ *
+ *  v3 — separa costo propio de latencia de entrada, cuenta sobrepasos y trae
+ *       los dos interruptores para cazar quién roba el tiempo
  * -----------------------------------------------------------------------------
- *  QUÉ CONTESTA
- *    La única pregunta del presupuesto que seguimos estimando y nunca medimos:
- *    ¿cuánto dura de verdad la ISR del SPWM? De ese número cuelgan el margen
- *    de DC-024, el reparto de DC-025 y el presupuesto de DC-017.
+ *  LO QUE YA SE MIDIÓ EN BANCO (22-nov-2026, v2, 24 reportes de un segundo)
  *
- *    Aquí corre el SPWM Y NADA MÁS. Sin ADC, sin I2C, sin comparador. El
- *    número que salga es el piso: todo lo que se agregue después se suma.
+ *      ciclos min/med/max = 126/197/330     [vector+prólogo 43-176]
  *
- *  POR QUÉ NO ES UNA COPIA DE LA ISR
- *    En la carpeta del sketch está el módulo REAL, spwm_328p.cpp, tal como
- *    sale del repositorio. No se reimplementa nada: se mide la ISR que se va
- *    a producción, no una versión parecida que se desincroniza en tres
- *    semanas.
+ *    El medio salió 197 en los 24 reportes, sin moverse un ciclo: el cuerpo
+ *    es determinístico. Toda la variación del máximo venía de la ENTRADA,
+ *    que va de 43 a 176 ciclos. O sea que la ISR a veces arranca 133 ciclos
+ *    (8.3 µs) tarde, esperando a que otra interrupción suelte el CPU.
  *
- *    El módulo trae dos enganches, SPWM_TRAZA_ENTRA() y SPWM_TRAZA_SALE().
- *    Los busca con __has_include("traza_isr.h"): si el archivo está —y sólo
- *    está en esta carpeta— toma las macros de ahí; si no está, como en
- *    producción, las macros quedan vacías. Verificado: el .o compilado con
- *    y sin el archivo da el mismo md5.
+ *    Costo propio del SPWM:  197 ciclos = 12.35 µs = 29.7 % del periodo.
+ *    simavr había predicho:  193 ciclos = 12.07 µs = 29.0 %.   Difieren 2.3 %.
  *
- *  LAS DOS MEDICIONES, Y POR QUÉ HACEN FALTA LAS DOS
+ *    B5 queda cerrado con dos métodos independientes de acuerdo.
  *
- *    1) POR SOFTWARE, con TCNT1 — es la buena.
- *       El Timer1 va en modo 8 y TOV1 se levanta en BOTTOM, con TCNT1 = 0.
- *       O sea que TCNT1 leído dentro de la ISR dice EXACTAMENTE cuántos ciclos
- *       pasaron desde que la interrupción se disparó, y eso YA INCLUYE la
- *       latencia del vector y el prólogo del compilador.
- *       Falta sumarle el epílogo, que es fijo: EPILOGO_CICLOS.
+ *  LO QUE ESTA VERSIÓN VIENE A CONTESTAR
  *
- *    2) POR PIN, D4 — para el analizador lógico.
- *       ⚠️ EL PIN MIENTE POR ABAJO, Y NO POR POCO. No puede ver el prólogo
- *       (16 push + in + eor = 32 ciclos), ni el epílogo (16 pop + out + reti
- *       = 35 ciclos), ni la latencia del vector (7 ciclos). Son 74 ciclos =
- *       4.62 µs que NO aparecen en el pin — el 38 % del costo total.
- *       Quien mida sólo con el pin va a leer ~7.4 µs y creer que le sobra
- *       muchísimo, cuando el costo real es ~12 µs.
- *       El pin sirve para el JITTER y para ver colisiones, no para el costo.
+ *    1. ¿Quién se lleva los 133 ciclos? En la etapa 1 el SPWM corre solo, así
+ *       que sólo pueden ser interrupciones del entorno de Arduino:
+ *          - millis(), que instala una ISR en el desborde del Timer0
+ *          - el UART, que interrumpe por cada byte del reporte
+ *       Los dos interruptores de abajo los apagan por separado.
  *
- *  LO QUE LA SIMULACIÓN YA PREDIJO (avr-gcc -Os + simavr, 22-nov-2026)
- *       mínimo   7.25 µs   116 ciclos   17.4 % del periodo
- *       medio   11.43 µs   183 ciclos   27.5 %
- *       máximo  12.07 µs   193 ciclos   29.0 %
- *    Si el banco da algo muy distinto, el que está mal es uno de los dos y
- *    hay que averiguar cuál ANTES de seguir con las etapas 2 a 5.
+ *    2. ¿Se pierde algún paso de la tabla? Con 330 ciclos de 666 no debería,
+ *       pero ahora se detecta exacto en vez de suponerlo: isr_sobrepasos.
+ *
+ *    3. El costo propio y la ocupación real, ya separados y no deducidos.
+ *
+ *  CÓMO CAZAR AL CULPABLE — tres corridas de un minuto
+ *
+ *      corrida 1:  SIN_MILLIS 0, SEGUNDOS_POR_REPORTE 1    ← referencia
+ *      corrida 2:  SIN_MILLIS 1, SEGUNDOS_POR_REPORTE 1    ← se va millis()
+ *      corrida 3:  SIN_MILLIS 0, SEGUNDOS_POR_REPORTE 10   ← se calla el UART
+ *
+ *    Si el MÁXIMO DE ENTRADA cae a ~43 en la 2, fue millis().
+ *    Si cae en la 3, fue el UART.
+ *    Si no cae en ninguna, hay un tercero y hay que buscarlo con el analizador.
+ *
+ *    Si fue millis(), eso no es un detalle de banco: es una decisión para el
+ *    firmware de producción, porque el CRÍTICO no necesita millis() —ya cuenta
+ *    desbordes del SPWM, que son una base de tiempo mejor y gratis.
+ *
+ *  LO QUE ESTE SKETCH NO PUEDE VER, Y SÍ NECESITA PULSEVIEW
+ *
+ *      - tiempo muerto: que HA/LA y HB/LB nunca estén altos a la vez.
+ *        Son 16 cuentas = 1 µs; a 24 MS/s son 24 muestras, de sobra.
+ *      - simetría de la pierna B: diferencia entre semiciclos ≤ 20 µs.
+ *
+ *    Puntas:  D9 = HA   D10 = LA   D11 = HB   D3 = LB   (D4 = traza, opcional)
+ *
+ *    NO buscar "anchos repetidos" en la pierna A: cerca del pico la senoidal
+ *    es plana y los anchos se repiten SOLOS, sin que haya falla. Ese criterio
+ *    estaba mal planteado en la Parte C. El detector bueno es isr_sobrepasos.
  *
  *  PINES  (⚠️ J15 DESCONECTADO — ver Parte C, sección C0)
  *       D4  = traza de la ISR        (normalmente INV_CMD, K4+K2)
- *       D12 = traza de la ISR#2      (normalmente EN_HW; con J15 fuera y la
- *             etapa de potencia desconectada, el 74HC08 no deja pasar nada)
- *       D9/D10 = HA/LA   D11/D3 = HB/LB   (las salidas del SPWM, para el
- *             analizador; se ven en el pin aunque EN_HW esté picado)
- *
- *  CÓMO SE USA
- *       1. J15 FUERA. Etapa de potencia desconectada. Verificar a ojo.
- *       2. Cargar, abrir el monitor serie a 115200.
- *       3. Dejarlo correr un minuto. Anotar la línea de REPORTE.
- *       4. Pasar los números a la hoja de registro de la Parte C, etapa 1.
+ *       D9/D10 = HA/LA   D11/D3 = HB/LB
  *
  *  Licencia: MIT (ver LICENSE.md del repositorio).
  * =============================================================================
@@ -69,15 +71,23 @@
 #include <avr/interrupt.h>
 #include <util/atomic.h>
 
-// ======================= CONFIGURACIÓN DE LA PRUEBA ==========================
+// ======================= INTERRUPTORES DE LA PRUEBA ==========================
 
-// Pin de traza para el analizador. PD4 = D4 (INV_CMD con J15 puesto).
-#define TRZ_DDR    DDRD
-#define TRZ_PORT   PORTD
-#define TRZ_BIT    PD4
+/*  SIN_MILLIS — apaga la interrupción del Timer0, o sea millis() y delay().
+ *  Este sketch no los usa: su base de tiempo son los desbordes del propio
+ *  SPWM, que son exactos por construcción. Ponerlo en 1 para la corrida 2.
+ */
+#define SIN_MILLIS              0
 
-// Segunda traza, opcional, en D12 = PB4 (EN_HW). Poner en 0 para no usarla.
-#define USA_TRAZA_D12   1
+/*  Cada cuánto imprime. Subirlo a 10 calla el UART casi todo el tiempo y
+ *  deja ver si era él quien robaba los ciclos (corrida 3).
+ */
+#define SEGUNDOS_POR_REPORTE    1
+
+/*  Arriba de este valor, una entrada se cuenta como "tarde". El piso medido
+ *  es 43 ciclos; 60 deja margen para variaciones de compilador.
+ */
+#define UMBRAL_TARDE            60
 
 /*  EPILOGO_CICLOS — lo que el compilador gasta DESPUÉS de la última lectura
  *  de TCNT1 y que por lo tanto no se puede medir desde adentro.
@@ -92,15 +102,10 @@
  *  REHACER LA CUENTA, porque cambia el número de registros que salva:
  *      avr-objdump -d firmware.elf | awk '/<__vector_13>:/,/reti/'
  *  y contar los pop del bloque que termina en reti.
- *
- *  El número reportado trae además ~6 ciclos (0.37 µs) de la propia
- *  instrumentación —subir la traza y guardar isr_t0— así que peca de
- *  PESIMISTA, que es el lado correcto para un presupuesto.
  */
-#define EPILOGO_CICLOS   35
+#define EPILOGO_CICLOS          35
 
-#define REPORTE_MS       1000UL
-#define RELOJ_MHZ        16UL
+#define RELOJ_MHZ               16UL
 
 // ========================= EL MÓDULO REAL, CON ENGANCHES =====================
 //
@@ -108,75 +113,94 @@
 // compila como cualquier otro archivo del sketch. El módulo encuentra el
 // traza_isr.h de al lado con __has_include y de ahí toma las macros.
 //
-// Antes esto incluía el .cpp directamente desde el .ino. Estaba mal: el IDE
-// de Arduino compila por su cuenta todo .cpp de la carpeta, así que el
-// módulo quedaba compilado DOS veces y el enlazador se caía con
-// "multiple definition of __vector_13".
+// No se incluye el .cpp desde el .ino: el IDE compila por su cuenta todo .cpp
+// de la carpeta, así que el módulo quedaría compilado dos veces y el
+// enlazador se cae con "multiple definition of __vector_13".
 
 #include "spwm.h"
 #include "config_spwm.h"
 #include "traza_isr.h"
+
+/*  Base de tiempo de la prueba: los desbordes del propio SPWM.
+ *  F_CPU / (2 × TOP) = 16 000 000 / 666 = 24 024 por segundo.
+ *  Se usa en vez de millis() para que el reporte siga cayendo cada segundo
+ *  aunque SIN_MILLIS esté en 1 — y porque es exacta por construcción.
+ */
+#define ISR_POR_SEGUNDO   (F_CPU / (2UL * TOP_CUENTAS))
 
 // Las variables que el enganche escribe. Las declara traza_isr.h y las
 // define aquí, una sola vez.
 volatile uint16_t isr_t0;
 volatile uint16_t isr_t1;
 volatile uint8_t  isr_lista;
+volatile uint32_t isr_n;
+volatile uint16_t isr_sobrepasos;
 
 // ============================== ESTADÍSTICAS =================================
 
-struct Acum {
+struct Serie {
   uint32_t n;
-  uint32_t suma;        // ciclos acumulados (cabe: 193 × 48000 × 1 s = 9.3e6)
+  uint32_t suma;
   uint16_t minimo;
   uint16_t maximo;
-  uint16_t entradaMin;  // el TCNT1 de entrada más chico visto = vector+prólogo
-  uint16_t entradaMax;
 };
 
-static Acum ac;
-static uint32_t tReporte;
-static uint32_t perdidas;   // ISRs que corrieron sin que el lazo las recogiera
+static Serie entrada;     // isr_t0            : piso fijo + espera ajena
+static Serie cuerpo;      // isr_t1 - isr_t0   : costo propio del SPWM
+static Serie ocupa;       // isr_t1 + epílogo  : lo que hay que caber
+static uint32_t tarde;    // entradas por encima de UMBRAL_TARDE
+static uint32_t isrPrev;  // isr_n del reporte anterior
+static uint32_t isrCorte; // cuándo toca el siguiente reporte
 
-static void acumReset(Acum &a)
+static void cero(Serie &s)
 {
-  a.n = 0;
-  a.suma = 0;
-  a.minimo = 0xFFFF;
-  a.maximo = 0;
-  a.entradaMin = 0xFFFF;
-  a.entradaMax = 0;
+  s.n = 0;
+  s.suma = 0;
+  s.minimo = 0xFFFF;
+  s.maximo = 0;
 }
 
-static void acumMete(Acum &a, uint16_t ciclos, uint16_t entrada)
+static void mete(Serie &s, uint16_t v)
 {
-  a.n++;
-  a.suma += ciclos;
-  if (ciclos  < a.minimo)     a.minimo     = ciclos;
-  if (ciclos  > a.maximo)     a.maximo     = ciclos;
-  if (entrada < a.entradaMin) a.entradaMin = entrada;
-  if (entrada > a.entradaMax) a.entradaMax = entrada;
+  s.n++;
+  s.suma += v;
+  if (v < s.minimo) s.minimo = v;
+  if (v > s.maximo) s.maximo = v;
+}
+
+static uint16_t medio(const Serie &s)
+{
+  return s.n ? (uint16_t)((s.suma + s.n / 2) / s.n) : 0;
 }
 
 // Imprime ciclos como microsegundos con dos decimales, sin punto flotante.
-static void imprimeUs(uint32_t ciclos_x100)
+static void us(uint32_t ciclos)
 {
-  // ciclos_x100 = ciclos × 100;  µs × 100 = ciclos × 100 / 16
-  const uint32_t us_x100 = (ciclos_x100 + RELOJ_MHZ / 2) / RELOJ_MHZ;
-  Serial.print(us_x100 / 100);
+  const uint32_t x100 = (ciclos * 100UL + RELOJ_MHZ / 2) / RELOJ_MHZ;
+  Serial.print(x100 / 100);
   Serial.print('.');
-  const uint8_t d = us_x100 % 100;
+  const uint8_t d = x100 % 100;
   if (d < 10) Serial.print('0');
   Serial.print(d);
 }
 
-// Imprime el porcentaje del periodo de portadora con un decimal.
-static void imprimePorciento(uint32_t ciclos_x100)
+// Porcentaje del periodo de portadora, con un decimal.
+static void pct(uint32_t ciclos)
 {
-  const uint32_t pc_x10 = (ciclos_x100 * 10UL + TOP_CUENTAS) / (2UL * TOP_CUENTAS);
-  Serial.print(pc_x10 / 10);
+  const uint32_t periodo = 2UL * TOP_CUENTAS;
+  const uint32_t x10 = (ciclos * 1000UL + periodo / 2) / periodo;
+  Serial.print(x10 / 10);
   Serial.print('.');
-  Serial.print(pc_x10 % 10);
+  Serial.print(x10 % 10);
+}
+
+static void trio(const Serie &s)
+{
+  Serial.print(s.minimo);
+  Serial.print('/');
+  Serial.print(medio(s));
+  Serial.print('/');
+  Serial.print(s.maximo);
 }
 
 // ================================= SETUP =====================================
@@ -186,16 +210,12 @@ void setup()
   Serial.begin(115200);
   while (!Serial) { }
 
-  TRZ_DDR |= _BV(TRZ_BIT);
-  TRZ_PORT &= ~_BV(TRZ_BIT);
-#if USA_TRAZA_D12
-  DDRB  |= _BV(PB4);
-  PORTB &= ~_BV(PB4);
-#endif
+  DDRD  |= _BV(TRZ_BIT);
+  PORTD &= ~_BV(TRZ_BIT);
 
   Serial.println();
   Serial.println(F("================================================================"));
-  Serial.println(F("  ISLA DEL SOL - Parte C, ETAPA 1: duracion de la ISR del SPWM"));
+  Serial.println(F("  ISLA DEL SOL - Parte C, ETAPA 1 v3: ISR del SPWM"));
   Serial.println(F("================================================================"));
   Serial.println(F("  !! J15 DESCONECTADO y etapa de potencia fuera. Verificar."));
   Serial.println();
@@ -205,110 +225,144 @@ void setup()
     for (;;) { }
   }
 
-  Serial.print(F("  portadora   : TOP = "));
+  Serial.print(F("  portadora : TOP = "));
   Serial.print(TOP_CUENTAS);
   Serial.print(F(" cuentas, periodo = "));
-  imprimeUs((uint32_t)2 * TOP_CUENTAS * 100);
-  Serial.println(F(" us"));
+  us(2UL * TOP_CUENTAS);
+  Serial.print(F(" us = "));
+  Serial.print(2UL * TOP_CUENTAS);
+  Serial.println(F(" ciclos"));
 
-  Serial.print(F("  linea       : "));
+  Serial.print(F("  linea     : "));
   Serial.print(spwm_frecuencia_hz());
   Serial.print(F(" Hz, "));
   Serial.print(spwm_muestras_ciclo());
-  Serial.println(F(" muestras por ciclo"));
+  Serial.print(F(" muestras/ciclo, "));
+  Serial.print(ISR_POR_SEGUNDO);
+  Serial.println(F(" ISR/s esperadas"));
 
-  Serial.print(F("  tiempo muerto: "));
-  Serial.print(spwm_dt_cuentas());
-  Serial.print(F(" cuentas   amplitud max: "));
-  Serial.println(spwm_amplitud_max());
-
-  Serial.print(F("  epilogo sumado: "));
+  Serial.print(F("  epilogo   : "));
   Serial.print(EPILOGO_CICLOS);
-  Serial.println(F(" ciclos (no medible desde adentro)"));
+  Serial.println(F(" ciclos sumados (no medibles desde adentro)"));
+
+  Serial.print(F("  millis()  : "));
+#if SIN_MILLIS
+  TIMSK0 = 0;                      // fuera la ISR del Timer0
+  Serial.println(F("APAGADO (SIN_MILLIS = 1)"));
+#else
+  Serial.println(F("encendido"));
+#endif
+
+  Serial.print(F("  reporte   : cada "));
+  Serial.print(SEGUNDOS_POR_REPORTE);
+  Serial.println(F(" s (base de tiempo: desbordes del SPWM, no millis)"));
+
   Serial.println();
-  Serial.println(F("  Prediccion de simavr: min 116 / med 183 / max 193 ciclos"));
+  Serial.println(F("  Referencia v2 en banco: cuerpo determinista, entrada 43-176 c"));
+  Serial.println(F("  Costo propio esperado : ~197 ciclos = 12.35 us = 29.7 %"));
   Serial.println(F("----------------------------------------------------------------"));
 
-  acumReset(ac);
+  cero(entrada);
+  cero(cuerpo);
+  cero(ocupa);
+  tarde = 0;
 
   spwm_arrancar();
   spwm_fijar_amplitud(spwm_amplitud_max());   // caso peor: la tabla trabaja
 
-  tReporte = millis();
+  isrPrev  = 0;
+  isrCorte = (uint32_t)ISR_POR_SEGUNDO * SEGUNDOS_POR_REPORTE;
 }
 
 // ================================== LAZO =====================================
 
 void loop()
 {
-  // Recoger la última muestra de la ISR.
-  uint16_t t0, t1;
+  uint16_t t0, t1, sob;
+  uint32_t n;
   uint8_t  hay;
+
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     hay = isr_lista;
     t0  = isr_t0;
     t1  = isr_t1;
+    n   = isr_n;
+    sob = isr_sobrepasos;
     isr_lista = 0;
   }
 
-  if (hay) {
-    // t1 es TCNT1 al final del cuerpo; como TOV1 se levanta en BOTTOM con
-    // TCNT1 = 0, t1 YA trae la latencia del vector y el prologo adentro.
-    // Solo falta el epilogo, que es fijo.
-    if (t1 >= t0) {                       // defensa: si el timer dio la vuelta
-      acumMete(ac, t1 + EPILOGO_CICLOS, t0);
-    } else {
-      perdidas++;
-    }
+  if (hay && t1 >= t0) {
+    mete(entrada, t0);
+    mete(cuerpo,  (uint16_t)(t1 - t0));
+    mete(ocupa,   (uint16_t)(t1 + EPILOGO_CICLOS));
+    if (t0 > UMBRAL_TARDE) tarde++;
   }
 
-  if (millis() - tReporte < REPORTE_MS) return;
-  tReporte += REPORTE_MS;
+  if (n < isrCorte) return;
+  isrCorte += (uint32_t)ISR_POR_SEGUNDO * SEGUNDOS_POR_REPORTE;
 
-  if (ac.n == 0) {
+  if (cuerpo.n == 0) {
     Serial.println(F("  sin muestras (la ISR no esta corriendo?)"));
     return;
   }
 
-  const uint32_t medio_x100 = (ac.suma * 100UL + ac.n / 2) / ac.n;
+  // --- cuántas ISR corrieron de verdad, contra cuántas recogio el lazo -------
+  const uint32_t corrieron = (n > isrPrev) ? (n - isrPrev) : 1;
+  isrPrev = n;
 
-  Serial.print(F("REPORTE  n="));
-  Serial.print(ac.n);
-  Serial.print(F("  ciclos min/med/max = "));
-  Serial.print(ac.minimo);
-  Serial.print('/');
-  Serial.print((uint16_t)(medio_x100 / 100));
-  Serial.print('/');
-  Serial.print(ac.maximo);
+  Serial.print(F("ISR="));
+  Serial.print(corrieron);
+  Serial.print(F(" recogidas="));
+  Serial.print(cuerpo.n);
+  Serial.print(F(" ("));
+  Serial.print((uint16_t)((cuerpo.n * 1000UL) / corrieron));
+  Serial.print(F("/1000)"));
 
-  Serial.print(F("   us = "));
-  imprimeUs((uint32_t)ac.minimo * 100);
-  Serial.print('/');
-  imprimeUs(medio_x100);
-  Serial.print('/');
-  imprimeUs((uint32_t)ac.maximo * 100);
+  // --- las tres series, en ciclos -------------------------------------------
+  Serial.print(F("  entrada="));
+  trio(entrada);
+  Serial.print(F("  cuerpo="));
+  trio(cuerpo);
 
-  Serial.print(F("   max = "));
-  imprimePorciento((uint32_t)ac.maximo * 100);
-  Serial.print(F(" % del periodo"));
+  // --- costo propio: piso + cuerpo + epilogo --------------------------------
+  // El piso es el minimo de entrada visto en la corrida: ahi nadie estorbo.
+  const uint32_t propio = (uint32_t)entrada.minimo + cuerpo.maximo + EPILOGO_CICLOS;
+  Serial.print(F("  PROPIO="));
+  Serial.print(propio);
+  Serial.print(F("c "));
+  us(propio);
+  Serial.print(F("us "));
+  pct(propio);
+  Serial.print('%');
 
-  Serial.print(F("   [vector+prologo "));
-  Serial.print(ac.entradaMin);
-  Serial.print('-');
-  Serial.print(ac.entradaMax);
-  Serial.print(F(" c]"));
+  // --- ocupacion real: lo que de verdad hay que caber -----------------------
+  Serial.print(F("  OCUPA="));
+  Serial.print(ocupa.maximo);
+  Serial.print(F("c "));
+  us(ocupa.maximo);
+  Serial.print(F("us "));
+  pct(ocupa.maximo);
+  Serial.print('%');
 
-  if (perdidas) {
-    Serial.print(F("   PERDIDAS="));
-    Serial.print(perdidas);
-  }
+  // --- robo ajeno y sobrepasos ----------------------------------------------
+  Serial.print(F("  robo="));
+  Serial.print(entrada.maximo - entrada.minimo);
+  Serial.print(F("c tarde="));
+  Serial.print(tarde);
 
-  // Veredicto contra los umbrales de la Parte C, seccion C1.
-  const uint16_t periodo = 2 * TOP_CUENTAS;          // 666 ciclos
-  Serial.print(F("   -> "));
-  if (ac.maximo * 10UL <= periodo * 7UL)        Serial.println(F("PASA"));
-  else if (ac.maximo * 10UL <= periodo * 9UL)   Serial.println(F("AVISO"));
-  else                                          Serial.println(F("FALLA"));
+  Serial.print(F("  SOBREPASOS="));
+  Serial.print(sob);
 
-  acumReset(ac);
+  // --- veredicto contra los umbrales de la Parte C, seccion C1 --------------
+  const uint32_t periodo = 2UL * TOP_CUENTAS;
+  Serial.print(F("  -> "));
+  if (sob)                                       Serial.println(F("FALLA (paso perdido)"));
+  else if (ocupa.maximo * 10UL <= periodo * 7UL) Serial.println(F("PASA"));
+  else if (ocupa.maximo * 10UL <= periodo * 9UL) Serial.println(F("AVISO"));
+  else                                           Serial.println(F("FALLA"));
+
+  cero(entrada);
+  cero(cuerpo);
+  cero(ocupa);
+  tarde = 0;
 }
