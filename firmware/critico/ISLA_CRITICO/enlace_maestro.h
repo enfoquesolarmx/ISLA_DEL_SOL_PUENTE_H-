@@ -1,7 +1,7 @@
 /*
  * =============================================================================
  *  enlace_maestro.h  -  Isla del Sol, micro CRÍTICO (A1)
- *  El enlace con el AUX, pero con el CRÍTICO de MAESTRO
+ *  El enlace con el AUX. El CRÍTICO es maestro DEL BUS; el que manda es el AUX.
  * -----------------------------------------------------------------------------
  *  POR QUÉ VOLTEARLO
  *
@@ -46,18 +46,49 @@
  *
  *    Un cambio, dos problemas.
  *
+ *  ⚠️ MAESTRO DEL BUS NO ES QUIEN MANDA
+ *
+ *    Esto hay que leerlo antes de cualquier otra cosa, porque la palabra
+ *    «maestro» confunde: **el que sigue mandando es el AUX.**
+ *
+ *      · El AUX es el panel. Él pide los perfiles de batería, él trae los
+ *        permisos de carga y descarga que el BMS manda por CAN, y él tiene el
+ *        AUX_KILL por hardware, que apaga el puente sin pedirle permiso a
+ *        nadie ni pasar por este bus.
+ *      · El CRÍTICO es maestro **del bus**, y nada más del bus. Lo único que
+ *        hace en cada transferencia es **reportar su estado y recoger
+ *        órdenes**. No decide nada del otro micro.
+ *
+ *    En una línea: **el CRÍTICO lleva el reloj, el AUX manda.**
+ *
+ *    Es maestro por una razón mecánica, no de jerarquía: el que abre la
+ *    transferencia es el único que puede cerrarla, y el único que tiene el
+ *    reloj para destrabar el bus si se atora. Antes el CRÍTICO era esclavo y
+ *    se quedaba agarrado al bus cuando el otro abortaba — con el agravante de
+ *    que es el único de los dos que no puede permitírselo.
+ *
+ *    Y hay un límite a lo que el AUX manda, que viene de DC-010 y no cambia:
+ *    **el CRÍTICO nunca depende del enlace para protegerse.** Sobrecorriente,
+ *    bajo voltaje y temperatura se deciden con sus propias lecturas. El AUX
+ *    manda sobre lo que se puede conversar, no sobre lo que protege.
+ *
  *  QUÉ PASA POR EL BUS
  *
  *    Cada 100 ms, el CRÍTICO:
- *      1) escribe la foto de estado (16 bytes, con CRC-8) al AUX
- *      2) lee un comando (4 bytes, con CRC-8) del AUX
+ *      1) escribe la foto de estado (16 bytes, con CRC-8) al AUX  — reporta
+ *      2) lee un comando (4 bytes, con CRC-8) del AUX            — obedece
+ *
+ *    Nótese el sentido: el CRÍTICO **entrega cuentas** y **recoge órdenes**.
+ *    Abre él la conversación, pero el contenido va en la dirección de siempre.
  *
  *    Mismo contenido y mismo CRC que el protocolo de siempre: sólo cambia
  *    quién inicia. `enlace_protocolo.h` va igual, sin tocar.
  *
- *  ⚠️ El AUX ahora es esclavo, en 0x21. Y eso traslada la exposición a
- *  trabarse a donde no duele: el AUX no tiene trabajo de tiempo real, así
- *  que si se cuelga se reinicia y no pasa nada.
+ *  ⚠️ El AUX ahora es esclavo **del bus**, en 0x21 — que no es lo mismo que
+ *  estar subordinado: sigue siendo el que manda. Lo que se movió es la
+ *  exposición a trabarse, y se movió a donde no duele: el AUX no tiene
+ *  trabajo de tiempo real, así que si se cuelga se reinicia y no pasa nada.
+ *  Si se colgaba el CRÍTICO, se perdían pasos de la onda.
  *
  *  Licencia: MIT (ver LICENSE.md del repositorio).
  * =============================================================================

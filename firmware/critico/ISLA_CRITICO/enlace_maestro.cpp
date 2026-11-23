@@ -1,7 +1,8 @@
 /*
  * =============================================================================
  *  enlace_maestro.cpp  -  Isla del Sol, micro CRÍTICO (A1)
- *  Implementación del enlace con el CRÍTICO de maestro. Ver enlace_maestro.h.
+ *  El CRÍTICO es maestro DEL BUS. El que manda es el AUX: aquí el CRÍTICO
+ *  nada más reporta su estado y recoge órdenes. Ver enlace_maestro.h.
  * =============================================================================
  */
 
@@ -89,7 +90,7 @@ void enlace_atender(uint8_t estadoP9, uint16_t adcP9, bool detenidoPorP9,
 
   const uint32_t t0 = micros();
 
-  // --- 1) la foto al AUX -----------------------------------------------
+  // --- 1) la foto al AUX: el CRÍTICO entrega cuentas -------------------
   Wire.beginTransmission(ENLACE_DIRECCION_AUX);
   Wire.write(f, ENLACE_LARGO_ESTADO);
   if (Wire.endTransmission() != 0) {        // sin ACK: el AUX no está
@@ -97,7 +98,12 @@ void enlace_atender(uint8_t estadoP9, uint16_t adcP9, bool detenidoPorP9,
     return;
   }
 
-  // --- 2) el comando de vuelta ------------------------------------------
+  // --- 2) el comando de vuelta: el CRÍTICO recoge órdenes ---------------
+  //
+  // Aquí es donde se ve quién manda: el CRÍTICO abre el bus para PEDIR
+  // instrucciones. Lo que llegue aquí es lo que el AUX decidió — un perfil de
+  // batería, un permiso del BMS — y el CRÍTICO lo acata, con el único límite
+  // de DC-010: sus propias protecciones no se negocian por este bus.
   const uint8_t n = Wire.requestFrom((uint8_t)ENLACE_DIRECCION_AUX,
                                      (uint8_t)ENLACE_LARGO_COMANDO);
   if (n != ENLACE_LARGO_COMANDO) { sinResp++; return; }

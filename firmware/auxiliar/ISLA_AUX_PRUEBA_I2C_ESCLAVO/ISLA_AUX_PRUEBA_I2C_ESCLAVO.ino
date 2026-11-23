@@ -1,13 +1,25 @@
 /*
  * =============================================================================
- *  ISLA_AUX_PRUEBA_I2C_ESCLAVO  -  Isla del Sol, micro AUX (A2): ESCLAVO I2C
+ *  ISLA_AUX_PRUEBA_I2C_ESCLAVO  -  Isla del Sol, micro AUX (A2)
+ *  Esclavo DEL BUS en 0x21 - y de todas formas el que manda
  *  Protocolo de banco, Parte C — ETAPA 3-B: el I2C, pero al revés
  * -----------------------------------------------------------------------------
- *  AHORA EL AUX ESPERA, Y ESO ESTÁ BIEN
+ *  EL AUX ESPERA EL BUS, PERO SIGUE MANDANDO
  *
- *    El AUX ya no pregunta: se queda escuchando en 0x21 y contesta cuando el
- *    CRÍTICO abre el bus. Eso traslada la parte frágil del I2C a donde no
- *    duele:
+ *    ⚠️ No confundir las dos cosas, porque las palabras del I2C enganan:
+ *
+ *        esclavo DEL BUS   = no abre la conversación, contesta cuando le hablan
+ *        quien MANDA       = el que decide qué va a hacer el otro
+ *
+ *    El AUX es lo primero y sigue siendo lo segundo. Es el panel: pide los
+ *    perfiles de batería, trae los permisos de carga y descarga del BMS por
+ *    CAN, y tiene el AUX_KILL por hardware que apaga el puente sin pasar por
+ *    este bus. El CRÍTICO abre la transferencia, pero lo único que hace en
+ *    ella es entregar cuentas y recoger órdenes.
+ *
+ *    En una línea: **el CRÍTICO lleva el reloj, el AUX manda.**
+ *
+ *    Y esperar el bus, además, pone la parte frágil del I2C donde no duele:
  *
  *      · Un esclavo puede quedarse agarrando el bus si el maestro aborta a
  *        media transferencia. Al AUX eso no le cuesta nada — no tiene trabajo
@@ -156,8 +168,9 @@ void setup()
   Wire.onRequest(alPedir);
 
   Serial.println();
-  Serial.println(F("=== Isla del Sol - AUX - enlace I2C (ESCLAVO en 0x21) ==="));
-  Serial.println(F("El CRITICO es el maestro: abre el bus cada 100 ms."));
+  Serial.println(F("=== Isla del Sol - AUX - enlace I2C (esclavo del bus, 0x21) ==="));
+  Serial.println(F("El CRITICO lleva el reloj del bus; el que manda es el AUX."));
+  Serial.println(F("El CRITICO abre, reporta su estado y recoge ordenes."));
   Serial.println(F("Teclear 0, 1 o 2 para pedir un perfil de bateria."));
 }
 

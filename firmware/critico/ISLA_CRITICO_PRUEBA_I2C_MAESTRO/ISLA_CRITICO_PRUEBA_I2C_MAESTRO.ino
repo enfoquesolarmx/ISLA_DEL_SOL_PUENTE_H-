@@ -5,10 +5,15 @@
  * -----------------------------------------------------------------------------
  *  QUÉ CAMBIA CONTRA LA ETAPA 3
  *
- *    Los papeles están volteados: **el CRÍTICO es MAESTRO** y el AUX es
- *    esclavo en 0x21. Mismo protocolo, mismo CRC, mismo contenido: sólo
- *    cambia quién abre la conversación. Ver `enlace_maestro.h` para el por
- *    qué completo; en corto son dos cosas:
+ *    Los papeles **del bus** están volteados: el CRÍTICO es maestro del bus
+ *    y el AUX es esclavo en 0x21. Mismo protocolo, mismo CRC, mismo
+ *    contenido: sólo cambia quién abre la conversación.
+ *
+ *    ⚠️ Y SÓLO ESO. **El que manda sigue siendo el AUX**: es el panel, pide
+ *    los perfiles, trae los permisos del BMS y tiene el AUX_KILL por
+ *    hardware. El CRÍTICO lleva el reloj del bus; en cada transferencia
+ *    nada más reporta su estado y recoge órdenes. Ver `enlace_maestro.h`
+ *    para el por qué completo; en corto son dos cosas:
  *
  *      1) un esclavo no decide cuándo se abre el bus y se queda agarrado
  *         si el otro aborta; un maestro abre, manda, cierra, y tiene el
@@ -362,7 +367,8 @@ void setup()
   Serial.println();
   Serial.println(F("================================================================"));
   Serial.println(F("  ISLA DEL SOL - Parte C, ETAPA 3-B: SPWM + ADC + I2C MAESTRO"));
-  Serial.println(F("  El CRITICO abre el bus: foto al AUX (0x21) cada 100 ms"));
+  Serial.println(F("  El CRITICO abre el bus: reporta al AUX (0x21) cada 100 ms"));
+  Serial.println(F("  (maestro del bus; el que manda sigue siendo el AUX)"));
   Serial.println(F("================================================================"));
   Serial.println(F("  !! J15 DESCONECTADO y etapa de potencia fuera. Verificar."));
   Serial.println();
