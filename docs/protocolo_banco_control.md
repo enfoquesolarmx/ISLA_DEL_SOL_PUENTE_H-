@@ -886,24 +886,98 @@ Cuatro reglas prácticas para el firmware de control:
 
 Esto pesa más que cualquier cosa que hayamos discutido de `millis()`, y es exactamente lo que el firmware de control va a hacer si no lo cuidamos: un lazo rápido leyendo variables que comparte con el ADC y el comparador.
 
+## Lo que vio el analizador lógico
+
+Medido con PulseView y un analizador FX2 de 8 canales a **16 MS/s**. Salió una coincidencia que ayuda mucho: el analizador y el micro corren a la misma frecuencia, así que **una muestra del analizador = una cuenta del temporizador**. Las lecturas no son aproximadas, son contadas.
+
+### Tiempo muerto de la pierna A: 1.000 µs
+
+```
+LA baja   →  4 997 500 ns
+              ← 1000 ns de hueco →
+HA sube   →  4 998 500 ns
+```
+
+Lo esperado eran **16 cuentas × 62.5 ns = 1.000 µs**, y eso dio, exacto. **HA y LA nunca están altos al mismo tiempo**: LA baja antes de que HA suba, con el hueco completo en medio.
+
+### Tiempo muerto de la pierna B: un periodo de portadora, y es a propósito
+
+La pierna B no tiene 1 µs, tiene **42**. No es una falla: está en el código.
+
+```c
+if (muestra == ultimaMuestra) {   // última muestra del semiciclo
+    ... apaga el lado que venía conduciendo
+} else if (muestra == 0) {        // primera muestra del siguiente
+    ... enciende el otro lado
+}
+```
+
+Apaga en la última muestra y enciende en la primera del semiciclo siguiente: **un periodo de portadora completo en medio**, por diseño.
+
+| | µs | sobra sobre el periodo |
+| --- | --- | --- |
+| Periodo de portadora (teórico) | 41.625 | — |
+| Cruce 1 | **42.187** | +562 ns = **9 ciclos exactos** |
+| Cruce 2 | **41.813** | +188 ns = **3 ciclos exactos** |
+
+### Los ciclos que sobran son el jitter, confirmado por segunda vía
+
+Las dos escrituras están a tres instrucciones una de otra dentro de la rutina. Si las dos entradas fueran igual de puntuales, el hueco sería **exactamente** un periodo. Lo que sobra es **la rutina que entró tarde**.
+
+Y cae justo donde el histograma dijo que debía caer: ahí el 52 % de las entradas se retrasan entre 1 y 20 ciclos, y estas dos dieron **9 y 3**.
+
+> **Es la misma medición por un camino completamente distinto.** El histograma la sacó contando con el temporizador desde adentro del micro; esto la sacó midiendo cobre con un instrumento externo. Coinciden. El jitter de entrada no es una teoría nuestra: se ve en los pines.
+
+Y no son 8.7 ni 3.4 ciclos — son **9 y 3 clavados**, porque la cuantización es de un ciclo.
+
+### Simetría de la pierna B: pasa con 53 veces de margen
+
+```
+criterio    ≤ 20 µs
+medido       0.374 µs   (6 ciclos exactos)
+```
+
+Hay una razón de fondo para que salga tan bien: **la duración del semiciclo no se mide, se cuenta.** El firmware lleva 200 muestras por semiciclo y cambia de signo al llegar a 200 — siempre 200, nunca 199 ni 201. Los dos semiciclos duran lo mismo **por construcción**, no por ajuste. Lo único que puede variar es dónde cae el flanco dentro de la rutina, y eso son los 374 ns.
+
+Encima, esos 374 ns ocurren **en el cruce por cero**, donde la tensión instantánea es casi nula y el puente está apagado de todos modos. La componente de CD que inyectan es todavía menor de lo que sugiere la proporción de tiempo. Y la CD importa: es lo único que el cálculo de RMS por medio ciclo **no** puede absorber (+6.15 % de error).
+
+### Dos cosas del diseño que hay que tener presentes
+
+**1. En el cruce por cero el puente queda abierto ~83 µs, no 42.** El código también fuerza apagada la pierna A durante esas dos muestras:
+
+```c
+if (sig == 0 || sig == ultimaMuestra) { OCR1A = 0; OCR1B = TOP_CUENTAS; }
+```
+
+Con carga resistiva da igual. **Con carga inductiva la corriente tiene que irse por los diodos de cuerpo durante esos 83 µs.** Hay que vigilarlo en la **etapa 5**, cuando el puente conmute de verdad: es donde aparecerían los picos si algo está mal dimensionado.
+
+**2. Van a faltar pulsos cerca del cruce, y está bien.** El código los quita a propósito:
+
+```c
+if (d < PULSO_MIN_CUENTAS) d = 0;   // pulso demasiado angosto: no se genera
+```
+
+Si en el analizador aparecen periodos sin pulso cerca del cruce por cero, **no es una falla** — es el firmware evitando pulsos tan angostos que el driver no alcanzaría a formar. Queda anotado para que nadie lo reporte como problema.
+
 ## Lo que queda abierto de la etapa 1
 
 **Una cuenta que no cierra.** El ancho de la puerta medido por dónde se cortan las esperas dice ~70 ciclos, pero la *cantidad* de retrasos dice como el doble. Las dos no pueden ser ciertas. Lo más probable es que el compilador del IDE genere ese pedazo distinto de como lo contamos aquí. Se cierra pidiéndole al IDE el binario compilado y mirándolo. **No cambia ninguna conclusión** — el mecanismo quedó probado en tres puntos — pero queda anotado.
 
-**Los dos renglones del analizador.** El puerto serie no puede ver el tiempo muerto ni la simetría de la pierna B. Siguen pendientes.
+**~~Los dos renglones del analizador.~~** **Hechos el 22 de noviembre** — ver la sección de arriba. Ya no queda nada pendiente de la etapa 1.
 
 ## Tabla para la hoja de registro
 
-| | Etapa 1 |
-| --- | --- |
-| Duración de la rutina de la onda | **204 ciclos = 12.75 µs = 30.6 %** |
-| Peor ocupación observada | 354 ciclos = 22.13 µs = 53.2 % |
-| Pasos de onda perdidos | **0** |
-| ISR que llegaron tarde (código limpio) | 0.54 % |
-| Tiempo muerto | *pendiente, analizador* |
-| Diferencia entre semiciclos | *pendiente, analizador* |
+| | Resultado | Criterio | Margen |
+| --- | --- | --- | --- |
+| Duración de la rutina de la onda | **204 ciclos = 12.75 µs = 30.6 %** | ≤ 70 % | 2.3× |
+| Peor ocupación observada | 354 ciclos = 22.13 µs = 53.2 % | ≤ 70 % | 1.3× |
+| Pasos de onda perdidos | **0** | 0 | — |
+| ISR que llegaron tarde (código limpio) | 0.54 % | — | — |
+| Tiempo muerto pierna A | **1.000 µs**, sin traslape | ~1 µs | exacto |
+| Tiempo muerto pierna B | 42.187 / 41.813 µs | un periodo, por diseño | +9 / +3 ciclos |
+| **Asimetría entre semiciclos** | **0.374 µs** | ≤ 20 µs | **53×** |
 
-**Veredicto: PASA.** Con margen suficiente para abrir la etapa 2.
+**Veredicto: PASA en todo.** B5 cerrado con dos métodos independientes de acuerdo al 1.6 %, y el jitter de entrada confirmado por dos caminos distintos. Queda margen para abrir la etapa 2.
 
 ---
 
