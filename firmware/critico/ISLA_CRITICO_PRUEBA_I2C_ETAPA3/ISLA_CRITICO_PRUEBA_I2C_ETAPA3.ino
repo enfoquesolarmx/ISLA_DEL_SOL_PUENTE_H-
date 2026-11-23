@@ -109,6 +109,25 @@
  */
 #define PISO_CICLOS             43
 
+/*  CUERPO_PISO — el cuerpo más corto que la ISR del SPWM puede tener.
+ *  Medido: 49 sin ADC, 57 con ADC. Se usa 40 para dejar margen.
+ *
+ *  Sirve para DESDOBLAR la lectura del cronómetro. En modo 8 el contador
+ *  SUBE hasta TOP (333) y luego BAJA, así que una lectura r puede venir de
+ *  dos tiempos distintos:
+ *
+ *      tau = r            si la ISR todavía no pasa el TOP
+ *      tau = 666 - r      si ya lo pasó y el contador va de regreso
+ *
+ *  Como el cuerpo nunca baja de CUERPO_PISO, cualquier lectura menor que
+ *  t0 + CUERPO_PISO sólo puede venir del regreso.
+ *
+ *  ⚠️ Esto apareció en la etapa 3: con entradas de 272 ciclos y cuerpo de
+ *  140 el total pasa de 333, y el reporte mostraba cuerpos de 0, 2, 6, 15...
+ *  cuando el real es 57.
+ */
+#define CUERPO_PISO             40
+
 /*  Traza de la sección crítica del lazo en D12 (PB4 = EN_HW).
  *  Sube al entrar al ATOMIC_BLOCK y baja al salir, para poder ver en
  *  PulseView si las entradas tardías caen justo encima.
@@ -235,6 +254,7 @@ static Serie entrada;     // isr_t0            : piso fijo + espera ajena
 static Serie cuerpo;      // isr_t1 - isr_t0   : costo propio del SPWM
 static Serie ocupa;       // isr_t1 + epílogo  : lo que hay que caber
 static uint32_t tarde;    // entradas por encima de UMBRAL_TARDE
+static uint32_t dobladas; // lecturas que pasaron el TOP y hubo que desdoblar
 static uint32_t vueltas;  // vueltas del lazo, para calcular el robo propio
 static uint16_t desdeCheck;        // muestras desde la última lectura de isr_n
 volatile uint16_t relleno;         // destino de las lecturas de relleno
@@ -366,6 +386,7 @@ void setup()
   cero(cuerpo);
   cero(ocupa);
   tarde = 0;
+  dobladas = 0;
   vueltas = 0;
   for (uint8_t i = 0; i < CAJONES; i++) histo[i] = 0;
 
@@ -449,9 +470,18 @@ void loop()
 #endif
 
   if (hay && t1 >= t0) {
+    /*  Desdoblado: ver CUERPO_PISO. Sin esto, cuando la ISR pasa el TOP el
+     *  cronómetro lee de regreso y el cuerpo sale absurdamente corto.
+     */
+    uint16_t tau1 = t1;
+    if (tau1 < (uint16_t)(t0 + CUERPO_PISO)) {
+      tau1 = (uint16_t)(2UL * TOP_CUENTAS - t1);
+      dobladas++;
+    }
+
     mete(entrada, t0);
-    mete(cuerpo,  (uint16_t)(t1 - t0));
-    mete(ocupa,   (uint16_t)(t1 + EPILOGO_CICLOS));
+    mete(cuerpo,  (uint16_t)(tau1 - t0));
+    mete(ocupa,   (uint16_t)(tau1 + EPILOGO_CICLOS));
     histoMete((t0 > PISO_CICLOS) ? (uint16_t)(t0 - PISO_CICLOS) : 0);
     if (t0 > UMBRAL_TARDE) tarde++;
   }
@@ -518,6 +548,9 @@ void loop()
   Serial.print('%');
 
   // --- robo ajeno y sobrepasos ----------------------------------------------
+  Serial.print(F("  dobladas="));
+  Serial.print(dobladas);
+
   Serial.print(F("  robo="));
   Serial.print(entrada.maximo - entrada.minimo);
   Serial.print(F("c tarde="));
@@ -615,6 +648,18 @@ void loop()
   Serial.print(enlace_aux_presente() ? F(" AUX-OK") : F(" AUX-AUSENTE"));
 
   // El piso tiene que ser el que creemos; si no, todo lo demas se corre.
+  /*  Si la ENTRADA misma se acerca al TOP, el instrumento se queda sin
+   *  margen: pasando 333 ni siquiera t0 se puede desdoblar, porque no hay
+   *  un piso conocido contra el cual compararlo.
+   */
+  if (entrada.maximo > 300) {
+    Serial.print(F("   !! entrada="));
+    Serial.print(entrada.maximo);
+    Serial.print(F(" cerca de TOP="));
+    Serial.print(TOP_CUENTAS);
+    Serial.print(F(": el instrumento pierde margen"));
+  }
+
   if (entrada.minimo != PISO_CICLOS) {
     Serial.print(F("   !! PISO observado="));
     Serial.print(entrada.minimo);
@@ -627,6 +672,7 @@ void loop()
   cero(cuerpo);
   cero(ocupa);
   tarde = 0;
+  dobladas = 0;
   vueltas = 0;
   for (uint8_t i = 0; i < CAJONES; i++) histo[i] = 0;
 }
