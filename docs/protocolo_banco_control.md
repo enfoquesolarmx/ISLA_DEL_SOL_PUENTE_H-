@@ -941,6 +941,76 @@ Hay una razón de fondo para que salga tan bien: **la duración del semiciclo no
 
 Encima, esos 374 ns ocurren **en el cruce por cero**, donde la tensión instantánea es casi nula y el puente está apagado de todos modos. La componente de CD que inyectan es todavía menor de lo que sugiere la proporción de tiempo. Y la CD importa: es lo único que el cálculo de RMS por medio ciclo **no** puede absorber (+6.15 % de error).
 
+### El reloj, por fin medido contra una referencia de afuera
+
+Hasta aquí todo se había medido con el reloj del micro midiéndose a sí mismo, que no prueba nada. El analizador tiene **su propio cristal**, así que por primera vez hay con qué comparar.
+
+Con el decodificador **Timing** sobre la pierna B, en **dos canales distintos** de la misma captura:
+
+```
+Timing: Averages    16.655 ms  (60.043 Hz)     ← idéntico en los dos canales
+```
+
+**La salida del inversor es de 60.043 Hz.** Y eso se descompone en dos cosas que conviene no confundir:
+
+| | | |
+| --- | --- | --- |
+| Lo que el firmware genera por diseño | **60.060 Hz** | cuantización, no error |
+| Lo que midió el analizador | **60.043 Hz** | |
+| Diferencia = error de reloj | **0.030 %** | el cristal anda en ~15.9952 MHz |
+
+**Los 60.060 Hz no son una falla, son aritmética.** Con TOP = 333 y 400 muestras por ciclo:
+
+```
+16 000 000 / (2 × 333 × 400) = 60.0601 Hz
+```
+
+No hay nada que ajustar ahí: el número cae donde cae.
+
+**Y el cristal resultó bueno.** DC-017 anota que el Nano usa resonador, y un resonador anda en ±0.5 %. Esto está **dieciséis veces mejor**. Parte de esos 300 ppm pueden ser del cristal del propio analizador —sin un tercer reloj no se separan— pero el total de los dos juntos es 0.030 %, así que ninguno puede andar peor que eso.
+
+### El jitter rebota, no se acumula — y para el PLL eso lo es todo
+
+Los ciclos individuales no son iguales:
+
+```
+16.650  16.651  16.653  16.655  16.655  16.655  16.656  16.658  16.659 ms
+  ↑                                                               ↑
+60.059 Hz                                                    60.027 Hz
+```
+
+Son **9 µs de reparto, o sea 144 ciclos de reloj** — justo el tamaño del jitter de entrada que vimos en el histograma, donde los retrasos raros por `millis()` llegaban a 128-170 ciclos. Si un ciclo tiene su flanco golpeado y el siguiente no, la diferencia sale de ese tamaño. **Es la cuarta vez que el mismo fenómeno aparece**, ahora en la frecuencia de salida.
+
+Pero el promedio de ocho ciclos **no se mueve ni un dígito**. Eso quiere decir que el error es de colocación de flanco, no de conteo: el firmware nunca pierde ni gana una muestra, cuenta 400 y son 400.
+
+Para el PLL la distinción lo decide todo:
+
+- **si fuera deriva**, habría que perseguirla eternamente
+- **siendo jitter acotado**, cualquier promediado lo borra y el lazo engancha firme
+
+En la onda esos ±4.5 µs son **±0.097° de fase**. Para distorsión armónica, nada.
+
+### Lo único que un trinchero sí va a notar: los relojes de los aparatos
+
+El microondas, la estufa, el horno — los que cuentan el tiempo contando ciclos de la red.
+
+```
+a 60.043 Hz  →  se adelantan ~62 segundos al día
+```
+
+Un minuto diario, media hora al mes. **No es una falla**, es física: si la frecuencia va 0.07 % arriba, los relojes van 0.07 % arriba.
+
+**Se puede mejorar, y queda anotado para la V2.** Buscando combinaciones con número par de muestras por ciclo:
+
+| TOP | muestras | frecuencia | error | reloj de pared |
+| --- | --- | --- | --- | --- |
+| **333** | **400** | 60.060 Hz | +0.100 % | +86 s/día |
+| 330 | 404 | **60.006 Hz** | +0.010 % | +8.6 s/día |
+
+Diez veces mejor por diseño. No es gratis: mueve la portadora a 24.24 kHz, obliga a **regenerar la tabla senoidal** con 101 entradas por cuarto en vez de 100, y toca [DC-018](decisiones_criticas.md#dc-018-modulación-híbrida-a-24-khz-también-en-el-cargador-y-socket-multimodelo-atmega328p--atmega4809) y [DC-020](decisiones_criticas.md#dc-020-frecuencia-de-muestreo-del-adc-e-instante-del-disparo). O sea, revalidar lo que acabamos de cerrar.
+
+Y aun arreglándolo, **el cristal sigue poniendo sus 0.030 %**, que son 26 s/día. El salto real sería de 62 a ~26 segundos diarios, no a cero.
+
 ### Dos cosas del diseño que hay que tener presentes
 
 **1. En el cruce por cero el puente queda abierto ~83 µs, no 42.** El código también fuerza apagada la pierna A durante esas dos muestras:
@@ -976,6 +1046,9 @@ Si en el analizador aparecen periodos sin pulso cerca del cruce por cero, **no e
 | Tiempo muerto pierna A | **1.000 µs**, sin traslape | ~1 µs | exacto |
 | Tiempo muerto pierna B | 42.187 / 41.813 µs | un periodo, por diseño | +9 / +3 ciclos |
 | **Asimetría entre semiciclos** | **0.374 µs** | ≤ 20 µs | **53×** |
+| Frecuencia de salida (promedio) | **60.043 Hz** | — | 60.060 por diseño |
+| Error del cristal | **0.030 %** | — | resonador sería ±0.5 % |
+| Jitter de ciclo a ciclo | ±4.5 µs = ±0.097° | — | no se acumula |
 
 **Veredicto: PASA en todo.** B5 cerrado con dos métodos independientes de acuerdo al 1.6 %, y el jitter de entrada confirmado por dos caminos distintos. Queda margen para abrir la etapa 2.
 
