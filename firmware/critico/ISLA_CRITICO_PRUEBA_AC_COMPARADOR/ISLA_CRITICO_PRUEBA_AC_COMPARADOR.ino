@@ -97,7 +97,7 @@
 // ======================== CONSTANTES DERIVADAS ===============================
 constexpr uint16_t TOP_CUENTAS = 333;                 // 24 024 Hz de portadora
 constexpr uint32_t CONVERSION_NS = 104000;            // 13 ciclos del ADC a 125 kHz
-constexpr uint8_t  PERIODOS_POR_DISPARO = 4;          // DC-020 + margen (ver A6)
+constexpr uint8_t  PERIODOS_POR_DISPARO = 4;          // DC-020 (corregido en banco, ver A6)
 constexpr uint32_t PERIODO_PORT_NS = 2UL * TOP_CUENTAS * 1000UL / 16UL;   // 41 625
 constexpr uint32_t ENTRE_MUESTRAS_NS = PERIODO_PORT_NS * PERIODOS_POR_DISPARO;
 constexpr uint16_t MUESTRAS_POR_S = (uint16_t)(1000000000UL / ENTRE_MUESTRAS_NS);
