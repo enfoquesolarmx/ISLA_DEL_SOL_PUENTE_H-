@@ -3,35 +3,50 @@
  *  ISLA_CRITICO_PRUEBA_ISR_SPWM  -  Isla del Sol, micro CRÍTICO (A1)
  *  Protocolo de banco, Parte C — ETAPA 1: el SPWM solo, y cuánto dura su ISR
  *
- *  v3 — separa costo propio de latencia de entrada, cuenta sobrepasos y trae
- *       los dos interruptores para cazar quién roba el tiempo
+ *  v4 — histograma de la latencia de entrada: identifica a cada ladrón por
+ *       el ANCHO de su bloqueo, y cuenta las vueltas del lazo para saber
+ *       cuánto robo mete la propia instrumentación
  * -----------------------------------------------------------------------------
- *  LO QUE YA SE MIDIÓ EN BANCO (22-nov-2026, v2, 24 reportes de un segundo)
+ *  LO QUE YA ESTÁ MEDIDO EN BANCO (22-nov-2026, dos Nano distintos, v3)
  *
- *      ciclos min/med/max = 126/197/330     [vector+prólogo 43-176]
+ *      cuerpo   = 49/116/126 ciclos   idéntico en todos los reportes
+ *      entrada  = 43/51/~165          piso 43 clavado
+ *      PROPIO   = 204 c = 12.75 us = 30.6 %   (196 c netos de instrumentación)
+ *      SOBREPASOS = 0                 no se pierde ningún paso de la tabla
  *
- *    El medio salió 197 en los 24 reportes, sin moverse un ciclo: el cuerpo
- *    es determinístico. Toda la variación del máximo venía de la ENTRADA,
- *    que va de 43 a 176 ciclos. O sea que la ISR a veces arranca 133 ciclos
- *    (8.3 µs) tarde, esperando a que otra interrupción suelte el CPU.
+ *    simavr había predicho 193 c. Difieren 1.6 %. B5 CERRADO.
  *
- *    Costo propio del SPWM:  197 ciclos = 12.35 µs = 29.7 % del periodo.
- *    simavr había predicho:  193 ciclos = 12.07 µs = 29.0 %.   Difieren 2.3 %.
+ *  LO QUE FALTA: QUIÉN SE ROBA LA ENTRADA
  *
- *    B5 queda cerrado con dos métodos independientes de acuerdo.
+ *    El 15.1 % de las ISR entra tarde, y esa fracción NO cambió al pasar el
+ *    reporte de 1 s a 2 s (15.18 % contra 15.17 %), así que el UART no es.
  *
- *  LO QUE ESTA VERSIÓN VIENE A CONTESTAR
+ *    Tampoco cuadra mi sección crítica: medida en el binario son 18 ciclos,
+ *    y con piso 43 eso daría entradas de 61 como mucho. Pero la media de 51
+ *    con 15 % tardías implica que las tardías promedian ~85 ciclos, o sea
+ *    ~42 de retraso. Un bloqueo de 18 ciclos no produce eso.
  *
- *    1. ¿Quién se lleva los 133 ciclos? En la etapa 1 el SPWM corre solo, así
- *       que sólo pueden ser interrupciones del entorno de Arduino:
- *          - millis(), que instala una ISR en el desborde del Timer0
- *          - el UART, que interrumpe por cada byte del reporte
- *       Los dos interruptores de abajo los apagan por separado.
+ *    El máximo sí está explicado: robo llega a 128 y la ISR del Timer0
+ *    (millis) mide justo eso — pero su frecuencia sólo da para el 0.73 %.
  *
- *    2. ¿Se pierde algún paso de la tabla? Con 330 ciclos de 666 no debería,
- *       pero ahora se detecta exacto en vez de suponerlo: isr_sobrepasos.
+ *    Queda un segundo ladrón de unos 40-90 ciclos disparando ~28 000 veces
+ *    por segundo. Esta versión lo saca por el ancho.
  *
- *    3. El costo propio y la ocupación real, ya separados y no deducidos.
+ *  CÓMO LO SACA
+ *
+ *    1. HISTOGRAMA de la espera (entrada - 43) en ocho cajones. Cada fuente
+ *       de bloqueo deja su firma: un bloqueo de ancho W reparte las esperas
+ *       uniformemente entre 1 y W, así que el histograma se corta justo en W.
+ *       Leer dónde se corta = medir el ancho del ladrón.
+ *
+ *    2. VUELTAS DEL LAZO por segundo. Con eso el sketch calcula solo cuánto
+ *       robo le toca a su propia sección crítica:
+ *             robo propio = 18 ciclos x vueltas / 16 000 000
+ *       Si ese número se parece al 15 %, el culpable soy yo. Si no, hay un
+ *       tercero y el histograma dice de qué tamaño.
+ *
+ *    3. TRAZA EN D12 durante la sección crítica (opcional). Con PulseView se
+ *       ve directo si las entradas tardías caen encima de D12 en alto.
  *
  *  CÓMO CAZAR AL CULPABLE — tres corridas de un minuto
  *
@@ -39,21 +54,20 @@
  *      corrida 2:  SIN_MILLIS 1, SEGUNDOS_POR_REPORTE 1    ← se va millis()
  *      corrida 3:  SIN_MILLIS 0, SEGUNDOS_POR_REPORTE 10   ← se calla el UART
  *
- *    Si el MÁXIMO DE ENTRADA cae a ~43 en la 2, fue millis().
- *    Si cae en la 3, fue el UART.
- *    Si no cae en ninguna, hay un tercero y hay que buscarlo con el analizador.
- *
- *    Si fue millis(), eso no es un detalle de banco: es una decisión para el
- *    firmware de producción, porque el CRÍTICO no necesita millis() —ya cuenta
- *    desbordes del SPWM, que son una base de tiempo mejor y gratis.
+ *    Lo que hay que mirar ahora es el HISTOGRAMA, no el máximo:
+ *      - si en la corrida 2 se vacía el último cajón y los demás no se
+ *        mueven, millis() era sólo el máximo y no el problema
+ *      - el cajón donde se concentre el 15 % dice el ancho del verdadero
+ *        ladrón, y ese ancho lo identifica
  *
  *  LO QUE ESTE SKETCH NO PUEDE VER, Y SÍ NECESITA PULSEVIEW
  *
  *      - tiempo muerto: que HA/LA y HB/LB nunca estén altos a la vez.
- *        Son 16 cuentas = 1 µs; a 24 MS/s son 24 muestras, de sobra.
- *      - simetría de la pierna B: diferencia entre semiciclos ≤ 20 µs.
+ *        Son 16 cuentas = 1 us; a 24 MS/s son 24 muestras, de sobra.
+ *      - simetría de la pierna B: diferencia entre semiciclos <= 20 us.
  *
- *    Puntas:  D9 = HA   D10 = LA   D11 = HB   D3 = LB   (D4 = traza, opcional)
+ *    Puntas:  D9 = HA   D10 = LA   D11 = HB   D3 = LB   (D4 = traza ISR,
+ *             D12 = traza de la sección crítica del lazo)
  *
  *    NO buscar "anchos repetidos" en la pierna A: cerca del pico la senoidal
  *    es plana y los anchos se repiten SOLOS, sin que haya falla. Ese criterio
@@ -88,6 +102,27 @@
  *  es 43 ciclos; 60 deja margen para variaciones de compilador.
  */
 #define UMBRAL_TARDE            60
+
+/*  PISO_CICLOS — la entrada cuando nadie estorba: vector + prólogo + traza.
+ *  Medido 43 en banco, en dos tarjetas y en todos los reportes. De aquí sale
+ *  la ESPERA de cada ISR: espera = entrada - PISO_CICLOS.
+ *  El sketch verifica el piso contra el mínimo observado y avisa si difieren.
+ */
+#define PISO_CICLOS             43
+
+/*  Traza de la sección crítica del lazo en D12 (PB4 = EN_HW).
+ *  Sube al entrar al ATOMIC_BLOCK y baja al salir, para poder ver en
+ *  PulseView si las entradas tardías caen justo encima.
+ *  ⚠️ Requiere la etapa de potencia DESCONECTADA, igual que el resto.
+ */
+#define TRAZA_SECCION_CRITICA   1
+
+/*  Ciclos que mi propia sección crítica tiene las interrupciones apagadas.
+ *  Contados en el binario con:
+ *      avr-objdump -d firmware.elf   y buscar el cli ... out 0x3f del lazo
+ *  Sirve para que el sketch calcule cuánto robo se debe a sí mismo.
+ */
+#define CLI_PROPIO_CICLOS       18
 
 /*  EPILOGO_CICLOS — lo que el compilador gasta DESPUÉS de la última lectura
  *  de TCNT1 y que por lo tanto no se puede medir desde adentro.
@@ -145,10 +180,34 @@ struct Serie {
   uint16_t maximo;
 };
 
+/*  HISTOGRAMA DE LA ESPERA (entrada - PISO_CICLOS).
+ *
+ *  Por qué sirve: un bloqueo de ancho W, si cae en cualquier momento, reparte
+ *  las esperas UNIFORMEMENTE entre 1 y W y no produce ninguna mayor que W.
+ *  O sea que el histograma se CORTA en W. Leer dónde se corta es medir el
+ *  ancho del que bloquea, y el ancho lo identifica:
+ *
+ *      ~18 c   la sección crítica de este mismo lazo
+ *      ~40-90  el desconocido que andamos buscando
+ *      ~128    la ISR del Timer0 (millis)
+ */
+#define CAJONES  8
+static const uint8_t TOPE[CAJONES] = { 0, 10, 20, 40, 70, 110, 160, 255 };
+static uint16_t histo[CAJONES];
+
+static void histoMete(uint16_t espera)
+{
+  for (uint8_t i = 0; i < CAJONES; i++) {
+    if (espera <= TOPE[i]) { histo[i]++; return; }
+  }
+  histo[CAJONES - 1]++;
+}
+
 static Serie entrada;     // isr_t0            : piso fijo + espera ajena
 static Serie cuerpo;      // isr_t1 - isr_t0   : costo propio del SPWM
 static Serie ocupa;       // isr_t1 + epílogo  : lo que hay que caber
 static uint32_t tarde;    // entradas por encima de UMBRAL_TARDE
+static uint32_t vueltas;  // vueltas del lazo, para calcular el robo propio
 static uint32_t isrPrev;  // isr_n del reporte anterior
 static uint32_t isrCorte; // cuándo toca el siguiente reporte
 
@@ -212,6 +271,10 @@ void setup()
 
   DDRD  |= _BV(TRZ_BIT);
   PORTD &= ~_BV(TRZ_BIT);
+#if TRAZA_SECCION_CRITICA
+  DDRB  |= _BV(PB4);          // D12 = EN_HW, traza de la seccion critica
+  PORTB &= ~_BV(PB4);
+#endif
 
   Serial.println();
   Serial.println(F("================================================================"));
@@ -266,6 +329,8 @@ void setup()
   cero(cuerpo);
   cero(ocupa);
   tarde = 0;
+  vueltas = 0;
+  for (uint8_t i = 0; i < CAJONES; i++) histo[i] = 0;
 
   spwm_arrancar();
   spwm_fijar_amplitud(spwm_amplitud_max());   // caso peor: la tabla trabaja
@@ -282,6 +347,11 @@ void loop()
   uint32_t n;
   uint8_t  hay;
 
+  vueltas++;
+
+#if TRAZA_SECCION_CRITICA
+  PORTB |= _BV(PB4);
+#endif
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     hay = isr_lista;
     t0  = isr_t0;
@@ -290,11 +360,15 @@ void loop()
     sob = isr_sobrepasos;
     isr_lista = 0;
   }
+#if TRAZA_SECCION_CRITICA
+  PORTB &= ~_BV(PB4);
+#endif
 
   if (hay && t1 >= t0) {
     mete(entrada, t0);
     mete(cuerpo,  (uint16_t)(t1 - t0));
     mete(ocupa,   (uint16_t)(t1 + EPILOGO_CICLOS));
+    histoMete((t0 > PISO_CICLOS) ? (uint16_t)(t0 - PISO_CICLOS) : 0);
     if (t0 > UMBRAL_TARDE) tarde++;
   }
 
@@ -361,8 +435,40 @@ void loop()
   else if (ocupa.maximo * 10UL <= periodo * 9UL) Serial.println(F("AVISO"));
   else                                           Serial.println(F("FALLA"));
 
+  // ---------- segunda linea: el histograma y el autoexamen ---------------
+  Serial.print(F("   espera:"));
+  for (uint8_t i = 0; i < CAJONES; i++) {
+    Serial.print(' ');
+    if (i == 0)               Serial.print(F("0="));
+    else if (i == CAJONES - 1) { Serial.print('>'); Serial.print(TOPE[i - 1]); Serial.print('='); }
+    else                      { Serial.print(TOPE[i]); Serial.print('='); }
+    Serial.print(histo[i]);
+  }
+
+  // Cuanto robo le toca a MI PROPIA seccion critica:
+  //    fraccion = CLI_PROPIO_CICLOS x vueltas / F_CPU
+  // en partes por mil, con cuidado de no desbordar en 32 bits.
+  const uint32_t vps  = vueltas / SEGUNDOS_POR_REPORTE;
+  const uint32_t mio  = (CLI_PROPIO_CICLOS * (vps / 100UL) * 1000UL) / (F_CPU / 100UL);
+  Serial.print(F("   vueltas/s="));
+  Serial.print(vps);
+  Serial.print(F(" robo_mio="));
+  Serial.print(mio);
+  Serial.print(F("/1000"));
+
+  // El piso tiene que ser el que creemos; si no, todo lo demas se corre.
+  if (entrada.minimo != PISO_CICLOS) {
+    Serial.print(F("   !! PISO observado="));
+    Serial.print(entrada.minimo);
+    Serial.print(F(" esperado="));
+    Serial.print(PISO_CICLOS);
+  }
+  Serial.println();
+
   cero(entrada);
   cero(cuerpo);
   cero(ocupa);
   tarde = 0;
+  vueltas = 0;
+  for (uint8_t i = 0; i < CAJONES; i++) histo[i] = 0;
 }

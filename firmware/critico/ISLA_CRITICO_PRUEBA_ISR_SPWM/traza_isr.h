@@ -1,7 +1,8 @@
 /*
  * =============================================================================
  *  traza_isr.h  -  Isla del Sol, protocolo de banco Parte C, etapa 1
- *  v3 — separa costo propio de latencia de entrada, y detecta sobrepasos
+ *  v4 — histograma de latencia de entrada, para identificar a los ladrones
+ *       por el ANCHO de su bloqueo y no por descarte
  * -----------------------------------------------------------------------------
  *  spwm_328p.cpp busca este archivo con __has_include y, si lo encuentra, lo
  *  incluye. En la carpeta de producción (ISLA_CRITICO/) NO EXISTE, así que las
@@ -14,36 +15,22 @@
  *        TOV1 se levanta en BOTTOM con TCNT1 = 0, así que esto es el tiempo
  *        desde que la interrupción se disparó hasta la primera instrucción
  *        útil. Son dos cosas sumadas:
- *            el piso fijo    = vector (7) + prólogo (32) + traza (~4) = ~43
- *            la ESPERA       = lo que tardó otra ISR en soltar el CPU
- *        El mínimo de isr_t0 en una corrida larga ES el piso. Todo lo que
- *        pase de ahí es tiempo robado por otro.
+ *            el piso fijo = vector (7) + prólogo (32) + traza (~4) = 43
+ *            la ESPERA    = lo que tardó otro en soltar las interrupciones
+ *        Medido en banco: el piso es 43, clavado en todos los reportes.
  *
- *    isr_t1 - isr_t0 = el CUERPO. Esto sí es costo propio del SPWM y no
- *        depende de quién más esté corriendo.
+ *    isr_t1 - isr_t0 = el CUERPO. Costo propio del SPWM, no depende de quién
+ *        más esté corriendo. Medido: 49/116/126 ciclos, idéntico siempre.
  *
- *    costo propio = piso + cuerpo + epílogo.  Es el número de B5.
- *    ocupación real = isr_t1 + epílogo.       Es lo que hay que caber.
+ *    isr_sobrepasos: el AVR limpia TOV1 al entrar a la ISR. Si al SALIR está
+ *        puesto otra vez, hubo un segundo desborde mientras estábamos adentro
+ *        y se perdió una actualización de OCR. Exacto, sin umbral.
  *
- *    isr_sobrepasos: el AVR limpia TOV1 al entrar a la ISR. Si al SALIR la
- *        bandera está puesta otra vez, hubo un segundo desborde mientras
- *        estábamos adentro — o sea, no terminamos a tiempo y se perdió una
- *        actualización de OCR. Detección exacta, sin umbral y sin falsos
- *        positivos.
+ *    isr_n: cuenta TODAS las ISR; el lazo sólo alcanza a muestrear ~99 %.
  *
- *        ⚠️ Es LIGERAMENTE PESIMISTA: la propia instrumentación que corre
- *        después de leer isr_t1 (el contador y esta misma comprobación,
- *        ~20 ciclos) alarga la ISR. En producción esos 20 ciclos no existen.
- *
- *    isr_n: cuenta TODAS las ISR. El lazo sólo alcanza a recoger ~99.4 % de
- *        las muestras mientras imprime, así que contar en el lazo daba de
- *        menos. Esto cuenta de verdad.
- *
- *  ORDEN DE LAS OPERACIONES, que importa:
- *    - al entrar: primero sube el pin, luego lee TCNT1
- *    - al salir : primero lee TCNT1, LUEGO todo lo demás
- *  Así el cuerpo reportado no incluye la instrumentación de salida, y el pin
- *  nunca mide menos que el software.
+ *  ⚠️ La instrumentación que corre DESPUÉS de leer isr_t1 (el contador y la
+ *  comprobación de TOV1, ~23 ciclos) alarga la ISR real pero NO entra en el
+ *  número reportado. Por eso el detector de sobrepasos es algo pesimista.
  * =============================================================================
  */
 
