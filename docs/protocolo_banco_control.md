@@ -729,7 +729,7 @@ Prenderlo todo de golpe y ver jitter no sirve: no se sabe quién lo causó. **Ca
 | --- | --- | --- | --- |
 | **C1** | SPWM solo | **B5**: la ISR limpia, sin nadie estorbando | traza |
 | **C2** | + ADC (3 canales) | cuánto cuesta el ADC, y si el reparto se cumple | traza |
-| **C3** | + I2C con el AUX | cuánto cuesta TWI — **la incógnita grande** | traza |
+| **C3** | + I2C con el AUX | cuánto cuesta TWI — **la incógnita grande**, y quedó sin medir | traza |
 | **C4** | + red y comparador | si la medición coincide con el Fluke | traza |
 | **C5** | + etapa de potencia conmutando | acoplamiento al canal de red | **EN_HW**, alto y quieto |
 
@@ -747,7 +747,9 @@ Sin ADC, sin I2C, sin comparador. Es **B5** en estado puro.
 
 ### C5.3 Etapa 3 — entra el I2C
 
-El CRÍTICO es **esclavo** ([DC-010](decisiones_criticas.md#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms), línea 842: «el CRÍTICO nunca espera al bus»). Eso evita que *espere*, pero **la ISR de TWI sigue corriendo en el CRÍTICO**, una vez por byte, y cae donde caiga.
+⚠️ **Corregido por la corrida del 23 de noviembre.** Esta etapa se diseñó con el CRÍTICO de **esclavo**, como lo había dejado DC-010 («el CRÍTICO nunca espera al bus»), y **falló**: perdió pasos de la onda. Ahora el CRÍTICO es **maestro del bus** y el AUX esclavo en 0x21 — pero **maestro del bus no es quien manda**: el que manda sigue siendo el AUX, y el CRÍTICO nada más reporta su estado y recoge órdenes ([DC-027](decisiones_criticas.md#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda)). Los resultados están en la sección de las etapas 2 y 3, más abajo.
+
+En cualquiera de los dos papeles, **la ISR de TWI corre en el CRÍTICO**, una vez por byte, y cae donde caiga.
 
 A 100 kHz un byte son 90 µs de bus — más que un periodo de portadora. Durante una trama hay una ISR de TWI cada ~2.2 periodos. **El riesgo no es la ocupación promedio, que es mínima: es la colisión.**
 
@@ -1051,6 +1053,125 @@ Si en el analizador aparecen periodos sin pulso cerca del cruce por cero, **no e
 | Jitter de ciclo a ciclo | ±4.5 µs = ±0.097° | — | no se acumula |
 
 **Veredicto: PASA en todo.** B5 cerrado con dos métodos independientes de acuerdo al 1.6 %, y el jitter de entrada confirmado por dos caminos distintos. Queda margen para abrir la etapa 2.
+
+---
+
+## Etapas 2 y 3: entran el ADC y el I2C
+
+Corridas del 22 y 23 de noviembre de 2026, con el mismo instrumento de la etapa 1 y los mismos dos Nano.
+
+### El ADC entra y no se nota
+
+| | Etapa 1 (SPWM solo) | Etapa 2 (+ ADC) |
+| --- | --- | --- |
+| Costo propio | 204 c = 30.6 % | **218 c = 13.63 µs = 32.7 %** |
+| Cuerpo más corto | 49 c | **57 c** (predicho: 57) |
+| Pasos perdidos | 0 | **0** |
+| Disparos de ADC | — | **6 003/s**, reparto 2:1:1 exacto |
+| Disparos perdidos | — | **0** |
+
+El cuerpo mínimo cayó donde la cuenta decía que iba a caer, al ciclo. Y el disparo del ADC quedó en 6 006 Hz nominales por construcción: un disparo cada cuatro desbordes de la portadora ([DC-020](decisiones_criticas.md#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad)).
+
+**Lo que nadie diseñó y conviene saber.** Una conversión son 104 µs y el periodo de portadora 41.625 µs: 104 ÷ 41.625 = **2.4985 periodos**. O sea que la ISR del ADC termina siempre a medio periodo, unos 20.9 µs después del desborde y 20.9 µs antes del siguiente. **La colisión con la ISR del SPWM se evita por construcción, y fue por casualidad.** En los 24 reportes de la etapa 2 el cajón de 161–220 ciclos quedó vacío, que es exactamente lo que predice ese 2.4985. Queda anotado porque **es frágil**: cambiar el TOP de la portadora o el preescalador del ADC lo rompe sin avisar.
+
+### La etapa 3 falló — el primer FALLA de toda la Parte C
+
+Con el CRÍTICO de **esclavo** del bus, como lo había dejado DC-010:
+
+```
+SOBREPASOS = 2, 4 y 6   en tres corridas    ≈ 0.2 – 0.35 pasos perdidos por segundo
+```
+
+No era falsa alarma, y la cuenta cierra sola:
+
+```
+entrada 491  +  cuerpo 140  +  epílogo 35  =  666 ciclos  =  el periodo exacto
+```
+
+Para llegar a una entrada de 491 ciclos hacía falta apilar dos ladrones, y había los dos:
+
+| | ancho | de dónde salió |
+| --- | --- | --- |
+| copia de la foto de estado bajo `cli()` | **212 c** | contado en el binario del módulo del enlace |
+| ISR de TWI del núcleo de Arduino | ~150 c | estimada, nunca medida (ver más abajo) |
+
+Es la «colisión de tres» que advirtió C1, ocurriendo por primera vez. Ninguno de los dos solo alcanza; juntos sí. Y el aviso temprano funcionó como estaba diseñado: `dobladas` —las lecturas del cronómetro que pasaron el TOP— acompañó al fallo en proporción ~6:1 y separó limpio por ocupación (423 ciclos cuando había dobladas, 360 cuando no).
+
+### Lo que se hizo: voltear los papeles del bus
+
+El CRÍTICO pasó a ser **maestro del bus**, el AUX a esclavo en 0x21. El por qué completo está en [DC-027](decisiones_criticas.md#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda); aquí lo que importa para el banco:
+
+> ⚠️ **Maestro del bus no es quien manda.** El que manda sigue siendo el AUX: es el panel, pide los perfiles, trae los permisos del BMS y tiene el AUX_KILL por hardware. El CRÍTICO lleva el reloj del bus y en cada transferencia nada más **reporta su estado y recoge órdenes**. Es maestro por una razón mecánica: el que abre la transferencia es el único que puede cerrarla y el único que tiene el reloj para destrabar el bus.
+
+Y de paso **desaparece el `ATOMIC_BLOCK` de 212 ciclos**: de maestro la foto se arma y se manda en la misma llamada, nadie más la lee, y no hay carrera que proteger. Un cambio, dos problemas.
+
+### Las tres corridas de carga
+
+Subiendo el tráfico a propósito con `ENLACE_MS_ENTRE_ENVIOS`:
+
+| transferencias/s | bus ocupado | `vueltas/s` predicho | `vueltas/s` medido | pasos perdidos |
+| --- | --- | --- | --- | --- |
+| 10 (producción) | 2.6 % | — (referencia) | 22 016 | **0** en 45 reportes |
+| 48.4 | 12.8 % | 19 712 | 19 700 | **0** en 19 reportes |
+| 192 | 49.8 % | 11 348 | 10 752 | **0** en 22 reportes |
+
+A 192 transferencias/s —**20× el tráfico de producción, con la mitad del lazo bloqueado**— son ~528 000 periodos de portadora sin perder uno. En las tres: `PERDIDAS = 0` en el ADC, `CRC malo = 0` en los dos micros, `PROPIO = 218 c` y `OCUPA` peor ~51 %.
+
+La diferencia de 5 % en el tercer punto tiene nombre: armar la foto y calcular el CRC-8 de 15 bytes **no bloquea, pero corre 19 veces más seguido** — unos 2 200 ciclos ≈ 137 µs por transferencia.
+
+### ⚠️ Lo que este instrumento NO puede medir: la ISR de TWI
+
+C5.3 decía que la ISR de TWI se iba a medir «por su efecto», con la técnica del corte del histograma que quedó calibrada en la etapa 1. **No funcionó, y hay que decir por qué.**
+
+Primero pareció que sí: con el enlace corriendo, el cajón de 111–160 ciclos pasó de ~2 cuentas (etapa 2) a ~36 por segundo. De ahí salió una estimación de ~112 ciclos por ISR de TWI. **La corrida de 48.4/s la tumbó:** con cinco veces el tráfico el cajón no creció — se quedó plano (~30), y a 192/s bajó a ~19. Normalizado por muestra recogida: 1.68, 1.59 y 1.8 por mil. **Plano. Ese cajón no mide TWI.**
+
+**Por qué el instrumento es ciego justo ahí.** El lazo sólo recoge una muestra cuando está corriendo. Durante los 2.63 ms que dura una transferencia el lazo está detenido dentro de `endTransmission()`, así que **las ~63 ISR que corren en esa ventana no se recogen: se sobreescriben.** Las muestras interesantes son precisamente las que se pierden.
+
+La cuenta cuadra en tres puntos, y eso vuelve la ceguera una limitación **medida** y no una sospecha:
+
+| transferencias/s | muestras no recogidas, predicho | medido |
+| --- | --- | --- |
+| 10 | 10.9 % (8.3 % de base + 2.6 % de ventana ciega) | 10.9 % |
+| 48.4 | 21.2 % (8.3 % + 12.9 %) | 20.5 % |
+| 192 | 57.9 % (8.3 % + 49.6 %) | 56.5 % |
+
+**La diferencia con la etapa 1 es de fondo.** Ahí el ladrón era un `cli()` que **retrasaba** la ISR, y el retraso quedaba en el histograma. Un bloqueo por *llamada bloqueante* no retrasa la ISR: **esconde la muestra.** La técnica del corte no aplica a este caso.
+
+**Queda sin medir, y se deja escrito así** en vez de dejar un número equivocado en la documentación.
+
+### El límite duro que sí sirve
+
+`SOBREPASOS` se cuenta con `TIFR1` **adentro de la ISR, en todas**, recogidas o no: no tiene ventana ciega. Cero sobrepasos significa que en **cada una** de esas 528 000 ISR se cumplió
+
+```
+entrada + cuerpo (140) + epílogo (35) < 666    →    entrada < 491 ciclos, siempre
+```
+
+Así que sin conocer el máximo exacto, sabemos que **nunca pasó de 491** — ni en las muestras que el lazo no alcanzó a ver. Y 491 es justo la cifra donde la etapa 3 fallaba. Lo que se quitó fue el **apilamiento**: con el `cli()` de 212 ciclos fuera, el TWI solo ya no llega.
+
+### Tabla para la hoja de registro — etapas 2 y 3
+
+| | Resultado | Criterio | Margen |
+| --- | --- | --- | --- |
+| Costo propio de la ISR del SPWM (con ADC e I2C) | **218 c = 13.63 µs = 32.7 %** | ≤ 70 % | 2.1× |
+| Peor ocupación observada | 340 c = 21.25 µs = 51.1 % | ≤ 70 % | 1.4× |
+| Pasos de onda perdidos, a 10/s | **0** en 45 s | 0 en 60 s | — |
+| Pasos de onda perdidos, a 192/s | **0** en 22 s (~528 000 ISR) | — | 20× el tráfico |
+| Entrada máxima, acotada por `TIFR1` | **< 491 c siempre** | < 491 c | límite exacto |
+| Disparos de ADC perdidos | **0** en las tres corridas | 0 | — |
+| Reparto del ADC | **2:1:1 exacto**, 6 003 disparos/s | 50/25/25 ± 1 % | exacto |
+| Errores de CRC en el enlace (**B3**) | **0** en los dos micros | 0 | — |
+| Transferencia completa | 2.63 ms | — | 2.6 % del lazo a 10/s |
+| Duración de la ISR de TWI | **sin medir** | — | ver arriba |
+
+**Veredicto: PASA.** Las etapas 2 y 3 quedan cerradas. La etapa 3 falló primero de esclavo, se corrigió con [DC-027](decisiones_criticas.md#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda) y pasó con 20× de margen de tráfico.
+
+### Lo que queda abierto de la etapa 3
+
+- **El máximo real de la entrada no se conoce**, sólo su límite de 491 ciclos. Se cierra guardando el máximo **dentro del enganche** (`if (isr_t0 > isr_t0_max) isr_t0_max = isr_t0;`, unos 8 ciclos) en vez de muestrearlo desde el lazo. No cambia ninguna decisión de diseño: se anota para la próxima vez que se toque el instrumento.
+- **La ISR de TWI sigue sin medir.** Si algún día hace falta el número, el camino es el analizador lógico mirando D4 contra SCL: la punta no es ciega durante la transferencia, el muestreo sí.
+- **El doblez del cronómetro no está resuelto, sólo no se activó.** `dobladas = 0` en las tres corridas porque las entradas se quedaron lejos del TOP. El arreglo de raíz sigue siendo mover la medición del cuerpo al Timer2 libre con preescalador /1 (16 µs de alcance contra 8.8 µs de cuerpo máximo), porque entre t0 ≈ 207 y 245 **ningún umbral distingue** una lectura doblada de una buena.
+- **El AUX necesita *watchdog*.** Como esclavo del bus sí puede trabarse — es el precio del cambio, y es el correcto porque no tiene trabajo de tiempo real. Pero hay que reiniciarlo solo.
 
 ---
 
