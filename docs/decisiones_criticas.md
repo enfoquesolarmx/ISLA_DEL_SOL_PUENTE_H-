@@ -48,6 +48,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo) | Transferencia red / inversor / cargador: tres estados y ninguna falla de un relé forma paralelo | Tarjeta de relés | 2026-11-08 | Vigente (V1, por validar en banco) |
 | [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad) | Reloj del ADC a /128 y muestreo amarrado a la portadora: precisión antes que velocidad | Control | 2026-11-16 | Vigente (V1, por validar en banco) |
 | [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no) | Transformador fuera de rango: qué pasa, qué se detecta solo y qué no | Potencia | 2026-11-18 | Vigente |
+| [DC-022](#dc-022-socket-de-diagnóstico-autodiagnóstico-de-la-etapa-de-potencia-antes-de-la-primera-energización) | Socket de diagnóstico: autodiagnóstico de la etapa de potencia antes de la primera energización | Control + potencia | 2026-11-21 | Objetivo (no vigente) |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -1299,6 +1300,79 @@ Una medición, una división y una comparación. Con eso el firmware **sabe qué
 > **Historia de esta entrada.** La primera redacción (18 de noviembre de 2026) tenía un error que invalidaba casi todas sus tablas: trataba la salida del puente como `amplitud × V_bus × razón`, **olvidando el √2** del fundamental del SPWM. Con ese error el diseño parecía trabajar al 100 % de amplitud y quedaba «marginal», y se llegó a escribir que un transformador de 30 → 120 estaría *más cerca del ideal que el nominal del diseño*. **Es falso, y lo contrario es lo cierto:** el de 30 V es justo el que no alcanza con batería baja, y el diseño está bien centrado. El error lo encontró el usuario al señalar que una cosa son los 48 V del bus y otra los 24–26 V del primario. Se deja asentado porque el número de la izquierda de una multiplicación es el que nadie revisa.
 
 **Referencias:** [6], [26], y las entradas [DC-013](#dc-013-corriente-ac-con-pinza-sct-013-015-en-el-crítico-a2), [DC-014](#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado) y [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809).
+
+---
+
+## DC-022. Socket de diagnóstico: autodiagnóstico de la etapa de potencia antes de la primera energización
+
+> **«Un LED dice *estoy vivo*, y cuando no lo está no dice nada más.»** Lo que hace imposible rescatar un inversor muerto no es soldar: es no saber qué buscar.
+
+**Estado: objetivo a futuro, no vigente.** Esta entrada no pide nada de la versión 1 y no cambia el esquemático de hoy. Se asienta ahora para que las decisiones que sí se están tomando —sobre todo el comparador de cruce por cero— se tomen sabiendo que esto viene después, **cuando el diseño ya camine**.
+
+### Por qué existe
+
+En un inversor comercial de 1 kW lo caro es el transformador; es la pieza de mayor valor de la caja. Lo que se muere es el módulo de control, que cuesta entre 5 y 8 dólares. Cuando muere, se tira el transformador, los MOSFET TO-220, el disipador, el inductor de salida, los capacitores del bus, el gabinete, el ventilador y los bornes.
+
+**Se bota lo caro para no reparar lo barato**, y no se repara porque es SMD y porque nadie sabe qué falló.
+
+Competir con un módulo EGS002 en una tarjeta nueva es pelear por siete dólares. **Resucitar la caja completa es otra cosa**, y además llega con un dueño motivado que ya tiene el fierro en la mesa. Esa es la propuesta que esta entrada habilita, y es la que vuelve al proyecto una herramienta de trinchera en vez de un producto más.
+
+### Qué mide
+
+Con el bus desconectado y una tensión de prueba baja, pulsando las compuertas y observando la respuesta:
+
+| Qué | Cómo se detecta |
+| --- | --- |
+| MOSFET en corto | Drenaje-surtidor casi en cero, sin pulsar |
+| MOSFET abierto | Se pulsa la compuerta y el drenaje no se mueve |
+| Disparo cruzado | Se pulsa una rama y se mueve la otra |
+| Capacitor de *bootstrap* | Se pulsa el lado bajo para cargarlo y se verifica que el alto ya pueda encender |
+| Capacitores del bus | Constante de tiempo → capacidad, y a grandes rasgos el ESR |
+| **Relación del transformador** | Se pulsa el primario y se mide el secundario |
+| **Espiras en corto** | Ensayo de timbre (abajo) |
+
+El penúltimo renglón importa más de lo que parece: **la razón de vueltas es justo el número que [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no) necesita y que el que rescata no tiene.** Esa entrada se escribió pensando en el trinchero que compra el transformador que encuentra; el que rescata no lo escoge, lo hereda. Es el mismo problema, y el techo de amplitud por flujo de DC-021 es lo que vuelve a la tarjeta adaptable a lo que se encuentre.
+
+### El ensayo de timbre, que es lo que un multímetro no puede hacer
+
+Una espira en corto **es invisible al óhmetro**: la resistencia del devanado casi no cambia. Y es fatal.
+
+El ensayo de timbre pulsa el devanado y lo deja resonar con su propia capacitancia distribuida. Una espira en corto se comporta como un secundario con carga brutal: se traga la energía y **el Q se desploma**. Un devanado sano timbra muchos ciclos antes de apagarse; uno con espira en corto, uno o dos.
+
+**El umbral absoluto hay que establecerlo en banco por familia de transformador** —no es el mismo número para un toroidal de 1 kW que para un EI chico—, pero el colapso del Q es inequívoco y no necesita calibración fina para distinguir sano de muerto.
+
+**Y lo cuenta el comparador analógico del ATmega328P**, el mismo que se va a poner para el cruce por cero. El timbre anda en decenas de kilohertz, demasiado rápido para una ISR, pero sondeando el bit `ACO` en un lazo apretado (del orden de 0.3 µs por vuelta) se cuentan de sobra. **Cero hardware nuevo.**
+
+### La decisión de arquitectura
+
+**No es un instrumento aparte: es el autodiagnóstico de arranque de la propia tarjeta.**
+
+> La tarjeta se niega a energizar el bus hasta que la etapa de potencia pase el examen.
+
+Así no es un accesorio que el trinchero tenga que conseguir —y que por lo tanto no va a tener—, sino **la tarjeta protegiéndose de la caja que va a manejar**. Poner una tarjeta nueva sobre una etapa de potencia en corto sólo mata la tarjeta nueva; este examen es lo que lo impide. Enlaza directo con el doble candado de [DC-014](#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado).
+
+El veredicto se reporta en el mismo idioma que ya usa el clasificador de [DC-011](#dc-011-lectura-de-p9-las-dos-ramas-en-un-solo-pin-analógico-nunca-en-paralelo-directo): **un estado con nombre y su margen medido.** «MOSFET Q3 en corto, 0.4 Ω» le sirve a alguien; tres parpadeos y una pausa, no.
+
+### Seguridad, y va primero en el procedimiento
+
+**Batería fuera, bus desconectado, capacitores descargados y *verificados* descargados, antes de pulsar nada.** Pulsar compuertas con 48 V en el bus y un MOSFET en corto es exactamente cómo se hace un cortocircuito con chispas. El procedimiento escrito empieza por ahí o no sirve.
+
+### Preguntas abiertas
+
+- **El bus.** La mayoría de los inversores baratos del mercado son de 12 o 24 V y este diseño es de 48. La fórmula del techo por flujo de DC-021 ya es agnóstica al bus; lo que no lo es son los rangos de sensado y el manejo de compuertas. Falta decidir si la tarjeta se hace flexible o si el alcance se limita a 48 V.
+- **Puente H contra *push-pull*.** Muchos inversores baratos no traen puente H sino *push-pull* con primario de tap central y MOSFET sólo del lado bajo. No son intercambiables. Vale la pena notar que el *push-pull* es **más fácil**, no más difícil: dos compuertas bajas y sin *bootstrap*.
+- **Mecánica.** Medidas de tarjeta, barrenos y posición de conectores para que entre en gabinetes ajenos.
+- **El triage en papel.** La capa más valiosa del diagnóstico es la que no necesita hardware: **qué medir con un multímetro, en qué orden y cuál es el criterio** para decir «esta caja se salva» o «esta caja no». Eso se puede escribir sin tocar el firmware y debería ir antes que todo lo demás.
+
+### De qué depende
+
+| Depende de | Estado |
+| --- | --- |
+| Comparador analógico en AIN0/AIN1 (cruce por cero) | **Sin entrada propia todavía** — decidido en banco el 2026‑11‑20, falta asentarlo |
+| [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no), techo de amplitud por flujo | Pendiente de implementar |
+| [DC-014](#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado), doble candado | Vigente |
+
+**Referencias:** las entradas [DC-011](#dc-011-lectura-de-p9-las-dos-ramas-en-un-solo-pin-analógico-nunca-en-paralelo-directo), [DC-014](#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado) y [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no).
 
 ---
 
