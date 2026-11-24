@@ -69,6 +69,7 @@ El sistema está pensado para que **el error humano no pueda causar el daño**:
 ISLA_DEL_SOL_PUENTE_H-/
 ├── README.md                                   ← este archivo
 ├── LICENSE.md                                  ← licencias (hardware, documentación, firmware)
+├── CONTRIBUTING.md                             ← cómo se trabaja aquí: las reglas que ya costaron algo
 ├── .gitignore
 ├── docs/
 │   ├── vision_isla_del_sol.md
@@ -276,5 +277,7 @@ Primero gatear, después caminar. La etapa actual busca un equipo **básico pero
 - **Firmware**: MIT
 
 Ver [`LICENSE.md`](LICENSE.md).
+
+**Antes de mandar un cambio**, lee [`CONTRIBUTING.md`](CONTRIBUTING.md). Son siete reglas y ninguna es de estilo: cada una dice qué falló cuando no estaba.
 
 Las hojas de datos de los fabricantes no se incluyen en el repositorio por derechos de autor; los documentos citan la fuente de cada dato.
