@@ -154,6 +154,45 @@ Referencia de diseño: [DC-006](decisiones_criticas.md#dc-006-sensado-ac-con-dos
 
 **Qué desbloquea.** Confirma la decisión de "un bias por canal" de DC-006. Si falla el acoplamiento, el PCB necesita separar los rieles o poner un seguidor.
 
+### Resultado parcial — 24 de noviembre de 2026
+
+⚠️ **La impedancia quedó contestada; el acoplamiento no.** Y el acoplamiento es el que esta misma sección llama «más importante que la de impedancia», así que **A1 sigue abierta.**
+
+**Lo que se contestó, y por un camino distinto al escrito.** No con el multímetro sino **por nulidad**: cambiando el capacitor del bias y viendo que la lectura del canal no se mueve.
+
+| C del bias | RMS de la red | cambio |
+| --- | --- | --- |
+| el que ya estaba | 224.9 c | referencia |
+| + 10 µF electrolítico | **224.9 c** | 0.00 % |
+| cambiado a 100 µF | **225.5 c** | +0.27 %, dentro de la deriva de la red |
+
+El modelo de la red completa dice que, para que cambiar de 10 a 100 µF **no mueva nada**, la impedancia previa tiene que ser de **≤ 26 Ω a 60 Hz**:
+
+```
+262 Ω (10 µF)   predice  −1.22 %
+100 Ω           predice  −0.38 %
+ 26 Ω (100 µF)  predice  +0.00 %   ← lo observado
+```
+
+> ✅ **El bias se para solo, con holgura.** El banco ya traía el equivalente a 100 µF o más desde antes de que empezáramos a cambiarle capacitores — los dos que se agregaron fueron marginales. Si el bias hubiera estado sin capacitor, la lectura se habría caído a ~83 V, un 30 %.
+
+**Lo que falta de A1:** el punto 1 (nivel de CD con multímetro), el punto 2 (rizado en AC) y sobre todo el punto 3, **el acoplamiento entre canales**, que es el que decide si la separación de rieles del PCB alcanza.
+
+### Y una medición que A1 no pedía: el arranque
+
+Con los 100 µF puestos y el micro recién reiniciado, **el primer segundo sale sucio y el resto limpio**:
+
+```
+reporte 1   sigma=3.8c   min/max=182/226c    ← una ventana leyó 19 % abajo
+reporte 2+  sigma=0.0c   min/max=221/226c    ← limpio
+```
+
+Es el bias trepando hacia 2.5 V con **τ = 500 ms**. Con 10 µF (τ = 50 ms) nunca se vio, porque cabía entre reportes.
+
+> 📌 **Requisito de firmware que sale de aquí:** con la opción 3 puesta, **los canales de CA no son creíbles durante el primer segundo y medio.** Hay que esperar al arranque —o mejor, esperar a que la lectura de los dos canales se quede quieta— antes de habilitar la transferencia.
+
+⚠️ **Y destapa un hueco en el descarte de ventanas sucias.** En ese primer reporte `descartadas = 0`: el mecanismo de [DC-028](decisiones_criticas.md#dc-028-el-lazo-de-control-de-ca-comparador-para-el-cruce-rms-de-medio-ciclo-por-pares) sólo sabe descartar ventanas **a las que les faltan muestras** por desborde del anillo. Una ventana cuyas muestras llegaron **todas** pero cuyo frente analógico todavía no se asienta le pasa por debajo. **Son dos clases de ventana sucia y sólo hay defensa para una.** Pendiente.
+
 ---
 
 ## A2. El secundario en vacío — el número que manda
@@ -1292,6 +1331,7 @@ Y vale la pena ver **cuánto subestimaba el muestreo**: en la misma corrida, la 
 - **El canal del inversor no se pudo validar**: hace falta la etapa de potencia, o sea la etapa 5.
 - **Deuda de banco, no de diseño:** se descartan 8 de 240 ventanas por segundo (3.3 %) por el reporte serial, que en producción no existe.
 - ⚠️ **Las fronteras de ventana se pierden siete veces más de lo que les toca** — son 5 % de los eventos del anillo y 37 % de las pérdidas. **Sin explicación confirmada.** No afecta el resultado porque el descarte las cubre, pero queda anotado en vez de inventarle una causa.
+- ⚠️ **El descarte de ventanas sucias cubre una sola de las dos clases.** Detecta las ventanas a las que les **faltan muestras** por desborde del anillo, y no las ventanas cuyas muestras llegaron **todas** pero cuyo frente analógico todavía no se asienta. Se vio en el arranque del 24 de noviembre con el bias de 100 µF: `sigma=3.8c`, una ventana 19 % abajo, y `descartadas = 0` — el mecanismo ni se enteró. Hace falta un segundo criterio, y el candidato natural es el propio `CD`: una ventana cuyo bias no coincide con el de la ventana anterior no es comparable con ella.
 - **El criterio (e) hay que replantearlo.** Los 12.5 mV de σ venían de A6 de la Parte A, que era otra medición con mucho más promediado. Con 25 muestras por ciclo el piso por ventana es de ~0.6 cuentas ≈ 340 mV; el promedio del segundo sí baja a unos 30 mV. No es que el firmware falle: el criterio estaba escrito contra otra cosa.
 
 ---
