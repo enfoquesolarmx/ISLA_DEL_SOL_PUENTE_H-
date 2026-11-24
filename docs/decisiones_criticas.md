@@ -56,6 +56,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda) | El enlace I2C al revés: el CRÍTICO es maestro del bus, y maestro del bus no es quien manda | Control | 2026-11-23 | Vigente (medido en banco) |
 | [DC-028](#dc-028-el-lazo-de-control-de-ca-comparador-para-el-cruce-rms-de-medio-ciclo-por-pares) | El lazo de control de CA: comparador para el cruce, RMS de medio ciclo por pares | Control | 2026-11-24 | Vigente (medido en banco) |
 | [DC-029](#dc-029-la-referencia-del-adc-es-avcc-y-eso-se-lleva-la-calibración-adentro) | La referencia del ADC es AVCC, y eso se lleva la calibración adentro | Control | 2026-11-24 | Vigente (por implementar) |
+| [DC-030](#dc-030-el-enlace-can-con-el-bms-la-batería-es-la-autoridad-sobre-los-límites-y-nosotros-nada-más-latimos) | El enlace CAN con el BMS: la batería es la autoridad sobre los límites | Control | 2026-11-24 | Vigente (por implementar) |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -1997,6 +1998,84 @@ A0, A6, A0, A3, A0, A6, A0, BG
 
 ---
 
+## DC-030. El enlace CAN con el BMS: la batería es la autoridad sobre los límites, y nosotros nada más latimos
+
+> En I2C el CRÍTICO lleva el reloj y **el AUX manda** ([DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda)). En CAN el que manda es **la batería**: nosotros pedimos permiso y mandamos un latido.
+
+**Estado: vigente (V1), pendiente de implementar.** El hardware quedó fijado en [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms); esta entrada fija el **protocolo** y lo que el protocolo implica para el reparto de autoridad. Escrita el 24 de noviembre de 2026, antes de tener la batería en la mesa.
+
+### El hardware ya estaba decidido
+
+De DC-010, y no se cambia:
+
+```
+MCP2515 + TJA1050 (módulo HW-184) colgado del AUX por SPI
+   CS  = D9        INT = D2
+RJ45 tipo Pylontech:   pin 4 = CAN_H    pin 5 = CAN_L    pin 6 = GND
+```
+
+Va en el AUX a propósito: el CRÍTICO no tiene tiempo sobrante y el CAN no es tiempo real.
+
+### El protocolo: PYLON Low Voltage CANBUS
+
+**500 kbit/s, identificadores de 11 bits, little-endian, un envío por segundo.** Es el protocolo de las Pylontech de baja tensión (US2000 / US3000, 48 V) y el que **emulan** los BMS «Pylontech-compatible» —JK, Seplos y varios más— que es la mitad de la razón para elegirlo.
+
+| ID | Dirección | Contenido | Escala |
+| --- | --- | --- | --- |
+| `0x351` | batería → nosotros | `[0..1]` voltaje de carga sugerido · `[2..3]` corriente máxima de carga · `[4..5]` corriente máxima de descarga | 0.1 V · 0.1 A · 0.1 A |
+| `0x355` | batería → nosotros | `[0..1]` SOC · `[2..3]` SOH | 1 % |
+| `0x356` | batería → nosotros | `[0..1]` voltaje del banco · `[2..3]` corriente total · `[4..5]` temperatura media de celda (int16) | 0.01 V · 0.1 A · 0.1 °C |
+| `0x359` | batería → nosotros | `[0..1]` banderas de protección · `[2..3]` banderas de alarma · `[4]` número de módulos · `[5..6]` ASCII `"PN"` | banderas de bit |
+| `0x35C` | batería → nosotros | `[0]` bit 7 = **permiso de carga** · bit 6 = **permiso de descarga** | banderas de bit |
+| `0x35E` | batería → nosotros | `[0..7]` nombre del fabricante, ASCII | — |
+| **`0x305`** | **nosotros → batería** | **ocho bytes en cero** | **— (latido)** |
+
+### La asimetría que define el diseño
+
+`0x35C` y `0x351` convierten a la batería en **la autoridad sobre los límites**: ella dice cuánta corriente acepta, hasta qué voltaje, y si en este momento se puede cargar o descargar. Nadie más tiene esa información —la temperatura de celda y el desbalance no salen de ningún sensor nuestro.
+
+**Y el camino hasta el CRÍTICO ya existe.** El AUX recibe los permisos por CAN y se los pasa en el campo de «permisos del BMS» que la foto de estado de DC-027 **ya lleva**. No hace falta transporte nuevo:
+
+```
+BMS  --CAN 1 s-->  AUX  --I2C 10/s, foto de DC-027-->  CRÍTICO
+```
+
+⚠️ **Con el límite de DC-010 intacto, y es lo que no se negocia:** el CRÍTICO nunca depende del enlace para protegerse. Si el AUX se calla, el CRÍTICO sigue con sus propias protecciones de voltaje de batería, corriente y temperatura. **El BMS refina los límites; no los habilita.**
+
+De ahí sale la regla para el *timeout* del CAN, que es una decisión y no una omisión: si dejan de llegar `0x35C` y `0x351`, el sistema **no se apaga** — vuelve a los límites por ventana de voltaje de [DC-008](#dc-008-tablero-de-diagnóstico-de-la-alimentación-led-test-points-y-valores-de-referencia) —40 a 58.4 V en LiFePO4, 42 a 64 V en plomo—, que es exactamente como funciona hoy sin BMS. Dejar un quirófano sin luz por un cable de red suelto sería peor que la falla que se está evitando.
+
+### Lo único que mandamos nosotros, y por qué es independiente
+
+**`0x305`, ocho bytes en cero, cada segundo.** Es el latido del inversor hacia la batería; si se calla, la batería considera el enlace muerto y cierra los permisos.
+
+⚠️ **Ese latido no se puede condicionar al enlace I2C.** El AUX tiene que mandar `0x305` aunque el CRÍTICO esté callado — si se encadenaran, una falla del I2C se convertiría en una falla del BMS, y acabaríamos con dos enlaces que fallan juntos en vez de dos enlaces independientes. **Dos enlaces, dos latidos, ninguno colgado del otro.**
+
+### Lo que NO hay que validar: el nombre
+
+`0x35E` trae el nombre del fabricante. Una Pylontech de verdad manda `"PYLON"`; los BMS que emulan el protocolo mandan su propia cadena —Battery-Emulator, por ejemplo, manda `"BatEmuLV"`.
+
+**Si el firmware valida el nombre, rechaza justo a los equipos compatibles que son la razón de haber elegido este protocolo.** Se lee para diagnóstico y se imprime en el panel; no decide nada.
+
+### Tres trampas antes de conectar
+
+1. **El cristal del módulo HW-184 suele ser de 8 MHz, no de 16.** Si la biblioteca se configura para 16 MHz, la velocidad real sale a la mitad y no comunica nada. Es el error más común con ese módulo y el primero que hay que descartar.
+2. **La terminación.** Un bus CAN lleva 120 Ω en cada extremo. La batería trae el suyo y el HW-184 suele traer uno de fábrica: hay que verificar que **no queden dos** en nuestro extremo.
+3. ⚠️ **Las fuentes se contradicen en `0x351`:** el documento del protocolo da los límites de corriente como **int16 con signo** y una implementación de referencia los lee como **uint16**. Con la batería en la mesa se resuelve en un minuto —una corriente de carga nunca es negativa, así que los dos coinciden en el rango útil y sólo se separan arriba de 3276.7 A, que no existe. Se anota en vez de elegir.
+
+**Y una nota de aislamiento:** el TJA1050 no está aislado, así que el GND del CAN (pin 6) queda unido al nuestro. No es nuevo —los dos ya comparten el negativo de la batería— pero es un segundo camino en paralelo con el cable de potencia, y de ahí sale un lazo de tierra. Con 500 kbit/s y un metro de cable no debe importar; si importa, el arreglo es un aislador en el SPI o un transceptor aislado, no quitar el GND.
+
+### Consecuencias
+
+- ✅ **No hace falta transporte nuevo:** la foto de estado de DC-027 ya tiene el campo de permisos del BMS.
+- ✅ **El reparto de autoridad queda escrito:** la batería manda sobre los límites, el AUX sobre la operación, el CRÍTICO sobre su propia protección. Tres niveles y ninguno indispensable para el de abajo.
+- ⚠️ **Hay que confirmar el modelo de batería antes de comprar.** Esto es el protocolo de **baja tensión**. Las Pylontech de alta tensión usan otro distinto, y no es compatible.
+- ⚠️ **El modo cargador no se puede probar con una fuente de banco**, porque una fuente no absorbe energía. Esa validación necesita batería de verdad o carga electrónica.
+- El primer firmware del módulo `can_bms` **sólo escucha y reporta**, sin que nada dependa de él. Es la forma de validar el enlace sin arriesgar una decisión de operación a un protocolo que todavía no hemos visto correr.
+
+**Referencias:** [DC-008](#dc-008-tablero-de-diagnóstico-de-la-alimentación-led-test-points-y-valores-de-referencia), [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms), [DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda). Fuentes externas: [27], [28], [29] y [9].
+
+---
+
 ## Críticas esperadas y preguntas abiertas
 
 Lo que sabemos que se puede discutir. Se deja escrito a propósito:
@@ -2039,6 +2118,9 @@ Quien tenga datos (mediciones, una alternativa probada, una falla documentada) p
 23. EC&M, *Transfer Switches Simplified*: el interruptor de transferencia básico es de dos polos y dos tiros; con él es imposible que las dos fuentes alimenten la carga a la vez. <https://www.ecmweb.com/basics/transfer-switches-simplified>
 24. Rayex, *L90 / L90S Power Relay*: 1 Form C, 30 A (NO) / 20 A (NC) a 240 VAC, bobina de 12 V con 160 Ω y 0.9 W, 2500 VAC (L90S). <https://manualmachine.com/datasheet/l9005w/27845111-specification>
 25. OutBack Power Systems, *GVFX/GTFX Series Inverter/Charger Installation Manual*, puesta a tierra: neutros comunes en todo el sistema, unión N–PE en un solo punto y retiro de las demás (incluida la de la planta). <https://manualsdir.com/manuals/407161/outback-power-systems-gvfx-series-inverter_charger-installation-manual-gtfx-series-inverter_charger-installation-manual.html?page=74>
+27. Pylontech, *PYLON Low Voltage CANBUS protocol*, V1.2: 500 kbit/s, identificadores de 11 bits, little-endian, envío cada segundo; tramas 0x351, 0x355, 0x356, 0x359, 0x35C y 0x35E de la batería y 0x305 del inversor. <https://akkudoktor.net/uploads/short-url/oLZIl9bFdMC1doN4OnIvXbazHMl.pdf>
+28. dalathegreat, *Battery-Emulator — Pylontech LV CAN protocol*: implementación de referencia con los desplazamientos de byte, tipos y escalas de cada trama; 0x305 de ocho bytes en cero como latido del inversor; nombre de fabricante propio en 0x35E. <https://deepwiki.com/dalathegreat/Battery-Emulator/5.5-pylontech-lv-can-protocol>
+29. Set Fire Labs, *Pylontech US2000/US3000: reading and replicating the CAN bus*: captura del bus de una batería real y verificación del latido. <https://www.setfirelabs.com/green-energy/pylontech-can-reading-can-replication>
 26. Microchip, *Prescaling and Conversion Timing* (mismo periférico ADC que el ATmega328P): «the successive approximation circuitry requires an input clock frequency between 50kHz and 200kHz to get maximum resolution»; conversión normal de 13 ciclos de ADC, primera conversión de 25 ciclos, *sample-and-hold* a 1.5 ciclos de ADC del inicio de una conversión normal (13.5 en la primera). <https://onlinedocs.microchip.com/oxy/GUID-EC8D3BAB-0B5E-454F-AB6E-6A7C91C6F103-en-US-3/GUID-6E3CE6D6-C382-4489-A654-C4664BA15691.html>
 
 ---
