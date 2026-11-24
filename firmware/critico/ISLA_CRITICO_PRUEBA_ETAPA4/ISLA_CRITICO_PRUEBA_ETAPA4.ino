@@ -864,6 +864,8 @@ void loop()
 
     Serial.print(F(" anillo="));
   Serial.print(rms_anillo_perdidos());
+  Serial.print(F(" descartadas="));
+  Serial.print(rms_descartadas());
   Serial.print(F(" PERDIDAS=")); Serial.print(pe);
 
     Serial.print(F("  cuentas=")); Serial.print(adc_cuentas(ADC_RANURA_INV));
@@ -941,7 +943,7 @@ void loop()
       Serial.print(F("   <<< CRUCES FUERA DE CUENTA"));
 
     Serial.println();
-    rms_atender(); cmp_atender();          // ver la nota del anillo, abajo
+    rms_atender(); cmp_atender();   // el reporte bloquea el lazo: ver el anillo
 
     /*  LA PREGUNTA QUE DECIDE EL ARREGLO: a qué distancia del cruce llegan los
      *  flancos rechazados. Concentrados abajo de 50 µs = repique por falta de
@@ -957,7 +959,7 @@ void loop()
       }
       Serial.print(F("   por direccion="));
       Serial.println(cmp_rech_direccion());
-      rms_atender(); cmp_atender();
+      rms_atender(); cmp_atender();   // el reporte bloquea el lazo: ver el anillo
     }
 
     /*  EL JITTER DEL CRUCE ACEPTADO — el criterio que de verdad importa, en
@@ -990,7 +992,7 @@ void loop()
         Serial.print(F(" grados (criterio: < 2.0)"));
         if (gradoMil > 2000) Serial.print(F("   <<< JITTER ALTO"));
         Serial.println();
-        rms_atender(); cmp_atender();
+        rms_atender(); cmp_atender();   // el reporte bloquea el lazo: ver el anillo
       }
     }
 
@@ -1047,6 +1049,7 @@ void loop()
       Serial.print(F(" (comparador sin cruces?)"));
     }
     Serial.println();
+    rms_atender(); cmp_atender();   // el reporte bloquea el lazo: ver el anillo
 
     est_cero(est[RMS_INV]);
     est_cero(est[RMS_RED]);
@@ -1073,6 +1076,7 @@ void loop()
     Serial.print(PISO_CICLOS);
   }
   Serial.println();
+  rms_atender(); cmp_atender();   // el reporte bloquea el lazo: ver el anillo
 
   cero(entrada);
   cero(cuerpo);

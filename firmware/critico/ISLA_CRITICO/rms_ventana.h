@@ -178,6 +178,13 @@ bool rms_recoger(uint8_t i, uint16_t *rmsCuentas, uint16_t *cd, uint8_t *n);
 
 uint16_t rms_desbordes_red(void);     // ventanas de red cerradas por el tope
 uint16_t rms_anillo_perdidos(void);   // eventos que no cupieron en el anillo
+
+/*  Ventanas descartadas por eventos faltantes. Una ventana incompleta no es
+ *  una medición, así que no se publica — se cuenta. Es el arreglo correcto
+ *  del desbordamiento del anillo: no pelear por no perder, sino no usar lo
+ *  que quedó incompleto.
+ */
+uint16_t rms_descartadas(void);
 void     rms_reiniciar(void);
 
 /*  Raíz cuadrada entera, por Newton. Evita arrastrar la de punto flotante,

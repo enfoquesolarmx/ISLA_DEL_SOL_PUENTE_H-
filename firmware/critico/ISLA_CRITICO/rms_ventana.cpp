@@ -29,6 +29,21 @@ static uint8_t  muestrasPar[2];
 static bool     hayNuevo[2];
 static uint16_t desbordesRed;
 
+/*  ⚠️ VENTANAS SUCIAS — el arreglo correcto, después de intentar el otro.
+ *
+ *  Primero agrandé el anillo y le puse drenajes para NO perder eventos. Bajó
+ *  de 79 a 15 por segundo, y eso no alcanza: los 15 que quedan corrompen una
+ *  ventana por reporte, que se veía como picos de σ de hasta 11 cuentas y el
+ *  RMS cayendo de 227.0 a 225.9.
+ *
+ *  Una ventana a la que le faltan muestras **no es una medición**. Así que en
+ *  vez de pelear por no perder, se detecta la pérdida y se descarta la
+ *  ventana. El par abarca dos ventanas, así que se descartan dos.
+ */
+static uint8_t  sucio[2];
+static uint16_t descartadas;
+static uint16_t llenoPrev;
+
 // =============================== CUENTAS =====================================
 
 /*  Raíz cuadrada entera por Newton, con semilla por bits. Converge en 5 o 6
@@ -68,6 +83,11 @@ static void cerrar(uint8_t i)
 
   if (nPrev == 0 || nTot < 8) return;   // la primera ventana no tiene par
 
+  /*  Si se perdieron eventos, esta ventana y la anterior están incompletas.
+   *  No se publica: se cuenta y se sigue.
+   */
+  if (sucio[i]) { sucio[i]--; descartadas++; return; }
+
   /*  La forma escalada, y no es estilo: dividir primero trunca ⟨x⟩ hasta en
    *  una cuenta, y al elevarla al cuadrado el error se multiplica por
    *  2⟨x⟩ ≈ 1 022. Son 0.4 % en el RMS = medio volt a 127 V, contra un
@@ -95,6 +115,16 @@ void rms_atender(void)
    *  y de un byte: en el AVR eso es atómico y no hace falta apagar nada
    *  (DC-026 — el `cli()` más barato es el que no existe).
    */
+  /*  ¿Se perdió algún evento desde la última vuelta? Entonces las ventanas
+   *  que están abiertas en los dos canales quedaron incompletas.
+   */
+  const uint16_t lleno = rms_anillo_lleno;
+  if (lleno != llenoPrev) {
+    llenoPrev = lleno;
+    sucio[RMS_INV] = 2;    // la que está abierta y la que forma el par
+    sucio[RMS_RED] = 2;
+  }
+
   uint8_t w = rms_w;
 
   while (rms_r != w) {
@@ -136,6 +166,9 @@ void rms_reiniciar(void)
     hayNuevo[i] = false;
   }
   desbordesRed = 0;
+  descartadas = 0;
+  llenoPrev = 0;
+  sucio[0] = sucio[1] = 0;
 }
 
 bool rms_recoger(uint8_t i, uint16_t *rmsCuentas, uint16_t *cd, uint8_t *n)
@@ -149,7 +182,8 @@ bool rms_recoger(uint8_t i, uint16_t *rmsCuentas, uint16_t *cd, uint8_t *n)
   return true;
 }
 
-uint16_t rms_desbordes_red(void) { return desbordesRed; }
+uint16_t rms_desbordes_red(void)  { return desbordesRed; }
+uint16_t rms_descartadas(void)    { return descartadas; }
 
 uint16_t rms_anillo_perdidos(void)
 {
