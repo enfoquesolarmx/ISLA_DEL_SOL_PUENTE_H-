@@ -26,6 +26,19 @@
 #define ADC_TRAZA_SALE()
 #endif
 
+// --- Enganche de la muestra (producción) ------------------------------------
+// Aquí cuelga el lazo de control: hoy la acumulación del RMS de medio ciclo.
+// Mismo mecanismo de siempre — si gancho_adc.h no está, la macro queda vacía y
+// el código compilado es byte por byte el mismo. Ver gancho_adc.h.
+#if defined(__has_include)
+#  if __has_include("gancho_adc.h")
+#    include "gancho_adc.h"
+#  endif
+#endif
+#ifndef ADC_CADA_MUESTRA
+#define ADC_CADA_MUESTRA(ranura, cuenta)
+#endif
+
 // ============================ ESTADO INTERNO =================================
 
 /*  La rotación de DC-025. Cuatro pasos, tres ranuras: el inversor aparece dos
@@ -65,8 +78,16 @@ ISR(ADC_vect)
   const uint8_t  p = paso;
   const uint8_t  r = RANURA[p];
 
-  cuentas[r] = ADC;
+  const uint16_t c = ADC;
+  cuentas[r] = c;
   muestras[r]++;
+
+  /*  El lazo de control, con la muestra todavía en un registro. Va ANTES de
+   *  mover el multiplexor porque esto es lo que puede crecer: si algún día no
+   *  cabe, el aviso llega como un sobrepaso del SPWM y no como una muestra
+   *  tomada en el canal equivocado.
+   */
+  ADC_CADA_MUESTRA(r, c);
 
   const uint8_t sig = (uint8_t)((p + 1) & 3);
   paso  = sig;
