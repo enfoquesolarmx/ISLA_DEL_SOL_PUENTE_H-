@@ -49,6 +49,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad) | Reloj del ADC a /128 y muestreo amarrado a la portadora: precisión antes que velocidad | Control | 2026-11-16 | Vigente (V1, por validar en banco) |
 | [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no) | Transformador fuera de rango: qué pasa, qué se detecta solo y qué no | Potencia | 2026-11-18 | Vigente |
 | [DC-022](#dc-022-socket-de-diagnóstico-autodiagnóstico-de-la-etapa-de-potencia-antes-de-la-primera-energización) | Socket de diagnóstico: autodiagnóstico de la etapa de potencia antes de la primera energización | Control + potencia | 2026-11-21 | Objetivo (no vigente) |
+| [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13) | Comparador analógico interno para el cruce por cero, y `TN_CMD` se muda a D13 | Control | 2026-11-21 | Vigente (V1, ruteado y verificado) |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -1001,7 +1002,7 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 | TRAFO (salida 15) | D6 → J15-5 | K3 + K_L3 |
 | TN (salida 14) | **AUX D10** → J15-7, **a través de Q2 (AND con AISLAR)** | RL_TN |
 
-   **Actualización 2026-11-11 (tarjeta de control V0.1, [`hardware/control/`](../hardware/control/README.md)):** la asignación construida es **J15-3 INV_CMD ← D4 del CRÍTICO (por R39, 1 kΩ)**, **J15-5 CARG_CMD ← D5 del CRÍTICO** y **J15-7 TN_CMD ← D6 del CRÍTICO**. La orden TN sale del CRÍTICO (no del AUX D10), porque es el que decide el instante de la transferencia; el modo CASA/CARGA lo elige el SETUP y el AUX se lo pasa por I2C. Los nombres de las señales son los mismos en las dos tarjetas.
+   **Actualización 2026-11-11 (tarjeta de control V0.1, [`hardware/control/`](../hardware/control/README.md)):** la asignación construida es **J15-3 INV_CMD ← D4 del CRÍTICO (por R39, 1 kΩ)**, **J15-5 CARG_CMD ← D5 del CRÍTICO** y **J15-7 TN_CMD ← D13 del CRÍTICO** (se mudó de D6 el 2026-11-21, ver [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13): D6 quedó para `AIN0` del comparador, que está cableado en silicio. **Q2 es lo que hace seguro ese pin**, porque el bootloader parpadea D13 en cada reset). La orden TN sale del CRÍTICO (no del AUX D10), porque es el que decide el instante de la transferencia; el modo CASA/CARGA lo elige el SETUP y el AUX se lo pasa por I2C. Los nombres de las señales son los mismos en las dos tarjetas.
 
    **Actualización 2026-11-09:** RL_TN pasa a canal propio para que el firmware decida la unión N–PE según el escenario. **Q2** (BC547 en seguidor de emisor: colector ← J15-7 por 1 kΩ, base ← AISLAR por 10 kΩ, emisor → I3 con 10 kΩ + 10 nF a GND) deja pasar TN **solo si AISLAR está activo**. En modo cargador o red, K2 sigue uniendo N-LOAD con N-GRID, y Q2 impide que RL_TN haga una doble unión con la de la red eléctrica aunque el AUX se equivoque, se cuelgue o el cable esté pelado. Referencias del esquemático KiCad: K_L2 = K4, K2 = K2, K_L3 = K1, K3 = K3, RL_TN = K5; todos Rayex L90S.
 
@@ -1028,7 +1029,7 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
    - **R_D 22 Ω 5 W + C_D 4.7 µF X2, sin poblar:** red de amortiguamiento para la etapa 3 (pico de los armónicos 27° y 29°).
    - En modo cargador, C_F queda conectado a la red por K3/K_L3: ~0.22 A reactivos a 127 V / 60 Hz, sin problema para los relés.
 9. **J15:** 1 15V · 2 GND · 3 AISLAR RED (D5) · 4 GND · 5 TRAFO (D6) · 6 GND · 7 **TN (AUX D10, salida)** · 8 **MODO_TN (CRÍTICO D4)**. C1 100 µF + C2 100 nF en la entrada de 15 V; C3 100 nF en COM; 10 kΩ y 1 nF (10 nF en I3) en cada entrada usada del ULN2003; **I4–I7 a GND**.
-   **Actualización 2026-11-11 (tarjeta de control V0.1, [`hardware/control/`](../hardware/control/README.md)):** J15 queda 1 15V · 2 GND · 3 INV_CMD (D4) · 4 GND · 5 CARG_CMD (D5) · 6 GND · 7 TN_CMD (D6) · 8 GND.
+   **Actualización 2026-11-11 (tarjeta de control V0.1, [`hardware/control/`](../hardware/control/README.md)):** J15 queda 1 15V · 2 GND · 3 INV_CMD (D4) · 4 GND · 5 CARG_CMD (D5) · 6 GND · 7 TN_CMD (**D13**, antes D6 — ver [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13)) · 8 GND.
    **Actualización 2026-11-11 (tarjeta V0.1, [`hardware/transferencia_reles/`](../hardware/transferencia_reles/README.md)):** con la eliminación de SW_TN (punto 10), **J15-8 queda en GND**; MODO_TN ya no existe.
 
 10. **Dos modos de inversor: CASA (con unión N–PE) y CARGA (sin unión N–PE).** Se eligen en el SETUP por menú **y** con un selector físico; los dos tienen que coincidir.
@@ -1373,6 +1374,143 @@ El veredicto se reporta en el mismo idioma que ya usa el clasificador de [DC-011
 | [DC-014](#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado), doble candado | Vigente |
 
 **Referencias:** las entradas [DC-011](#dc-011-lectura-de-p9-las-dos-ramas-en-un-solo-pin-analógico-nunca-en-paralelo-directo), [DC-014](#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado) y [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no).
+
+---
+
+## DC-023. Comparador analógico interno para el cruce por cero, y `TN_CMD` se muda a D13
+
+> **El cruce por cero es una medición de tiempo, y la estábamos sacando de un canal que mide amplitud.** El ADC no tiene problema de resolución: tiene problema de saber *cuándo* tomó la muestra.
+
+**Estado: vigente (V1), ruteado y verificado el 22 de noviembre de 2026.** Decidido con números medidos en banco los días 20 y 21. El esquemático y el cobre de la tarjeta de control V0.1 ya traen el cambio; el resultado del ruteo está al final de esta entrada.
+
+### La decisión
+
+Usar el **comparador analógico interno del ATmega328P** para detectar el cruce por cero del **canal de la red (A6)**, con:
+
+- **AIN0 = PD6 (D6)** ← el nodo del divisor AC de red, tomado en C7
+- **AIN1 = PD7 (D7)** ← `NEUTRO-GRID`, la referencia de bias de ese canal
+
+Para liberar D6, **`TN_CMD` se muda de D6 a D13**. Cero componentes nuevos: las dos entradas son nodos que ya existen.
+
+### Por qué no se puede en otro pin
+
+Las entradas del comparador están **cableadas en silicio**. Los dos escapes que ofrece el AVR no sirven aquí:
+
+| Escape | Qué hace | Por qué no |
+| --- | --- | --- |
+| **ACME** (`ADCSRB`) | el multiplexor del ADC sustituye la entrada **negativa** | sustituye AIN1, no AIN0 — y exige `ADEN = 0`, o sea el ADC apagado |
+| **ACBG** (`ACSR`) | la referencia de banda prohibida (~1.1 V) sustituye AIN0 | la señal vive en 2.5 V de bias: el punto de disparo se movería **con la amplitud** |
+
+### Sólo hace falta uno
+
+**El canal del inversor no necesita comparador.** Su salida la generamos nosotros: el índice de la tabla senoidal avanza una vez por periodo de portadora, así que **un ciclo de salida son un número entero de periodos de portadora por construcción**, y el cruce lo sabe el firmware — es donde el índice vale cero. El que no controlamos es la red.
+
+Eso es lo que permite usar el comparador interno, que es uno solo, en vez de un LM393 externo.
+
+### Qué habilita, con números medidos
+
+| | Hoy | Con el comparador |
+| --- | --- | --- |
+| σ del RMS | **82.8 mV** | **~30.6 mV** |
+| Ventana del RMS | 3 ciclos (50 ms) | **medio ciclo (8.33 ms)** |
+| Actualizaciones del lazo | 20/s | **120/s** |
+| Frecuencia | σ 0.032 Hz, atada a `millis()` | al nivel del cristal |
+| Peor caso de la ISR del ADC | **28 µs** de 41.6 disponibles | **13 µs** |
+| Protección por CD / asimetría | no existe | compara medios ciclos consecutivos |
+| Ensayo de timbre ([DC-022](#dc-022-socket-de-diagnóstico-autodiagnóstico-de-la-etapa-de-potencia-antes-de-la-primera-energización)) | imposible | el único instrumento del chip que llega a decenas de kHz |
+
+**1. El batido desaparece.** La ventana de 300 muestras son **3.00616 ciclos**, no 3.00000, y el pedacito sobrante rota de fase: 77 mV de error determinístico con periodo de 4 reportes, el 86 % de la varianza (ver el registro de A6 en [`protocolo_banco_control.md`](protocolo_banco_control.md)). Con la ventana delimitada por cruces son ciclos enteros **por construcción**.
+
+**2. Medio ciclo es exacto.** Verificado numéricamente: para cualquier onda con **armónicos impares** —toda onda de AC simétrica— el RMS de medio ciclo da **0.0000 %** de error contra el de ciclo completo. Los productos cruzados se integran a cero sobre medio periodo de la fundamental. Así que acortar la ventana de 3 ciclos a medio **no cuesta nada de exactitud**, y con eso el lazo iguala la velocidad del EG8010, que corrige en 1–3 ciclos midiendo pico.
+
+> **El pero, y es sobre nuestro propio inversor.** Medio ciclo es exacto sólo si la onda es simétrica: con 2º armónico el error es **−1.65 %** y con 5 % de CD es **+6.15 %**. La red está limpia; la salida de un puente H con asimetría de conmutación no. **Eso se detecta gratis** comparando dos medios ciclos consecutivos — iguales, el método vale; distintos, hay CD o armónicos pares. El método se audita solo, y de paso queda un detector de asimetría del puente, que es el hermano del error de 0.577 V del tiempo muerto de [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no).
+
+**3. La frecuencia deja de medir el contador de milisegundos.** La correlación entre la frecuencia reportada y la tasa de muestreo es **+0.996**: la σ de 0.032 Hz es el redondeo de `millis()`, no la red. Y `millis()` no va a existir en el firmware real.
+
+**4. Le quita trabajo a la ISR del ADC, no se lo agrega.** Hoy la interpolación del cruce vive ahí y lleva una **división de 32 bits (~250 ciclos = 15.6 µs)**: en un cruce esa ISR llega a 28 µs, el 67 % del periodo de portadora. Con el comparador ese código se va y la ISR queda plana en 13 µs. **Contra el plazo de 41.6 µs del SPWM, el comparador baja la latencia peor en vez de subirla** — ver [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809).
+
+### Lo que NO arregla
+
+- **No mejora la exactitud de la amplitud.** Ésa la fijan las constantes de calibración y el patrón, y el patrón es el multímetro del usuario.
+- **No arregla el 0.24 % de muestras** sin explicar (→ B5).
+- **No arregla el filtro antialias flojo** (fc 1719 Hz contra Nyquist 3003).
+- **La precisión de un cruce suelto apenas mejora**: el ADC da ±6.85 µs de cuantización y el comparador tiene unos pocos µs de jitter de latencia de ISR. **Lo que cambia no es la precisión de un cruce, es que el cruce exista como evento de hardware** sobre el que construir una ventana, en vez de inferirlo de muestras que a veces faltan.
+
+### Lo que cuesta
+
+- **Dos pines**, D6 y D7, y la mudanza de `TN_CMD`.
+- **Cero componentes.**
+- **No tiene histéresis.** Hay que poner un candado por software de ~12 ms después de aceptar un flanco; los cruces están a 16.67 ms. Se configura un solo flanco (`ACIS1:0 = 11`, subida): 60 estampas por segundo bastan.
+- **Hay que apagar los buffers digitales** de D6 y D7 con `DIDR1`. Esos pines van a vivir en 2.5 V, el peor punto para una entrada digital: consume corriente y mete ruido.
+- **Offset de entrada de hasta ~40 mV** → ~1.1° de fase a 60 Hz. **Fijo, así que no afecta la frecuencia**; se calibra si algún día hace falta la fase absoluta.
+
+### ⚠️ `TN_CMD` en D13: por qué es seguro, y de qué depende
+
+**El bootloader del Nano parpadea D13 en cada arranque y en cada reset.** Con `TN_CMD` ahí, el relé de unión N–PE (K5) recibiría pulsos en cada reinicio. Solo, eso sería inaceptable: una doble unión N–PE con la de la acometida es el peligro que [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo) existe para evitar.
+
+**No muerde, y la razón hay que protegerla.** Ya existe **Q2 (BC547)** en la tarjeta de transferencia, compuerta Y por hardware: `TN_CMD` en el colector por R13, `INV_CMD` en la base por R14, emisor a `TN_OK`. En un reset todos los pines quedan en alta impedancia, así que `INV_CMD` no excita la base y **`TN_OK` se queda bajo aunque D13 parpadee**. El orden lo garantiza: el bootloader corre **antes** que la aplicación. Lo mismo aplica a la programación por ICSP, donde D13 es **SCK** y conmuta a la frecuencia del programador.
+
+> **Q2 ya no es sólo el candado contra la doble unión: también es lo que hace seguro poner `TN_CMD` en D13.** Si alguien lo quita más adelante por «redundante», reintroduce el problema sin saberlo. Queda asentado aquí y en [`hardware/transferencia_reles/README.md`](../hardware/transferencia_reles/README.md).
+
+**De pilón:** el LED de la tarjeta queda como **indicador de la unión N–PE**. Para una señal de seguridad eso es bueno — de un vistazo se ve si el puente está comandado. Cuesta ~3 mA; con los ~5 mA de R13 son ~8 mA en el pin, muy dentro de lo que un AVR entrega.
+
+### Lo que el DRC no atrapa
+
+- **La señal para D6 se toma en el nodo del divisor, donde está C7**, no en el pad del Nano. Así el ADC y el comparador ven el mismo nodo filtrado; un trazo que sale del pad le cuelga una antena a un nodo de 9.36 kΩ.
+- **Los trazos a D6 y D7 no deben correr paralelos** a `HA_IN`, `LA_IN`, `HB_IN`, `LB_IN` ni al I2C. Si tienen que cruzarlos, a 90°.
+
+### De qué depende y qué habilita
+
+| | Estado |
+| --- | --- |
+| Ruteo de la tarjeta de control V0.1 (3 nets en A1) | **en proceso** |
+| Ventana de medio ciclo y adelanto por pico en el lazo | pendiente de firmware |
+| [DC-022](#dc-022-socket-de-diagnóstico-autodiagnóstico-de-la-etapa-de-potencia-antes-de-la-primera-energización), ensayo de timbre | depende de esta entrada |
+| [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo), Q2 como compuerta Y | **vigente, y ahora también protege D13** |
+
+### ✅ Resultado del ruteo — 22 de noviembre de 2026
+
+**Los cuatro pads de A1, verificados leyendo el `.kicad_pcb`:**
+
+| Pad | | Net | |
+| --- | --- | --- | --- |
+| 9 | D6 — AIN0 | `AC_FB_GRID_A6` | ✅ |
+| 10 | D7 — AIN1 | `NEUTRO-GRID` | ✅ |
+| 16 | D13 | `TN_CMD` | ✅ |
+| 25 | A6 — ADC | `AC_FB_GRID_A6` | ✅ rama, no traslado |
+
+Y `NEUTRO-GRID` existe como **una sola net**: no se coló ningún carácter parecido al guion, que es la falla silenciosa típica al teclear etiquetas globales.
+
+**DRC:** 0 errores · 0 no conectados · 0 sin enrutar · 381 pads · 88 vías · 714 segmentos. Los 55 avisos son relleno aislado (ver abajo) y huellas que no coinciden con la biblioteca, que es contable y no eléctrico. Las 10 exclusiones son **serigrafía de J30 recortada por el borde**, cosmético.
+
+**Acoplamiento medido sobre la geometría del archivo** (tramos con ángulo < 30°, separación borde a borde):
+
+| Víctima | Agresor | mm paralelos | Sep. mín. | |
+| --- | --- | --- | --- | --- |
+| `AC_FB_GRID_A6` | `TN_CMD` | 44.1 | **0.27 mm** | lento |
+| `AC_FB_GRID_A6` | `D12_ON_OF` | 26.5 | 0.60 mm | lento |
+| `NEUTRO-GRID` | `D12_ON_OF` | 24.3 | **0.20 mm** | lento |
+| `NEUTRO-GRID` | `TN_CMD` | 22.5 | 0.67 mm | lento |
+| `AC_FB_GRID_A6` | `I2C_SCL` | 29.5 | 2.04 mm | |
+| `NEUTRO-GRID` | `HB_IN` | 10.1 | 3.58 mm | **rápido** |
+| `AC_FB_GRID_A6` | `HB_IN` | 14.9 | 6.12 mm | **rápido** |
+| `AC_FB_GRID_A6` | `LA_IN` / `LB_IN` / `HA_IN` | ≤ 5.2 | ≥ 12.4 mm | **rápido** |
+
+**Lo que importa de esa tabla: las señales rápidas quedaron lejos.** Las cuatro de compuerta —24 kHz con flancos de nanosegundos— están todas a 3.6 mm o más y con tramos cortos. Los tramos pegados son con `TN_CMD` y `D12_ON_OF`, que son órdenes de relé y de permiso: **cambian de estado en una transferencia, no continuamente.** El pico acoplado se estima en ~6 mV por flanco, unos 8 µs de señal equivalente, **una vez por transferencia** — y el candado de 12 ms del comparador se lo come.
+
+**Relleno de tierra:** 79 vías de GND más 65 pads pasantes. El punto analógico más lejano de una atadura queda a **11.9 mm**. Quedan 15 regiones de F.Cu de más de 20 mm² sin vía ni pad pasante adentro, pero **la más cercana a un trazo analógico está a 23.7 mm**: ya no son asunto del comparador. Antes del ajuste había una de **418 mm² a 9.7 mm**, y ésa se quitó.
+
+> **Corrección de un número de esta sesión.** Al revisar el ruteo se reportó «45–47 mm a la vía GND más cercana». Ese número contaba **sólo vías**, y en una tarjeta THT los **pads pasantes de GND también unen las dos caras** — hay 65. Contándolos, la peor distancia ya era **13.8 mm antes de tocar nada**, no 45. El problema real nunca fue la costura general sino la región de 418 mm² junto a las analógicas.
+
+### ⚠️ Consecuencia: B5 no puede usar D13 como pin de traza
+
+`AC_FB_GRID_A6` corre **44 mm paralelo a `TN_CMD`, con 0.27 mm de separación en el tramo más cerrado.** Conmutar D13 a 24 kHz para medir la duración de las ISR serían **48 000 flancos por segundo** junto a la entrada del comparador: lo dejaría inservible durante exactamente la medición que se quiere hacer.
+
+El reemplazo propuesto en el README de la tarjeta —usar D13— **queda descartado por este ruteo**. La salida es medir las ISR en **un Nano de protoboard** con el mismo firmware, sin tocar la tarjeta buena. Eso además no cuesta pines y permite instrumentar libremente.
+
+**Queda abierto en el DRC:** la **paridad con el esquemático** no se ejecutó. Sustituto aplicado mientras tanto: se compararon los **355 pads** de la tarjeta contra la versión previa y **ninguno cambió de net**, más la verificación directa de los cuatro pads de A1. Vale la pena correr la paridad cuando se abra el proyecto completo.
+
+**Referencias:** el registro de banco de A6 en [`protocolo_banco_control.md`](protocolo_banco_control.md), y las entradas [DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc), [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809), [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad) y [DC-022](#dc-022-socket-de-diagnóstico-autodiagnóstico-de-la-etapa-de-potencia-antes-de-la-primera-energización).
 
 ---
 
