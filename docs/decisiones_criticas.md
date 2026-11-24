@@ -36,7 +36,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-007](#dc-007-sensado-del-voltaje-de-la-batería) | Sensado del voltaje de la batería | Control | 2026-11-06 | Vigente |
 | [DC-008](#dc-008-tablero-de-diagnóstico-de-la-alimentación-led-test-points-y-valores-de-referencia) | Tablero de diagnóstico de la alimentación: LED, test points y valores de referencia | Control | 2026-11-06 | Vigente |
 | [DC-009](#dc-009-objetivo-a-futuro-holgura-de-diseño-para-capacidad-médica) | Objetivo a futuro: holgura de diseño para capacidad médica | Todo el sistema | 2026-11-06 | Objetivo (no vigente) |
-| [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms) | Reparto de tareas entre los dos ATmega, enlace I2C con latido y CAN para el BMS | Control | 2026-11-07 | Vigente |
+| [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms) | Reparto de tareas entre los dos ATmega, enlace I2C con latido y CAN para el BMS | Control | 2026-11-07 | Vigente (el papel en el bus lo revisa DC-027) |
 | [DC-011](#dc-011-lectura-de-p9-las-dos-ramas-en-un-solo-pin-analógico-nunca-en-paralelo-directo) | Lectura de P9: las dos ramas en un solo pin analógico, nunca en paralelo directo | Control | 2026-11-07 | Vigente |
 | [DC-012](#dc-012-los-nano-se-alimentan-por-5v-pin-27-nunca-por-vin) | Los Nano se alimentan por +5V (pin 27), nunca por VIN | Control | 2026-11-07 | Vigente |
 | [DC-013](#dc-013-corriente-ac-con-pinza-sct-013-015-en-el-crítico-a2) | Corriente AC con pinza SCT-013-015 en el CRÍTICO (A2) | Control | 2026-11-07 | Vigente |
@@ -52,6 +52,10 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13) | Comparador analógico interno para el cruce por cero, y `TN_CMD` se muda a D13 | Control | 2026-11-21 | Vigente (V1, ruteado y verificado) |
 | [DC-024](#dc-024-análisis-armónico-selectivo-goertzel-fuera-de-la-v1-y-qué-haría-falta-para-la-v2) | Análisis armónico selectivo (Goertzel): fuera de la V1, y qué haría falta para la V2 | Control | 2026-11-22 | Objetivo (V2, no vigente) |
 | [DC-025](#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben) | Reparto del ADC entre los canales: tres prioridades y por qué caben | Control | 2026-11-22 | Vigente |
+| [DC-026](#dc-026-la-regla-del-cli-el-costo-se-paga-por-vuelta-del-lazo-no-por-unidad-de-tiempo) | La regla del `cli()`: el costo se paga por vuelta del lazo, no por unidad de tiempo | Control | 2026-11-22 | Vigente (medido en banco) |
+| [DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda) | El enlace I2C al revés: el CRÍTICO es maestro del bus, y maestro del bus no es quien manda | Control | 2026-11-23 | Vigente (medido en banco) |
+| [DC-028](#dc-028-el-lazo-de-control-de-ca-comparador-para-el-cruce-rms-de-medio-ciclo-por-pares) | El lazo de control de CA: comparador para el cruce, RMS de medio ciclo por pares | Control | 2026-11-24 | Vigente (medido en banco) |
+| [DC-029](#dc-029-la-referencia-del-adc-es-avcc-y-eso-se-lleva-la-calibración-adentro) | La referencia del ADC es AVCC, y eso se lleva la calibración adentro | Control | 2026-11-24 | Vigente (por implementar) |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -402,7 +406,7 @@ La tarjeta de control usa dos Arduino Nano (ATmega328P TQFP). Hay que repartir:
 | Sensado AC del inversor (A0) y de la red (A6) | LCD por I2C **en un bus aparte** (D4/D5, I2C por software) |
 | Batería (A3) y temperatura (A1) | ~~Sensor de corriente AC ZMCT103C (A1)~~ → reemplazado por el SCT-013-015 en el CRÍTICO (DC-013); el AUX recibe el monitor del riel de 15 V |
 | Relés de transferencia (D4, D5, D6) y encendido (D12) | Ventilador (D6), buzzer, LED y botón (D8) |
-| **Esclavo o maestro del enlace I2C (A4/A5)** | **El otro extremo del enlace I2C (A4/A5)** |
+| **Maestro del enlace I2C (A4/A5)** — abre, reporta y recoge órdenes ([DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda)) | **Esclavo del enlace I2C (A4/A5) en 0x21 — y el que manda** ([DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda)) |
 
 **Por qué los sensados AC y los relés van en el CRÍTICO:** para sincronizarse con la red hay que **ajustar la fase de la tabla de senos**, y eso solo lo puede hacer el micro que genera la SPWM. Si la sincronía pasara por el enlace I2C, el retraso del enlace se comería parte de la ventana de 5°. La transferencia de los relés tiene que ocurrir en el instante que decide la sincronía, en el mismo micro.
 
@@ -410,10 +414,13 @@ La tarjeta de control usa dos Arduino Nano (ATmega328P TQFP). Hay que repartir:
 
 **El enlace I2C**
 - **Pull-ups de 4.7 kΩ a 5 V en A4/A5,** un solo par para todo el bus (R10 y R11). El Nano no los trae, y los internos del ATmega (20–50 kΩ) son demasiado débiles. Con ~100 pF, el flanco sube en ≈ 0.4 µs, contra 1 µs como máximo a 100 kHz. El mínimo permitido es ≈ 1.5 kΩ (3 mA por pin) [8].
+- ⚠️ **Quién abre el bus: revisado por [DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda).** Esta entrada dejaba abierto «esclavo o maestro» y en el firmware se cerró del lado equivocado: el CRÍTICO quedó de esclavo con el argumento de que «nunca espera al bus». En banco eso costó pasos de la onda, y ahora **el CRÍTICO es maestro del bus**. Dos cosas que conviene no confundir y que DC-027 explica en detalle:
+  - **Maestro del bus no es quien manda.** El AUX sigue mandando: pide los perfiles, trae los permisos del BMS y tiene el AUX_KILL por hardware. El CRÍTICO lleva el reloj; en cada transferencia nada más reporta su estado y recoge órdenes.
+  - **El bloqueo del enlace es del lazo, no de las interrupciones.** 2.63 ms por transferencia, 2.6 % del lazo a 10/s, y la ISR del SPWM no se entera. Ésa es la distinción que faltaba aquí.
 - **Latido (*heartbeat*):** el AUX manda un mensaje cada ~100 ms con los permisos de carga y descarga del BMS. **Si el CRÍTICO no recibe nada en ~500 ms, deja de cargar** y sigue protegiendo la batería con su propia lectura de A3.
 - **El CRÍTICO nunca depende del enlace para protegerse:** la sobrecorriente, el bajo voltaje y la temperatura se deciden con sus propias lecturas.
 - **El bus no se debe colgar:** se usa `Wire.setWireTimeout()` (núcleo AVR de Arduino).
-- **Mensajes cortos:** cada mensaje dispara una interrupción en el CRÍTICO, y mientras corre, la interrupción de la SPWM espera. El Timer1 actualiza con doble búfer y tolera retrasos de unos µs.
+- **Mensajes cortos:** cada byte dispara una interrupción de TWI en el CRÍTICO, y mientras corre, la interrupción de la SPWM espera. El Timer1 actualiza con doble búfer y tolera retrasos de unos µs. **Medido en banco:** con el enlace corriendo, el costo propio de la ISR del SPWM queda en 218 ciclos (32.7 % del periodo de portadora) y la ocupación peor en ~51 %, sin perder un solo paso de la onda hasta 192 transferencias por segundo — 20 veces el tráfico de producción ([DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda)).
 
 **El CAN con el BMS**
 - **Módulo MCP2515 + TJA1050 (HW-184)** en un socket de 7 pines, en el mismo orden que el módulo: VCC, GND, CS, SO, SI, SCK, INT.
@@ -427,7 +434,7 @@ La tarjeta de control usa dos Arduino Nano (ATmega328P TQFP). Hay que repartir:
 
 - ✅ La sincronía y la transferencia no dependen de ningún enlace.
 - ✅ Una falla del LCD o del CAN no afecta la generación de la onda.
-- ⚠️ **El CRÍTICO carga con más trabajo:** la SPWM a 24 kHz deja ~666 ciclos de reloj por periodo, y además están los tres canales de ADC y los relés. Hay que medir en el banco cuánto tiempo ocupa la interrupción de la SPWM (con un pin que cambie de estado al entrar y salir, y el osciloscopio).
+- ✅ **El CRÍTICO carga con más trabajo, y ya está medido.** La SPWM a 24 kHz deja 666 ciclos de reloj por periodo. Con el SPWM, los tres canales de ADC y el enlace corriendo juntos: **218 ciclos de costo propio (32.7 %)** y ~51 % de ocupación en el peor caso, con cero pasos perdidos. Medir con un pin no habría alcanzado: el pin no ve el vector de interrupción ni el prólogo del compilador, que son 74 ciclos — **38 % del costo real**. Se midió leyendo `TCNT1` desde dentro de la propia ISR (Parte C del protocolo de banco, etapa 1).
 - **Pines libres para crecer:**
   - en el CRÍTICO: D2 (reservado para el FAULT), D8 y D13 (A2 se usa para la corriente AC, DC-013; A7 para P9, DC-011);
   - en el AUX: D3, D7, A0, A1, A2, A3, A6 y A7 (uno de ellos, para el monitor del riel de 15 V, DC-013).
@@ -1115,7 +1122,7 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 
 **Contexto**
 
-[DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc) fijó el cobre de los dos canales AC — A0 (red) y A6 (inversor), transformador de 12 VAC, bias de 2.5 V — y dejó el firmware abierto, con una advertencia: el ADC lee un canal a la vez, y eso mete desfase entre las dos lecturas.
+[DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc) fijó el cobre de los dos canales AC — **A0 (inversor) y A6 (red)**, transformador de 12 VAC, bias de 2.5 V — y dejó el firmware abierto, con una advertencia: el ADC lee un canal a la vez, y eso mete desfase entre las dos lecturas.
 
 Al llegar al PLL y al cruce por cero hay que decidir dos cosas que parecen independientes y no lo son:
 
@@ -1683,6 +1690,310 @@ Sigue cabiendo en el mismo 62.5 %. Y queda anotado el error que introduce multip
 - **El canal del inversor no necesita comparador** porque su periodo son un número entero de periodos de portadora por construcción; el cruce lo sabe el firmware. Eso está en DC-023 y es lo que permite que un solo comparador alcance.
 
 **Referencias:** [DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no), [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13) y el registro de banco de A6 en [`protocolo_banco_control.md`](protocolo_banco_control.md).
+
+---
+
+## DC-026. La regla del `cli()`: el costo se paga por vuelta del lazo, no por unidad de tiempo
+
+> **Una sección crítica no cuesta por lo que dura: cuesta por lo seguido que se ejecuta.** Un `cli()` de 18 ciclos en un lazo que gira 55 000 veces por segundo roba más que uno de 212 ciclos que corre diez veces.
+
+**Estado: vigente (V1).** Sale de la etapa 1 del protocolo de banco, el 22 de noviembre de 2026, y se comprobó por accidente.
+
+### Cómo apareció
+
+Buscando quién retrasaba la entrada a la ISR del SPWM, el instrumento de banco leía dos contadores dentro de un `ATOMIC_BLOCK` en cada vuelta del lazo: once bytes, 18 ciclos. Parecía despreciable.
+
+Al alargar el lazo con más trabajo —intuitivamente, *peor*— las entradas tardías **bajaron de 15.1 % a 8.9 %**. Agregar trabajo redujo el robo, porque el lazo giró menos veces y la sección crítica se ejecutó menos veces.
+
+### La cuenta
+
+```
+robo = ciclos con interrupciones apagadas × veces por segundo
+```
+
+| caso | ancho | veces/s | robo |
+| --- | --- | --- | --- |
+| lectura de 11 bytes en el lazo | 18 c | 55 000 | **990 000 c/s = 6.2 %** |
+| copia de la foto del enlace (esclavo) | 212 c | 20 | 4 240 c/s = 0.03 % |
+
+El bloque pequeño robaba **200 veces más** que el grande. Son dos problemas distintos y se arreglan distinto:
+
+- **El `cli()` frecuente y corto** roba tiempo medio: se arregla **sacándolo del lazo** (muestrear cada 512 vueltas en vez de cada una, que es lo que hizo la v5 del instrumento).
+- **El `cli()` raro y largo** no roba casi nada en promedio, pero **es el que pierde un paso**: cuando cae encima de un desborde, el retraso completo se le suma a la entrada de esa ISR. Se arregla **quitándolo**, no espaciándolo ([DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda)).
+
+### La regla, para el firmware de verdad
+
+1. **Ningún `cli()` dentro del lazo principal** si lo que protege se puede muestrear más despacio.
+2. **Ningún `cli()` de más de ~40 ciclos** en ninguna parte, por raro que sea: 40 ciclos son 2.5 µs y caben en el margen que deja la ISR del SPWM.
+3. **Lo que se pueda armar sin compartir, se arma sin compartir.** La forma barata de no necesitar un `cli()` es que nadie más lea la variable.
+4. **Un promedio bueno no prueba nada.** Lo que pierde un paso de la onda es el peor caso, y el peor caso hay que contarlo aparte — con `TIFR1`, no con un umbral.
+
+**Referencias:** [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809), [DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda) y el experimento completo en [`protocolo_banco_control.md`](protocolo_banco_control.md).
+
+---
+## DC-027. El enlace I2C al revés: el CRÍTICO es maestro del bus, y maestro del bus no es quien manda
+
+> **El que abre la conversación es el único que puede cerrarla.** Y el que lleva el reloj no es necesariamente el que manda: el CRÍTICO abre el bus, pero lo único que hace en él es entregar cuentas y recoger órdenes.
+
+**Estado: vigente (V1).** Decidido el 23 de noviembre de 2026 y **medido en banco el mismo día**, en tres corridas de tráfico distinto. Revisa el renglón del enlace de [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms), que dejaba abierto «esclavo o maestro» y se cerraba del lado equivocado.
+
+### Lo primero, porque la palabra engaña
+
+El I2C usa «maestro» y «esclavo» para una cosa muy acotada: **quién genera el reloj y quién abre la transferencia.** No dice nada de jerarquía. Conviene tener las dos columnas separadas a la vista:
+
+| | maestro / esclavo **del bus** | quién **manda** |
+| --- | --- | --- |
+| **CRÍTICO** (A1) | maestro: abre, da el reloj, cierra | reporta su estado y acata órdenes |
+| **AUX** (A2) | esclavo en 0x21: contesta cuando le hablan | **manda**: es el panel |
+
+El AUX pide los perfiles de batería, trae los permisos de carga y descarga que el BMS manda por CAN, y tiene el **AUX_KILL por hardware**, que apaga el puente sin pasar por este bus ni pedirle permiso a nadie. Nada de eso cambió al voltear los papeles del bus.
+
+**En una línea: el CRÍTICO lleva el reloj, el AUX manda.**
+
+Y con el límite de DC-010 intacto: **el CRÍTICO nunca depende del enlace para protegerse.** Sobrecorriente, bajo voltaje y temperatura se deciden con sus propias lecturas. El AUX manda sobre lo que se puede conversar, no sobre lo que protege.
+
+### Por qué se volteó
+
+DC-010 eligió esclavo con este argumento: «el CRÍTICO nunca espera al bus». En banco resultó más débil de lo que parecía, y el precio más caro.
+
+**Un esclavo no decide cuándo se abre la comunicación.** Tiene que estar siempre escuchando y su máquina de estados queda a merced de los tiempos del otro. Si el maestro aborta a media transferencia, el esclavo se queda agarrando el bus y **no se destraba solo**: es el `SDA = 0, SCL = 0` que apareció en la etapa 3 del protocolo de banco. Los nueve pulsos de reloj de la especificación de NXP [10] no sirven ahí, porque el maestro no puede levantar una línea que el esclavo tiene clavada en bajo.
+
+**Un maestro abre cuando quiere, manda, cierra y vuelve a empezar.** Nunca se queda colgado esperando a nadie, porque nadie más inicia nada, y si el bus se atora es él quien tiene el reloj para destrabarlo.
+
+La exposición a trabarse no desaparece: **se muda al AUX, que es quien puede permitírselo.** El AUX no tiene trabajo de tiempo real — si se cuelga, se reinicia y no pasa nada. Cuando el que se colgaba era el CRÍTICO, se perdían pasos de la onda.
+
+### Y de paso se lleva un defecto que no buscábamos
+
+Siendo esclavo, la foto de estado vivía en un búfer que la interrupción de TWI podía leer en cualquier momento, así que había que copiarla con las interrupciones apagadas:
+
+```c
+ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {        // la interrupción nunca ve media foto
+  for (uint8_t i = 0; i < 16; i++) tx[i] = f[i];
+}
+```
+
+**212 ciclos con las interrupciones apagadas**, contados en el binario: el bloqueo más largo de todo el sistema, más que `millis()`. Era el que hacía perder pasos en la etapa 3.
+
+De maestro **ese bloque no existe**: la foto se arma y se manda en la misma llamada, nadie más la lee y no hay carrera que proteger. Verificado en el binario nuevo: el `cli` más largo que queda en el módulo son los ~4 ciclos con que el compilador protege el puntero de pila.
+
+### Lo que cuesta, medido
+
+| | valor | de dónde sale |
+| --- | --- | --- |
+| una transferencia completa | **2.63 ms** | 16 bytes de ida + 4 de vuelta a 100 kHz, medido con `micros()` |
+| a 10 transferencias/s (producción) | **2.6 % del lazo** | 26.3 ms/s |
+| costo propio de la ISR del SPWM | **218 ciclos = 32.7 %** | sin cambio contra la etapa 2 |
+
+**El bloqueo es del lazo, no de las interrupciones.** La ISR del SPWM y la del ADC siguen corriendo dentro de la transferencia porque van por interrupción. Eso es lo que hace barato el cambio, y es justo lo que el argumento original de DC-010 no distinguía.
+
+### La prueba de carga: tres corridas
+
+Se subió el tráfico a propósito, cambiando `ENLACE_MS_ENTRE_ENVIOS`:
+
+| transferencias/s | bus ocupado | `vueltas/s` predicho | `vueltas/s` medido | pasos perdidos |
+| --- | --- | --- | --- | --- |
+| 10 | 2.6 % | — (referencia) | 22 016 | **0** |
+| 48.4 | 12.8 % | 19 712 | 19 700 | **0** |
+| 192 | 49.8 % | 11 348 | 10 752 | **0** |
+
+A 192 transferencias/s —**20 veces el tráfico de producción, con la mitad del lazo bloqueado**— son ~528 000 periodos de portadora sin perder uno. La diferencia de 5 % en el tercer punto tiene nombre: armar la foto y calcular el CRC-8 de 15 bytes **no bloquea pero corre 19 veces más seguido**, unos 2 200 ciclos ≈ 137 µs por transferencia.
+
+### Consecuencias
+
+- ✅ **Cero pasos perdidos** hasta 20× el tráfico de producción, con `PERDIDAS = 0` en el ADC y `CRC malo = 0` en los dos micros.
+- ✅ El CRÍTICO ya no puede quedarse agarrado al bus, que era el único modo de falla del enlace que le costaba la onda.
+- ✅ La jerarquía de control **no cambió**: el AUX sigue mandando y el AUX_KILL sigue siendo por hardware.
+- ⚠️ **El AUX sí puede trabarse como esclavo.** Es el precio, y es el correcto: necesita su propio reinicio por *watchdog*, pendiente para el firmware del AUX.
+- ⚠️ **La dirección del AUX es 0x21, a propósito distinta de 0x20.** Así una tarjeta con firmware viejo no contesta por error si alguien mezcla versiones en la trinchera.
+- ⚠️ **El costo escala con el tráfico, no con el tiempo.** Si algún día el enlace tiene que ir más rápido que 10/s, lo que se gasta es tiempo de lazo: a 192/s se va la mitad. El margen está medido, pero no es infinito.
+
+**Referencias:** [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms), [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-025](#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben) y el registro completo de las tres corridas en [`protocolo_banco_control.md`](protocolo_banco_control.md).
+
+---
+
+## DC-028. El lazo de control de CA: comparador para el cruce, RMS de medio ciclo por pares
+
+> **El cruce por cero es una medición de tiempo, no de amplitud.** Y el RMS de medio ciclo no se puede calcular sobre medio ciclo: hay que emparejar dos ventanas, porque sobre medio seno la media no es el bias.
+
+**Estado: vigente (V1).** Construido y validado en banco el 24 de noviembre de 2026 (etapa 4 de la Parte C, ocho versiones). Implementa el lazo que [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13) y [DC-025](#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben) habían dejado especificado pero sin escribir.
+
+### Lo que se construyó
+
+| Módulo | Qué hace |
+| --- | --- |
+| `comparador_red.{h,cpp}` | el cruce por cero de la red con el comparador analógico interno: AIN0 = D6 (nodo del divisor), AIN1 = D7 (`NEUTRO-GRID`) |
+| `rms_ventana.{h,cpp}` | RMS de medio ciclo de los dos canales de CA, acumulado fuera de las interrupciones |
+| `gancho_adc.h` | el enganche por el que la ISR del ADC entrega cada muestra, con el mismo mecanismo de `__has_include` del resto del proyecto |
+
+### Tres decisiones, y la primera es la que más fácil se olvida
+
+**1. No se puede usar la captura de entrada del Timer1, aunque el hardware la ofrece.**
+
+El 328P puede amarrar el comparador a `ICP1` con el bit `ACIC`: el hardware guardaría `TCNT1` en `ICR1` en el instante exacto del flanco — 62.5 ns de resolución, latencia cero, sin software. Es la forma obvia de hacerlo y es la forma equivocada aquí:
+
+> **`ICR1` ES EL TOP DE LA PORTADORA.** El SPWM corre en modo 8 con TOP = ICR1 = 333. Si el comparador escribiera ahí, cada cruce de la red cambiaría la frecuencia de conmutación del puente.
+
+`ACIC` se queda en 0, y está dicho en el código para que nadie lo intente después. El fechado va por software: las garrapatas crudas del Timer0, 16 bits en unidades de 4 µs.
+
+**2. El RMS se acumula fuera de las interrupciones, pero NO desde el lazo.**
+
+Esto parece una contradicción con la etapa 3, y no lo es. Ahí se demostró que **el lazo se queda ciego mientras hay tráfico I2C**: durante los 2.7 ms de una transferencia está detenido dentro de `endTransmission()` y las ~63 interrupciones de ese rato pasan sin que nadie las recoja. Un RMS al que le faltan muestras cuando hay bus no es un RMS: es un número que depende del tráfico.
+
+La salida es un **anillo de 128 entradas** que las ISR llenan —unos 20 ciclos— y el lazo drena. En el bloqueo del I2C entran ~12 eventos; no se pierde ninguno, se encolan. Y el anillo lleva **las muestras y las fronteras de ventana mezcladas en el orden real**, que es necesario porque la frontera de la red la pone la ISR del comparador y las muestras la del ADC: por caminos separados el lazo no sabría cuál ocurrió primero.
+
+**3. La ventana del inversor son 25 muestras exactas, por construcción.**
+
+```
+24 024 desbordes/s ÷ 4            = 6 006 disparos de ADC/s
+2 de cada 4 disparos son A0       = 3 003 muestras/s del inversor
+línea de 60.06 Hz                 = 120.12 semiciclos/s
+3 003 ÷ 120.12                    = 25.000 muestras por semiciclo
+```
+
+Sin redondeo, porque todo sale del mismo cristal. Son las 25 muestras que DC-023 daba por supuestas. ⚠️ **Y es frágil igual que el 2.4985 del ADC:** se cumple porque 400 muestras/ciclo, 4 desbordes por disparo y 2 ranuras de A0 de cada 4 se dividen sin resto. Cambiar cualquiera de los tres rompe la alineación sin avisar. La red, en cambio, recibe 12.50 por semiciclo —nunca entero— y por eso el par importa el doble ahí.
+
+### Lo que el banco midió
+
+| | medido | criterio |
+| --- | --- | --- |
+| Pasos de onda perdidos | **0** en 30 reportes (~740 000 periodos) | 0 |
+| Peor entrada a la ISR del SPWM | **351 c** | < 491 → **140 c de margen** |
+| Ocupación peor | 431 c = 64.7 % | ≤ 70 % |
+| Jitter del cruce aceptado | **0.58 – 0.66°** | < 2.0° |
+| Frecuencia de la red | 60.006 – 60.013 Hz (7 mHz) | ±10 mHz |
+| RMS de la red | **120.19 – 120.43 V** | ±0.3 V de 120.1 medido |
+| Bias de la ventana | **511, quieto** | ~511 |
+| Muestras por par | **25 / 50 exactos** | exacto |
+| Disparos de ADC perdidos | **0** | 0 |
+
+**Las cuatro interrupciones caben.** Contado en el binario: 537 ciclos de 666 en el banco (81 %), 507 en producción (76 %) donde no hay instrumentación; sumando la ISR de TWI, 97 % y 93 %.
+
+⚠️ El costo de la ISR de TWI (~112 c) **sigue siendo el único número de esa tabla que nunca se midió**. Es una estimación. Lo que decide es `SOBREPASOS`, que es exacto.
+
+### Lo que el criterio original pedía y resultó imposible
+
+C5.4 pedía `rechazados = 0` en el comparador. **Eso no se puede cumplir, y pedirlo era un error de criterio, no del circuito.**
+
+El comparador del AVR no tiene histéresis y su salida no sale a ningún pin, así que no se puede realimentar. Y la pendiente en el cruce es lentísima:
+
+```
+amplitud en el nodo    334 cuentas × 4.88 mV = 1.63 V
+pendiente en el cruce  1.63 V × 2π × 60     = 0.614 mV/µs
+```
+
+A esa pendiente, **10 mV de perturbación son ±16 µs de ambigüedad**, y el comparador alterna dentro de esa ventana. Se miden 60–80 flancos rechazados por segundo contra 120 cruces reales.
+
+**El histograma de los rechazos cerró el diagnóstico sin ambigüedad:** todos abajo de 100 µs y el 97 % abajo de 50. Eso descarta el recruce por armónicos de la red —caería a cientos de µs o a ms— y deja el repique del comparador como única causa. Un filtro no lo arregla: se probó un RC de 1 kΩ + 100 nF (corte en 1.59 kHz, 24 kHz aplastado 15 veces) y `rechazados` no se movió un flanco. Un filtro no hace que la señal cruce más rápido.
+
+**El criterio correcto es el jitter del cruce que sí se acepta**, que es lo que le importa al PLL: 0.58–0.66° contra un requisito de transferencia de ±5–10°. Se mide con la σ del semiperiodo, con `σ_cruce = σ_semi / √2` porque el semiperiodo es la diferencia de dos cruces independientes.
+
+Y el filtro se queda puesto por otra razón: cuando entre la etapa de potencia, con el puente conmutando 1 kW al lado del nodo, ese corte en 1.59 kHz va a valer mucho. Cuesta 2.16° de retardo constante y compensable, y roba 9 % de señal que la calibración absorbe.
+
+### Seis correcciones que el banco destapó
+
+Se dejan escritas porque cada una es una trampa que vuelve:
+
+| | El error | Cómo se delató |
+| --- | --- | --- |
+| 1 | **El RMS, mal por 2.30×.** `⟨x²⟩ − ⟨x⟩²` sobre medio ciclo quita la **media rectificada** (bias + 0.6366·A), no el bias. Da 0.3078·A contra 0.7071·A | el `CD` alternando 277 y 744 cuentas, **simétrico alrededor de 510.5** — el bias exacto |
+| 2 | **El criterio de cruces, falsa alarma.** Comparaba contra 120 × segundos, y el reporte no dura un segundo: su base de tiempo son los desbordes del SPWM, ±2 % | `cruces` seguía la variación de `ISR` al pie de la letra: 114 en un reporte de 0.965 s, 121 en uno de 1.011 s |
+| 3 | **La medición perturbó al sistema.** La estadística del jitter dentro de la ISR del comparador costaba **117 ciclos**: la suma de las tres ISR pasó de 91 % a **109 %** del periodo | 14 pasos de onda perdidos en 33 segundos, después de tres versiones en cero |
+| 4 | **El peor caso salió saturado.** `TCNT1` en modo 8 no puede leer más que TOP, así que `t0max = 333` significaba «333 o más» | el número se clavó exactamente en 333 en varios reportes |
+| 5 | **El anillo se desbordaba por el reporte serial, no por el I2C.** 900 bytes a 115200 son ~70 ms contra los 2.7 ms presupuestados | `anillo = 79` por segundo, y picos de σ del RMS de hasta 11 cuentas con el RMS cayendo de 227.0 a 225.9 |
+| 6 | **Un contador que se reinicia antes de poder contar no mide nada.** `descartadas` se imprimía en la línea 2, los descartes ocurren 8.3 ms después, y el reinicio del final del reporte los borraba | imprimía 0 en todos los reportes, funcionara o no el mecanismo |
+
+**Dos de ellas dejaron herramienta.** La corrección (4) —dos lecturas seguidas de `TCNT1` para saber la dirección del contador— **cierra la ventana ciega de 207 a 245 ciclos que se arrastraba desde la etapa 1**, donde ningún umbral podía distinguir una lectura doblada de una buena. Y el conteo de (5) fue lo que delató (6).
+
+### Consecuencias
+
+- ✅ **El cruce por cero sirve para cerrar el PLL** con 3× de margen sobre el requisito de transferencia. Es la puerta de [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo).
+- ✅ **La cadena completa está validada** —señal, ADC, ventana, cruce— y sólo se podía validar cerrada: el RMS necesita el cruce para saber dónde empieza la ventana.
+- ⚠️ **No hace falta histéresis de hardware**, pero si algún día hiciera falta son un pin libre y una resistencia de 1 MΩ al nodo de D6: 55 mV de histéresis, 90 µs. El firmware voltearía el pin según `ACO`.
+- ⚠️ **El canal del inversor no se pudo validar**: sin etapa de potencia, A0 está al aire. Y lo que lee no es cero sino ~95 % del canal de la red, porque el condensador de muestreo del ADC se queda con el valor del canal anterior de la rotación. **Un canal desconectado lee a su vecino**, y eso es una trampa para diagnosticar más adelante.
+- ⚠️ **Deuda de banco, no de diseño:** se descartan 8 de 240 ventanas por segundo (3.3 %) por el reporte serial, que en producción no existe. Y **las fronteras se pierden 7 veces más de lo que les toca** —5 % de los eventos y 37 % de las pérdidas—, sin explicación confirmada.
+
+**Referencias:** [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13), [DC-025](#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben), [DC-026](#dc-026-la-regla-del-cli-el-costo-se-paga-por-vuelta-del-lazo-no-por-unidad-de-tiempo), [DC-029](#dc-029-la-referencia-del-adc-es-avcc-y-eso-se-lleva-la-calibración-adentro) y el registro completo en [`protocolo_banco_control.md`](protocolo_banco_control.md).
+
+---
+
+## DC-029. La referencia del ADC es AVCC, y eso se lleva la calibración adentro
+
+> **El ADC no mide volts: mide la razón entre su entrada y su referencia.** Y la referencia es el riel de alimentación, que se mueve.
+
+**Estado: vigente (V1), pendiente de implementar.** Detectado al calibrar los canales de CA el 24 de noviembre de 2026.
+
+### El problema, con números
+
+La calibración de banco se hizo con el Nano alimentado por USB:
+
+```
+AVCC medido en el protoboard                   4.76 V
+RMS de la red medido                         226.8 cuentas
+contra el multímetro                         120.1 V
+constante resultante                      52 954  (mV × 100 por cuenta)
+```
+
+Cuando la tarjeta de control entregue los 5.00 V de su regulador lineal:
+
+```
+las cuentas escalan como 1/AVCC   →   226.8 × 4.76/5.00 = 215.9
+y la misma constante reportaría   →   114.3 V en vez de 120.1
+error                             →   −5.8 V = −4.8 %
+```
+
+**19 veces el criterio de ±0.3 V.** Y no hace falta cambiar de tarjeta para que pase: basta otro puerto USB, otro cable, o más carga en el riel.
+
+### La salida no cuesta componentes
+
+El 328P trae un bandgap interno de ~1.1 V que **el ADC puede leer usando AVCC como referencia** (`MUX = 1110`). Como el ADC mide razones, leer una entrada conocida da la referencia:
+
+```
+cuenta_bg = 1.1 / AVCC × 1023      →      AVCC = 1.1 × 1023 / cuenta_bg
+```
+
+A 4.76 V son **236 cuentas**; a 5.00 V, **225**. Once cuentas de diferencia: el firmware se entera del cambio sin que nadie le diga. Y entonces
+
+```
+V_línea = k × (cuenta / 1023) × AVCC_medido
+```
+
+con `k` —que lo fijan las resistencias y el transformador— calibrado una vez para siempre.
+
+⚠️ **El valor absoluto del bandgap está mal especificado:** 1.0 a 1.2 V según la hoja de datos, ±9 %. Lo que está bien es su **estabilidad** con temperatura y tiempo, que es lo que un bandgap sabe hacer. Así que lo que se calibra por tarjeta ya no es «volts por cuenta» —que se va con el riel— sino **el valor del bandgap de ese chip**, medido una vez contra el multímetro y guardado en EEPROM:
+
+```
+V_bg = AVCC_medido × cuenta_bg / 1023 = 4.76 × 236 / 1023 = 1.0981 V
+```
+
+### Lo que cuesta en la rotación del ADC: nada en los canales de CA
+
+La rotación de DC-025 pasa de cuatro pasos a ocho:
+
+```
+A0, A6, A0, A3, A0, A6, A0, BG
+```
+
+| canal | antes | después |
+| --- | --- | --- |
+| A0, inversor | 3 003/s | **3 003/s** — igual |
+| A6, red | 1 501/s | **1 501/s** — igual |
+| A3, batería | 1 501/s | 750/s |
+| bandgap | — | 750/s |
+
+**Las ventanas de RMS no se enteran:** el inversor sigue con 25 muestras por semiciclo y la red con 12.5, así que el emparejamiento de DC-028 queda intacto. Lo único que se reparte es la batería, que es una medición de CD lenta y a 750 por segundo le sobra. Y los 150 µs de asentamiento que ya tiene la rotación cubren el arranque del bandgap, que la hoja de datos pide en ~70 µs.
+
+### Honestidad sobre cuánto gana
+
+236 cuentas dan 0.42 % por cuenta, y promediando queda en **~0.2 % de AVCC** — unos 0.25 V a 120 V. No regala precisión: **convierte un error del 5 % en uno del 0.2 %**, y eso es la diferencia entre inservible y dentro del criterio.
+
+### Consecuencias
+
+- ⚠️ **La constante `MV_POR_CUENTA_X100_RED = 52954` es de banco, no de producción**, y está marcada así en el código con esta cuenta completa.
+- ⚠️ **Hay que recalibrar con la tarjeta en físico**, y ésa es la oportunidad de implementar esto en vez de volver a calibrar a mano.
+- ✅ Una vez puesto, la lectura deja de depender del riel: se puede cambiar de fuente sin recalibrar.
+- La corrida de validación es directa: **mover el riel a propósito y comprobar que la lectura no se mueve.**
+
+**Referencias:** [DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc), [DC-025](#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben), [DC-028](#dc-028-el-lazo-de-control-de-ca-comparador-para-el-cruce-rms-de-medio-ciclo-por-pares).
 
 ---
 
