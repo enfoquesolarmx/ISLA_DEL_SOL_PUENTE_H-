@@ -730,7 +730,7 @@ Prenderlo todo de golpe y ver jitter no sirve: no se sabe quién lo causó. **Ca
 | **C1** | SPWM solo | **B5**: la ISR limpia, sin nadie estorbando | traza |
 | **C2** | + ADC (3 canales) | cuánto cuesta el ADC, y si el reparto se cumple | traza |
 | **C3** | + I2C con el AUX | cuánto cuesta TWI — **la incógnita grande**, y quedó sin medir | traza |
-| **C4** | + red y comparador | si la medición coincide con el Fluke | traza |
+| **C4** | + red y comparador | si la medición coincide con el multímetro | traza |
 | **C5** | + etapa de potencia conmutando | acoplamiento al canal de red | **EN_HW**, alto y quieto |
 
 El cambio de la etapa 5 no es un detalle de instrumentación: **es la frontera entre "el puente no puede encender" y "el puente está conmutando".** Mientras D12 sea traza, EN_HW anda picado y el 74HC08 no deja pasar nada completo — que es justamente lo que vuelve seguras a las etapas 1–4.
@@ -1172,6 +1172,111 @@ Así que sin conocer el máximo exacto, sabemos que **nunca pasó de 491** — n
 - **La ISR de TWI sigue sin medir.** Si algún día hace falta el número, el camino es el analizador lógico mirando D4 contra SCL: la punta no es ciega durante la transferencia, el muestreo sí.
 - **El doblez del cronómetro no está resuelto, sólo no se activó.** `dobladas = 0` en las tres corridas porque las entradas se quedaron lejos del TOP. El arreglo de raíz sigue siendo mover la medición del cuerpo al Timer2 libre con preescalador /1 (16 µs de alcance contra 8.8 µs de cuerpo máximo), porque entre t0 ≈ 207 y 245 **ningún umbral distingue** una lectura doblada de una buena.
 - **El AUX necesita *watchdog*.** Como esclavo del bus sí puede trabarse — es el precio del cambio, y es el correcto porque no tiene trabajo de tiempo real. Pero hay que reiniciarlo solo.
+
+---
+
+## Etapa 4: la red y el comparador — resultados
+
+Corridas del 24 de noviembre de 2026, ocho versiones del instrumento. Es la etapa que cambió de pregunta: las tres primeras preguntaban **«¿cabe en el tiempo?»** y ésta **«¿lo que medimos es la realidad?»**
+
+### El veredicto
+
+| | Resultado | Criterio | Margen |
+| --- | --- | --- | --- |
+| Pasos de onda perdidos | **0** en 30 reportes (~740 000 periodos) | 0 | — |
+| **Peor entrada a la ISR, medida** | **351 c = 21.9 µs** | < 491 c | **140 c** |
+| Costo propio de la ISR del SPWM | 234 c con instrumentación, 218 sin ella | ≤ 70 % | 2.1× |
+| Ocupación peor observada | 431 c = 26.9 µs = 64.7 % | ≤ 70 % | — |
+| **(a)** Cruces por segundo | 114–121, siguiendo `ISR/200` | 2 por ciclo | ~3/s se pierden al blanqueo |
+| **(b)** Jitter del cruce aceptado | **0.58 – 0.66°** | < 2.0° | **3×** |
+| **(c)** Frecuencia de la red | 60.006 – 60.013 Hz (7 mHz) | ±10 mHz | — |
+| **(d)** RMS de la red | **120.19 – 120.43 V** | ±0.3 V de 120.1 | — |
+| **(e)** Bias de la ventana | **511, quieto**; ventanas 223–228 c | ~511 | — |
+| Muestras por par | **25 / 50 exactos** | exacto | — |
+| Disparos de ADC perdidos | **0** | 0 | — |
+| Errores de CRC en el enlace | **0** | 0 | — |
+
+**PASA.** Las cuatro interrupciones —Timer1, ADC, TWI y comparador— caben por primera vez en un periodo de portadora: 537 ciclos de 666 en el banco (81 %) y 507 en producción (76 %), donde no hay instrumentación.
+
+### Lo que esta etapa agregó, y el presupuesto que costó
+
+Contado en el binario, escalando por el factor que el SPWM dio entre la cuenta estática y su medición real:
+
+| ISR | Etapa 3 | Etapa 4 |
+| --- | --- | --- |
+| SPWM | 218 c | 212 c (+8 de instrumentación nueva) |
+| ADC | ~125 c | **127 c** con el RMS encolado |
+| Comparador | — | **176 c** |
+| TWI | ~112 c (estimado, nunca medido) | igual |
+
+⚠️ **El costo de la ISR de TWI sigue siendo el único número de esa tabla que no se midió.** Lo que decide es `SOBREPASOS`, que se cuenta con `TIFR1` dentro de la ISR y no tiene ventana ciega.
+
+### El criterio (b) pedía lo imposible, y era error del criterio
+
+C5.4 pedía `rechazados = 0`. **No se puede cumplir.** El comparador del AVR no tiene histéresis, su salida no sale a ningún pin —así que no se puede realimentar— y la pendiente en el cruce es lentísima:
+
+```
+amplitud en el nodo    334 cuentas × 4.88 mV = 1.63 V
+pendiente en el cruce  1.63 V × 2π × 60      = 0.614 mV/µs
+→ 10 mV de perturbación = ±16 µs de ambigüedad
+```
+
+Se miden 60–80 flancos rechazados por segundo contra 120 cruces reales.
+
+**El histograma de los rechazos cerró el diagnóstico**, y es la medición de la que más se aprendió en la etapa:
+
+```
+<=20 µs = 35    <=50 µs = 33    <=100 µs = 0    <=200 y arriba = 0
+```
+
+Todo abajo de 100 µs y el 97 % abajo de 50. **Eso descarta el recruce por armónicos de la red** —caería a cientos de microsegundos o a milisegundos— y deja el repique del comparador como única causa. Son arreglos distintos: el repique se arregla con histéresis, el recruce con blanqueo.
+
+**Y un filtro no lo arregla.** Se probó un RC de 1 kΩ + 100 nF en D6, con el corte en 1.59 kHz —24 kHz aplastado quince veces— y `rechazados` no se movió un flanco. Un filtro no hace que la señal cruce más rápido. Lo que sí hizo fue robar **9.0 % de la señal**, porque D6 cuelga del mismo nodo que A6; de ahí se dedujo la impedancia de fuente del nodo, **11.1 kΩ**. El filtro se queda puesto para la etapa 5, cuando el puente conmute 1 kW al lado del nodo: cuesta 2.16° de retardo constante y compensable.
+
+**El criterio correcto es el jitter del cruce aceptado**, que es lo que le importa al PLL. Se mide con la σ del semiperiodo y `σ_cruce = σ_semi / √2`, porque un semiperiodo es la diferencia de dos cruces independientes: **0.58 a 0.66°** contra un requisito de transferencia de ±5–10°.
+
+### El peor caso, por fin medido
+
+Éste es el dato que el proyecto no tenía:
+
+```
+entrada máxima real        351 c
++ cuerpo máximo            156 c
++ epílogo                   35 c
+                         -------
+                           542 c   de 666 = 81 %
+```
+
+Y vale la pena ver **cuánto subestimaba el muestreo**: en la misma corrida, la entrada máxima que el histograma reportó fue de 223 a 242 ciclos, mientras la real llegó a 351. **110 ciclos de diferencia**, porque el histograma lo arma el lazo y el lazo no ve las ~63 ISR de cada bloqueo de I2C. Es la tercera vez que esa ceguera queda cuantificada, y la primera en que importaba de verdad.
+
+### Seis correcciones, y cómo se delató cada una
+
+| | El error | Lo que lo delató |
+| --- | --- | --- |
+| 1 | **El RMS, mal por 2.30×.** `⟨x²⟩ − ⟨x⟩²` sobre medio ciclo quita la media rectificada (bias + 0.6366·A), no el bias: da 0.3078·A contra 0.7071·A | el `CD` alternando 277 y 744 cuentas, **simétrico alrededor de 510.5** — el bias exacto. De ahí salió la amplitud real y la predicción cuadró al 3 % |
+| 2 | **El criterio de cruces, falsa alarma.** Comparaba contra 120 × segundos, y el reporte no dura un segundo: su base son los desbordes del SPWM, ±2 % | `cruces` seguía la variación de `ISR` al pie de la letra: 114 en un reporte de 0.965 s, 121 en uno de 1.011 s |
+| 3 | **La medición perturbó al sistema.** La estadística del jitter dentro de la ISR costaba **117 ciclos**: la suma de las tres ISR pasó de 91 % a **109 %** del periodo | 14 pasos de onda perdidos en 33 segundos, después de tres versiones en cero |
+| 4 | **El peor caso, saturado.** `TCNT1` en modo 8 no puede leer más que TOP, así que `t0max = 333` significaba «333 o más» | el número se clavó exactamente en 333 en varios reportes |
+| 5 | **El anillo se desbordaba por el reporte serial, no por el I2C.** 900 bytes a 115200 son ~70 ms contra los 2.7 ms presupuestados | `anillo = 79`/s, y picos de σ del RMS de hasta 11 cuentas con el RMS cayendo de 227.0 a 225.9 |
+| 6 | **Un contador que se reinicia antes de poder contar no mide nada.** `descartadas` se imprimía en la línea 2, los descartes ocurren 8.3 ms después, y el reinicio del final del reporte los borraba | imprimía 0 en todos los reportes, funcionara o no el mecanismo |
+
+**Dos dejaron herramienta.** La corrección (4) —dos lecturas seguidas de `TCNT1`, que por los cuatro ciclos que hay entre ellas dicen si el contador sube o baja— **cierra la ventana ciega de 207 a 245 ciclos que se arrastraba desde la etapa 1**, donde ningún umbral podía distinguir una lectura doblada de una buena. Y el contador de (5) fue lo que delató (6).
+
+**Y una enseñanza de método.** El arreglo correcto del anillo no fue agrandarlo: fue **detectar la pérdida y descartar la ventana**. Una ventana a la que le faltan muestras no es una medición, por pocas que falten. Agrandarlo bajó las pérdidas de 79 a 15 por segundo y los picos de σ siguieron; descartar las ventanas sucias los eliminó por completo — σ = 0.0 y ventanas de 223 a 228 cuentas en los treinta reportes.
+
+### Dos hallazgos que no se buscaban
+
+**Un canal desconectado no lee cero: lee a su vecino.** Sin etapa de potencia, A0 está al aire y mide 216 cuentas contra 227 de la red — el 95 %. El condensador de muestreo del ADC se queda con el valor del canal anterior de la rotación, que es justo A6. No es falla y desaparece con el divisor puesto, pero es una trampa fina para diagnosticar más adelante.
+
+**La razón del transformador quedó verificada por una medición independiente.** De las dos lecturas del multímetro, 120.1 V en el primario y 14.23 en el secundario, sale 8.443 — contra 8.3986 medida en A6 de la Parte A. Coinciden dentro de **0.53 %**.
+
+### Lo que queda abierto
+
+- **La calibración lleva AVCC adentro.** Con los 5.00 V del regulador en vez de los 4.76 del USB, la constante de hoy reportaría 114.3 V en vez de 120.1: −4.8 %, diecinueve veces el criterio. Se resuelve midiendo el bandgap ([DC-029](decisiones_criticas.md#dc-029-la-referencia-del-adc-es-avcc-y-eso-se-lleva-la-calibración-adentro)), y la corrida de validación es directa: mover el riel a propósito y comprobar que la lectura no se mueve.
+- **El canal del inversor no se pudo validar**: hace falta la etapa de potencia, o sea la etapa 5.
+- **Deuda de banco, no de diseño:** se descartan 8 de 240 ventanas por segundo (3.3 %) por el reporte serial, que en producción no existe.
+- ⚠️ **Las fronteras de ventana se pierden siete veces más de lo que les toca** — son 5 % de los eventos del anillo y 37 % de las pérdidas. **Sin explicación confirmada.** No afecta el resultado porque el descarte las cubre, pero queda anotado en vez de inventarle una causa.
+- **El criterio (e) hay que replantearlo.** Los 12.5 mV de σ venían de A6 de la Parte A, que era otra medición con mucho más promediado. Con 25 muestras por ciclo el piso por ventana es de ~0.6 cuentas ≈ 340 mV; el promedio del segundo sí baja a unos 30 mV. No es que el firmware falle: el criterio estaba escrito contra otra cosa.
 
 ---
 
