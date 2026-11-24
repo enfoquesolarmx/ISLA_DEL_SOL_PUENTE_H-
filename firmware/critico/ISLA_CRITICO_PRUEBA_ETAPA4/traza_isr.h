@@ -37,6 +37,7 @@
 #pragma once
 
 #include <avr/io.h>
+#include "config_portadora.h"   // por CICLOS_CPU_PERIODO = 2 × TOP
 
 // Pin de traza para el analizador lógico: PD4 = D4 (INV_CMD con J15 puesto).
 // ⚠️ J15 DESCONECTADO durante toda la prueba — ver Parte C, sección C0.
@@ -61,26 +62,53 @@ extern volatile uint16_t isr_t0_max;      // el PEOR caso de entrada, sin ceguer
  *
  *  El histograma lo arma el lazo, que sólo recoge una muestra por vuelta. Con
  *  el I2C corriendo, el lazo se queda detenido 2.7 ms y **las ~63 ISR de esa
- *  ventana no se recogen**. La corrida del 24-nov lo dejó en evidencia sin
- *  lugar a dudas:
+ *  ventana no se recogen**. La corrida del 24-nov lo dejó en evidencia:
  *
  *      entrada máxima que reportó el histograma    269 ciclos
  *      entrada mínima que SOBREPASOS demuestra     > 491 ciclos, 14 veces
  *
- *  O sea que el máximo muestreado subestimaba el real **a la mitad**. Este
- *  `if` corre en TODAS las ISR, recogidas o no, y cuesta unos ocho ciclos.
+ *  O sea que el máximo muestreado subestimaba el real **a la mitad**.
+ *
+ *  ⚠️⚠️ Y LA PRIMERA VERSIÓN DE ESTE MÁXIMO SALIÓ SATURADA, TAMBIÉN POR MÍ.
+ *
+ *  Leía `TCNT1` crudo, y en modo 8 el contador sube 0→TOP y baja TOP→0: **no
+ *  puede leer más que TOP**. La corrida reportó `t0max = 333` en varios
+ *  reportes, que es TOP exacto — o sea «333 o más», no 333.
+ *
+ *  EL ARREGLO: dos lecturas seguidas dicen la dirección.
+ *
+ *  Una lectura de 16 bits son dos instrucciones, cuatro ciclos, así que la
+ *  segunda lectura queda cuatro cuentas adelante si el contador sube, y
+ *  cuatro atrás si baja. Si baja, el tiempo real desde BOTTOM no es `TCNT1`
+ *  sino `2·TOP − TCNT1`.
+ *
+ *  Con eso el alcance pasa de 333 a 666 ciclos — justo el periodo completo, y
+ *  arriba de los 491 donde se pierde un paso. **Se acaba la ventana ciega de
+ *  207 a 245 que arrastrábamos desde la etapa 1**, donde ningún umbral podía
+ *  distinguir una lectura doblada de una buena.
+ *
+ *  Cuesta ocho ciclos por punta. Es instrumentación: en producción no existe.
  */
+#define SPWM_TCNT_DIR(dest)                                       \
+  do {                                                            \
+    const uint16_t a_ = TCNT1;                                    \
+    const uint16_t b_ = TCNT1;                                    \
+    (dest) = (b_ >= a_) ? a_                                      \
+                        : (uint16_t)(CICLOS_CPU_PERIODO - a_);    \
+  } while (0)
+
 #define SPWM_TRAZA_ENTRA()                      \
   do {                                          \
     PORTD |= _BV(TRZ_BIT);                      \
-    const uint16_t t = TCNT1;                   \
+    uint16_t t;                                 \
+    SPWM_TCNT_DIR(t);                           \
     isr_t0 = t;                                 \
     if (t > isr_t0_max) isr_t0_max = t;         \
   } while (0)
 
 #define SPWM_TRAZA_SALE()                       \
   do {                                          \
-    isr_t1 = TCNT1;                             \
+    SPWM_TCNT_DIR(isr_t1);                      \
     isr_n++;                                    \
     if (TIFR1 & _BV(TOV1)) isr_sobrepasos++;    \
     isr_lista = 1;                              \

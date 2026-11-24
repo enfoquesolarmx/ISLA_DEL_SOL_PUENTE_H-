@@ -88,16 +88,27 @@
 
 /*  EL ANILLO. 64 entradas de 16 bits = 128 bytes de RAM.
  *
- *  Dimensionado contra el peor bloqueo conocido del lazo: una transferencia
- *  I2C de 2.7 ms deja entrar ~12 muestras de los dos canales de CA más una
- *  frontera. 64 son cinco veces eso.
+ *  ⚠️ DIMENSIONADO CONTRA EL BLOQUEO EQUIVOCADO, LA PRIMERA VEZ.
+ *
+ *  Lo puse en 64 contra los 2.7 ms de una transferencia I2C, donde entran ~12
+ *  eventos. Y el banco perdió **79 eventos por segundo**, porque el bloqueo
+ *  largo del lazo no es el I2C: **es imprimir el reporte**. Novecientos bytes
+ *  a 115200 baudios son ~70 ms, y a 4 744 eventos por segundo eso son ~330.
+ *
+ *  Y no fue gratis: esos eventos faltantes corrompían las ventanas que
+ *  atravesaban el reporte, y se veían como picos de σ del RMS —de 0.0 a
+ *  10.6 cuentas— que sin el contador habríamos ido a buscar a la red.
+ *
+ *  En producción no existe el reporte. En el banco van dos cosas: 128
+ *  entradas (27 ms de aguante) y drenar el anillo entre líneas del reporte,
+ *  que es lo que lo deja en cero.
  *
  *  Formato de cada entrada:
  *      bit 15     1 = frontera de ventana, 0 = muestra
  *      bit 12     canal: 0 = inversor, 1 = red
  *      bits 9..0  la cuenta del ADC (sólo en las muestras)
  */
-#define RMS_ANILLO     64
+#define RMS_ANILLO     128
 #define RMS_ANILLO_MSK (RMS_ANILLO - 1)
 #define RMS_EV_FRONTERA 0x8000u
 #define RMS_EV_CANAL    0x1000u

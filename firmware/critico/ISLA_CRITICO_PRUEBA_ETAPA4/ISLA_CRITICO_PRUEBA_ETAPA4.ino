@@ -680,18 +680,22 @@ void loop()
 #endif
 
   if (hay && t1 >= t0) {
-    /*  Desdoblado: ver CUERPO_PISO. Sin esto, cuando la ISR pasa el TOP el
-     *  cronómetro lee de regreso y el cuerpo sale absurdamente corto.
+    /*  ⚠️ YA NO HAY QUE DESDOBLAR NADA, Y ESO CIERRA UN PENDIENTE VIEJO.
+     *
+     *  El enganche resuelve la dirección del contador con dos lecturas
+     *  seguidas (ver traza_isr.h), así que `t0` y `t1` vienen con su valor
+     *  real hasta 666 ciclos. Se acabó el umbral de `CUERPO_PISO`, que no
+     *  podía distinguir una lectura doblada de una buena entre t0 ≈ 207 y
+     *  245 — la ventana ciega que arrastrábamos desde la etapa 1.
+     *
+     *  `dobladas` deja de ser «las que hubo que adivinar» y pasa a ser un
+     *  dato: cuántas veces la ISR siguió corriendo después del TOP.
      */
-    uint16_t tau1 = t1;
-    if (tau1 < (uint16_t)(t0 + CUERPO_PISO)) {
-      tau1 = (uint16_t)(2UL * TOP_CUENTAS - t1);
-      dobladas++;
-    }
+    if (t1 > TOP_CUENTAS) dobladas++;
 
     mete(entrada, t0);
-    mete(cuerpo,  (uint16_t)(tau1 - t0));
-    mete(ocupa,   (uint16_t)(tau1 + EPILOGO_CICLOS));
+    mete(cuerpo,  (uint16_t)(t1 - t0));
+    mete(ocupa,   (uint16_t)(t1 + EPILOGO_CICLOS));
     histoMete((t0 > PISO_CICLOS) ? (uint16_t)(t0 - PISO_CICLOS) : 0);
     if (t0 > UMBRAL_TARDE) tarde++;
   }
@@ -937,6 +941,7 @@ void loop()
       Serial.print(F("   <<< CRUCES FUERA DE CUENTA"));
 
     Serial.println();
+    rms_atender(); cmp_atender();          // ver la nota del anillo, abajo
 
     /*  LA PREGUNTA QUE DECIDE EL ARREGLO: a qué distancia del cruce llegan los
      *  flancos rechazados. Concentrados abajo de 50 µs = repique por falta de
@@ -952,6 +957,7 @@ void loop()
       }
       Serial.print(F("   por direccion="));
       Serial.println(cmp_rech_direccion());
+      rms_atender(); cmp_atender();
     }
 
     /*  EL JITTER DEL CRUCE ACEPTADO — el criterio que de verdad importa, en
@@ -984,6 +990,7 @@ void loop()
         Serial.print(F(" grados (criterio: < 2.0)"));
         if (gradoMil > 2000) Serial.print(F("   <<< JITTER ALTO"));
         Serial.println();
+        rms_atender(); cmp_atender();
       }
     }
 
