@@ -76,6 +76,26 @@
 #include "spwm.h"
 #include "tabla_seno.h"
 
+// --- Enganches de medición (DC-017 / protocolo de banco, Parte C) -----------
+// En producción NO EXISTEN: no hay traza_isr.h, las macros se expanden a nada
+// y el código compilado queda byte por byte igual (verificado: mismo md5 del
+// .o con y sin ellas).
+//
+// El sketch de la Parte C pone un traza_isr.h junto a este archivo y ahí las
+// define. Así el módulo se compila como un .cpp NORMAL —nada de incluir un
+// .cpp desde el .ino, que produce símbolos duplicados en el IDE de Arduino.
+#if defined(__has_include)
+#  if __has_include("traza_isr.h")
+#    include "traza_isr.h"
+#  endif
+#endif
+#ifndef SPWM_TRAZA_ENTRA
+#define SPWM_TRAZA_ENTRA()
+#endif
+#ifndef SPWM_TRAZA_SALE
+#define SPWM_TRAZA_SALE()
+#endif
+
 // ============================ PINES ==========================================
 #define BIT_HA   PB1   // D9,  OC1A
 #define BIT_LA   PB2   // D10, OC1B
@@ -109,6 +129,7 @@ static const uint16_t *tablaSeno         = TABLA_SENO_60_Q16;   // en flash
 
 // ============================ INTERRUPCIÓN DE PORTADORA ======================
 ISR(TIMER1_OVF_vect) {
+  SPWM_TRAZA_ENTRA();
   // ---- 1) Periodo que acaba de empezar: pierna B ---------------------------
   // La pierna A ya está apagada en estos dos periodos (se programó antes).
   if (muestra == ultimaMuestra) {
@@ -153,6 +174,7 @@ ISR(TIMER1_OVF_vect) {
 
   muestra   = sig;
   semiciclo = sem;
+  SPWM_TRAZA_SALE();
 }
 
 // ============================ FUNCIONES PÚBLICAS =============================
