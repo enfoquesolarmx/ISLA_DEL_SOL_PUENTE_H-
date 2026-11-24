@@ -282,11 +282,13 @@ Dos canales iguales:
 | --- | --- | --- | --- |
 | **R1 + R2** | 68 kΩ + 68 kΩ | Parte de arriba del divisor desde 48 V | **Dos en serie:** si una se pone en corto, la otra sigue limitando, y cada una solo ve ~27 V |
 | **R4** | 10 kΩ | Parte de abajo | Ganancia 0.0685: 48 V → 3.29 V; 58.4 V → 4.0 V; el ADC llega a 5 V con ~73 V. Sirve para cualquier química de 48 V |
-| **R3** | 1 kΩ | Serie hacia A3 | Protege el pin |
-| **C1** | 1 µF | Filtro en A3 | Fuente de baja impedancia para el ADC. τ ≈ 10 ms: sigue la caída lenta de la batería, no el rizo de 120 Hz |
+| **R3** | **47 kΩ** | Serie hacia A3 | **Protege el pin.** Si el nodo toca BAT+, limita a **1 mA** en vez de los 48 mA que dejaba pasar con 1 kΩ — arriba del máximo absoluto de 40 mA por pin. Subió de 1 kΩ el 2026-11-24, ver [DC-031](../../docs/decisiones_criticas.md#dc-031-r3-del-canal-de-batería-sube-de-1-kω-a-47-kω-y-por-qué-un-zener-no-servía): un zener en este nodo cuesta más en fuga de lo que la medición vale |
+| **C1** | 1 µF | Filtro en A3 | Fuente de baja impedancia para el ADC: es el tanque que surte los 21 pC del condensador de muestreo, y R3 nada más lo rellena. **τ ≈ 56 ms** (eran 10 ms con R3 de 1 kΩ): sigue la caída lenta de la batería y rechaza el rizo de 120 Hz 42 veces |
 | **TP9** | Test point | Lectura en A3 | — |
 
 **Falla segura:** si R4 se abre, la lectura **sube**, el firmware ve "sobrevoltaje" y apaga.
+
+> ⚠️ **No se quite `DIDR0` del canal A3.** `adc_portadora.cpp` desactiva el búfer de entrada digital de A0 y A3 (`DIDR0 |= _BV(ADC0D) | _BV(ADC3D)`). Se puso para ahorrar corriente, pero con R3 en 47 kΩ **es la condición para que la medición sirva**: la hoja de datos garantiza hasta 1 µA de fuga para ese búfer, y 1 µA por 56.3 kΩ son 0.82 V de error en la lectura de batería ([DC-031](../../docs/decisiones_criticas.md#dc-031-r3-del-canal-de-batería-sube-de-1-kω-a-47-kω-y-por-qué-un-zener-no-servía)).
 
 **Firmware:** conversión, límites de corte de las 3 tecnologías (plomo-ácido, LiFePO4 15S y 16S) y su selección desde el SETUP: [firmware del CRÍTICO, sección 7.4](../../firmware/critico/README.md).
 
