@@ -2277,15 +2277,21 @@ Al calcular lo que eso costaba aparecieron dos errores escritos en la documentac
 
 Tres corridas de banco del 24 de noviembre, con la red verificada **quieta en 120.35 ± 0.05 V** con el multímetro:
 
-**(1) Quitando C30 por completo**, el RMS de la red subió de 227 a **249.9 cuentas (+10.1 %)**. El modelo predijo +7.2 %, con el trimmer y el valor real del capacitor como incógnitas. Esa coincidencia es lo que le da crédito a lo demás.
+**(1) Quitando C30 por completo**, el RMS de la red subió de 227 a **249.9 cuentas (+10.1 %)**. El modelo predice **+9.9 %**: coincide dentro de **0.15 %**, con el trimmer y el valor real del capacitor como incógnitas. Esa coincidencia es lo que le da crédito a lo demás.
+
+> ⚠️ **Tercera corrección de la misma tarde, y la anoto porque enseña algo.** La primera versión de esta cuenta daba +7.2 % —2.7 % de error— porque yo estaba calculando **A6 menos el bias**, que es lo que ve el comparador. **El ADC mide contra GND**, y el firmware sólo le resta la media, que quita el **CD** del bias pero **no su parte alterna**. Al usar la cantidad correcta el error se desplomó de 2.7 % a 0.15 %. Que un error se desplome al cambiar la cantidad medida es la mejor señal de que antes estaba mal planteada.
+>
+> ✅ **No afecta ninguna conclusión de esta entrada**, porque el comparador *sí* es diferencial —mide AIN0 contra AIN1, que es el bias— y esa cantidad siempre estuvo bien calculada.
 
 **(2) Cambiando el capacitor por otro de la misma bolsa**, los tres marcados `104`:
 
 | | lectura del canal | C30 que implica | fase del comparador |
 | --- | --- | --- | --- |
-| capacitor 1 | 120.35 V | ~126 nF | −21.97° |
-| capacitor 2 | 119.10 V | ~134 nF | −23.07° |
-| capacitor 3 | 118.57 V | ~137 nF | −23.52° |
+| capacitor 1 | 120.35 V | ~126 nF | −22.0° |
+| capacitor 2 | 119.10 V | ~134 nF | −23.1° |
+| capacitor 3 | 118.57 V | ~137 nF | −23.5° |
+
+Las capacitancias ajustadas quedan en **116 a 138 nF** y la fase del comparador en **−22 a −24°**, barriendo el trimmer de 0 a 2 kΩ y la impedancia del bias de 262 Ω a 2.6 Ω. **El ajuste es robusto a lo que no conocemos**, y por eso se puede firmar.
 
 **Los tres entre 26 y 37 % arriba de la etiqueta, y 9 % dispersos entre sí.** Eso son **1.55° de fase** nada más por cambiar de capacitor. Son cerámicos Y5V o Z5U, cuya tolerancia de catálogo es **+80 / −20 %** y que además se mueven con la temperatura — eso último no se midió y es peor que la dispersión de unidad a unidad.
 
