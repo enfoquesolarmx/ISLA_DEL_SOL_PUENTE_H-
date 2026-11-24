@@ -54,6 +54,8 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-025](#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben) | Reparto del ADC entre los canales: tres prioridades y por qué caben | Control | 2026-11-22 | Vigente |
 | [DC-026](#dc-026-la-regla-del-cli-el-costo-se-paga-por-vuelta-del-lazo-no-por-unidad-de-tiempo) | La regla del `cli()`: el costo se paga por vuelta del lazo, no por unidad de tiempo | Control | 2026-11-22 | Vigente (medido en banco) |
 | [DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda) | El enlace I2C al revés: el CRÍTICO es maestro del bus, y maestro del bus no es quien manda | Control | 2026-11-23 | Vigente (medido en banco) |
+| [DC-028](#dc-028-el-lazo-de-control-de-ca-comparador-para-el-cruce-rms-de-medio-ciclo-por-pares) | El lazo de control de CA: comparador para el cruce, RMS de medio ciclo por pares | Control | 2026-11-24 | Vigente (medido en banco) |
+| [DC-029](#dc-029-la-referencia-del-adc-es-avcc-y-eso-se-lleva-la-calibración-adentro) | La referencia del ADC es AVCC, y eso se lleva la calibración adentro | Control | 2026-11-24 | Vigente (por implementar) |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -1120,7 +1122,7 @@ Los relés de transferencia van en **su propia tarjeta**: los 127 V quedan fuera
 
 **Contexto**
 
-[DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc) fijó el cobre de los dos canales AC — A0 (red) y A6 (inversor), transformador de 12 VAC, bias de 2.5 V — y dejó el firmware abierto, con una advertencia: el ADC lee un canal a la vez, y eso mete desfase entre las dos lecturas.
+[DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc) fijó el cobre de los dos canales AC — **A0 (inversor) y A6 (red)**, transformador de 12 VAC, bias de 2.5 V — y dejó el firmware abierto, con una advertencia: el ADC lee un canal a la vez, y eso mete desfase entre las dos lecturas.
 
 Al llegar al PLL y al cruce por cero hay que decidir dos cosas que parecen independientes y no lo son:
 
@@ -1806,6 +1808,192 @@ A 192 transferencias/s —**20 veces el tráfico de producción, con la mitad de
 - ⚠️ **El costo escala con el tráfico, no con el tiempo.** Si algún día el enlace tiene que ir más rápido que 10/s, lo que se gasta es tiempo de lazo: a 192/s se va la mitad. El margen está medido, pero no es infinito.
 
 **Referencias:** [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms), [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-025](#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben) y el registro completo de las tres corridas en [`protocolo_banco_control.md`](protocolo_banco_control.md).
+
+---
+
+## DC-028. El lazo de control de CA: comparador para el cruce, RMS de medio ciclo por pares
+
+> **El cruce por cero es una medición de tiempo, no de amplitud.** Y el RMS de medio ciclo no se puede calcular sobre medio ciclo: hay que emparejar dos ventanas, porque sobre medio seno la media no es el bias.
+
+**Estado: vigente (V1).** Construido y validado en banco el 24 de noviembre de 2026 (etapa 4 de la Parte C, ocho versiones). Implementa el lazo que [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13) y [DC-025](#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben) habían dejado especificado pero sin escribir.
+
+### Lo que se construyó
+
+| Módulo | Qué hace |
+| --- | --- |
+| `comparador_red.{h,cpp}` | el cruce por cero de la red con el comparador analógico interno: AIN0 = D6 (nodo del divisor), AIN1 = D7 (`NEUTRO-GRID`) |
+| `rms_ventana.{h,cpp}` | RMS de medio ciclo de los dos canales de CA, acumulado fuera de las interrupciones |
+| `gancho_adc.h` | el enganche por el que la ISR del ADC entrega cada muestra, con el mismo mecanismo de `__has_include` del resto del proyecto |
+
+### Tres decisiones, y la primera es la que más fácil se olvida
+
+**1. No se puede usar la captura de entrada del Timer1, aunque el hardware la ofrece.**
+
+El 328P puede amarrar el comparador a `ICP1` con el bit `ACIC`: el hardware guardaría `TCNT1` en `ICR1` en el instante exacto del flanco — 62.5 ns de resolución, latencia cero, sin software. Es la forma obvia de hacerlo y es la forma equivocada aquí:
+
+> **`ICR1` ES EL TOP DE LA PORTADORA.** El SPWM corre en modo 8 con TOP = ICR1 = 333. Si el comparador escribiera ahí, cada cruce de la red cambiaría la frecuencia de conmutación del puente.
+
+`ACIC` se queda en 0, y está dicho en el código para que nadie lo intente después. El fechado va por software: las garrapatas crudas del Timer0, 16 bits en unidades de 4 µs.
+
+**2. El RMS se acumula fuera de las interrupciones, pero NO desde el lazo.**
+
+Esto parece una contradicción con la etapa 3, y no lo es. Ahí se demostró que **el lazo se queda ciego mientras hay tráfico I2C**: durante los 2.7 ms de una transferencia está detenido dentro de `endTransmission()` y las ~63 interrupciones de ese rato pasan sin que nadie las recoja. Un RMS al que le faltan muestras cuando hay bus no es un RMS: es un número que depende del tráfico.
+
+La salida es un **anillo de 128 entradas** que las ISR llenan —unos 20 ciclos— y el lazo drena. En el bloqueo del I2C entran ~12 eventos; no se pierde ninguno, se encolan. Y el anillo lleva **las muestras y las fronteras de ventana mezcladas en el orden real**, que es necesario porque la frontera de la red la pone la ISR del comparador y las muestras la del ADC: por caminos separados el lazo no sabría cuál ocurrió primero.
+
+**3. La ventana del inversor son 25 muestras exactas, por construcción.**
+
+```
+24 024 desbordes/s ÷ 4            = 6 006 disparos de ADC/s
+2 de cada 4 disparos son A0       = 3 003 muestras/s del inversor
+línea de 60.06 Hz                 = 120.12 semiciclos/s
+3 003 ÷ 120.12                    = 25.000 muestras por semiciclo
+```
+
+Sin redondeo, porque todo sale del mismo cristal. Son las 25 muestras que DC-023 daba por supuestas. ⚠️ **Y es frágil igual que el 2.4985 del ADC:** se cumple porque 400 muestras/ciclo, 4 desbordes por disparo y 2 ranuras de A0 de cada 4 se dividen sin resto. Cambiar cualquiera de los tres rompe la alineación sin avisar. La red, en cambio, recibe 12.50 por semiciclo —nunca entero— y por eso el par importa el doble ahí.
+
+### Lo que el banco midió
+
+| | medido | criterio |
+| --- | --- | --- |
+| Pasos de onda perdidos | **0** en 30 reportes (~740 000 periodos) | 0 |
+| Peor entrada a la ISR del SPWM | **351 c** | < 491 → **140 c de margen** |
+| Ocupación peor | 431 c = 64.7 % | ≤ 70 % |
+| Jitter del cruce aceptado | **0.58 – 0.66°** | < 2.0° |
+| Frecuencia de la red | 60.006 – 60.013 Hz (7 mHz) | ±10 mHz |
+| RMS de la red | **120.19 – 120.43 V** | ±0.3 V de 120.1 medido |
+| Bias de la ventana | **511, quieto** | ~511 |
+| Muestras por par | **25 / 50 exactos** | exacto |
+| Disparos de ADC perdidos | **0** | 0 |
+
+**Las cuatro interrupciones caben.** Contado en el binario: 537 ciclos de 666 en el banco (81 %), 507 en producción (76 %) donde no hay instrumentación; sumando la ISR de TWI, 97 % y 93 %.
+
+⚠️ El costo de la ISR de TWI (~112 c) **sigue siendo el único número de esa tabla que nunca se midió**. Es una estimación. Lo que decide es `SOBREPASOS`, que es exacto.
+
+### Lo que el criterio original pedía y resultó imposible
+
+C5.4 pedía `rechazados = 0` en el comparador. **Eso no se puede cumplir, y pedirlo era un error de criterio, no del circuito.**
+
+El comparador del AVR no tiene histéresis y su salida no sale a ningún pin, así que no se puede realimentar. Y la pendiente en el cruce es lentísima:
+
+```
+amplitud en el nodo    334 cuentas × 4.88 mV = 1.63 V
+pendiente en el cruce  1.63 V × 2π × 60     = 0.614 mV/µs
+```
+
+A esa pendiente, **10 mV de perturbación son ±16 µs de ambigüedad**, y el comparador alterna dentro de esa ventana. Se miden 60–80 flancos rechazados por segundo contra 120 cruces reales.
+
+**El histograma de los rechazos cerró el diagnóstico sin ambigüedad:** todos abajo de 100 µs y el 97 % abajo de 50. Eso descarta el recruce por armónicos de la red —caería a cientos de µs o a ms— y deja el repique del comparador como única causa. Un filtro no lo arregla: se probó un RC de 1 kΩ + 100 nF (corte en 1.59 kHz, 24 kHz aplastado 15 veces) y `rechazados` no se movió un flanco. Un filtro no hace que la señal cruce más rápido.
+
+**El criterio correcto es el jitter del cruce que sí se acepta**, que es lo que le importa al PLL: 0.58–0.66° contra un requisito de transferencia de ±5–10°. Se mide con la σ del semiperiodo, con `σ_cruce = σ_semi / √2` porque el semiperiodo es la diferencia de dos cruces independientes.
+
+Y el filtro se queda puesto por otra razón: cuando entre la etapa de potencia, con el puente conmutando 1 kW al lado del nodo, ese corte en 1.59 kHz va a valer mucho. Cuesta 2.16° de retardo constante y compensable, y roba 9 % de señal que la calibración absorbe.
+
+### Seis correcciones que el banco destapó
+
+Se dejan escritas porque cada una es una trampa que vuelve:
+
+| | El error | Cómo se delató |
+| --- | --- | --- |
+| 1 | **El RMS, mal por 2.30×.** `⟨x²⟩ − ⟨x⟩²` sobre medio ciclo quita la **media rectificada** (bias + 0.6366·A), no el bias. Da 0.3078·A contra 0.7071·A | el `CD` alternando 277 y 744 cuentas, **simétrico alrededor de 510.5** — el bias exacto |
+| 2 | **El criterio de cruces, falsa alarma.** Comparaba contra 120 × segundos, y el reporte no dura un segundo: su base de tiempo son los desbordes del SPWM, ±2 % | `cruces` seguía la variación de `ISR` al pie de la letra: 114 en un reporte de 0.965 s, 121 en uno de 1.011 s |
+| 3 | **La medición perturbó al sistema.** La estadística del jitter dentro de la ISR del comparador costaba **117 ciclos**: la suma de las tres ISR pasó de 91 % a **109 %** del periodo | 14 pasos de onda perdidos en 33 segundos, después de tres versiones en cero |
+| 4 | **El peor caso salió saturado.** `TCNT1` en modo 8 no puede leer más que TOP, así que `t0max = 333` significaba «333 o más» | el número se clavó exactamente en 333 en varios reportes |
+| 5 | **El anillo se desbordaba por el reporte serial, no por el I2C.** 900 bytes a 115200 son ~70 ms contra los 2.7 ms presupuestados | `anillo = 79` por segundo, y picos de σ del RMS de hasta 11 cuentas con el RMS cayendo de 227.0 a 225.9 |
+| 6 | **Un contador que se reinicia antes de poder contar no mide nada.** `descartadas` se imprimía en la línea 2, los descartes ocurren 8.3 ms después, y el reinicio del final del reporte los borraba | imprimía 0 en todos los reportes, funcionara o no el mecanismo |
+
+**Dos de ellas dejaron herramienta.** La corrección (4) —dos lecturas seguidas de `TCNT1` para saber la dirección del contador— **cierra la ventana ciega de 207 a 245 ciclos que se arrastraba desde la etapa 1**, donde ningún umbral podía distinguir una lectura doblada de una buena. Y el conteo de (5) fue lo que delató (6).
+
+### Consecuencias
+
+- ✅ **El cruce por cero sirve para cerrar el PLL** con 3× de margen sobre el requisito de transferencia. Es la puerta de [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo).
+- ✅ **La cadena completa está validada** —señal, ADC, ventana, cruce— y sólo se podía validar cerrada: el RMS necesita el cruce para saber dónde empieza la ventana.
+- ⚠️ **No hace falta histéresis de hardware**, pero si algún día hiciera falta son un pin libre y una resistencia de 1 MΩ al nodo de D6: 55 mV de histéresis, 90 µs. El firmware voltearía el pin según `ACO`.
+- ⚠️ **El canal del inversor no se pudo validar**: sin etapa de potencia, A0 está al aire. Y lo que lee no es cero sino ~95 % del canal de la red, porque el condensador de muestreo del ADC se queda con el valor del canal anterior de la rotación. **Un canal desconectado lee a su vecino**, y eso es una trampa para diagnosticar más adelante.
+- ⚠️ **Deuda de banco, no de diseño:** se descartan 8 de 240 ventanas por segundo (3.3 %) por el reporte serial, que en producción no existe. Y **las fronteras se pierden 7 veces más de lo que les toca** —5 % de los eventos y 37 % de las pérdidas—, sin explicación confirmada.
+
+**Referencias:** [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13), [DC-025](#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben), [DC-026](#dc-026-la-regla-del-cli-el-costo-se-paga-por-vuelta-del-lazo-no-por-unidad-de-tiempo), [DC-029](#dc-029-la-referencia-del-adc-es-avcc-y-eso-se-lleva-la-calibración-adentro) y el registro completo en [`protocolo_banco_control.md`](protocolo_banco_control.md).
+
+---
+
+## DC-029. La referencia del ADC es AVCC, y eso se lleva la calibración adentro
+
+> **El ADC no mide volts: mide la razón entre su entrada y su referencia.** Y la referencia es el riel de alimentación, que se mueve.
+
+**Estado: vigente (V1), pendiente de implementar.** Detectado al calibrar los canales de CA el 24 de noviembre de 2026.
+
+### El problema, con números
+
+La calibración de banco se hizo con el Nano alimentado por USB:
+
+```
+AVCC medido en el protoboard                   4.76 V
+RMS de la red medido                         226.8 cuentas
+contra el multímetro                         120.1 V
+constante resultante                      52 954  (mV × 100 por cuenta)
+```
+
+Cuando la tarjeta de control entregue los 5.00 V de su regulador lineal:
+
+```
+las cuentas escalan como 1/AVCC   →   226.8 × 4.76/5.00 = 215.9
+y la misma constante reportaría   →   114.3 V en vez de 120.1
+error                             →   −5.8 V = −4.8 %
+```
+
+**19 veces el criterio de ±0.3 V.** Y no hace falta cambiar de tarjeta para que pase: basta otro puerto USB, otro cable, o más carga en el riel.
+
+### La salida no cuesta componentes
+
+El 328P trae un bandgap interno de ~1.1 V que **el ADC puede leer usando AVCC como referencia** (`MUX = 1110`). Como el ADC mide razones, leer una entrada conocida da la referencia:
+
+```
+cuenta_bg = 1.1 / AVCC × 1023      →      AVCC = 1.1 × 1023 / cuenta_bg
+```
+
+A 4.76 V son **236 cuentas**; a 5.00 V, **225**. Once cuentas de diferencia: el firmware se entera del cambio sin que nadie le diga. Y entonces
+
+```
+V_línea = k × (cuenta / 1023) × AVCC_medido
+```
+
+con `k` —que lo fijan las resistencias y el transformador— calibrado una vez para siempre.
+
+⚠️ **El valor absoluto del bandgap está mal especificado:** 1.0 a 1.2 V según la hoja de datos, ±9 %. Lo que está bien es su **estabilidad** con temperatura y tiempo, que es lo que un bandgap sabe hacer. Así que lo que se calibra por tarjeta ya no es «volts por cuenta» —que se va con el riel— sino **el valor del bandgap de ese chip**, medido una vez contra el multímetro y guardado en EEPROM:
+
+```
+V_bg = AVCC_medido × cuenta_bg / 1023 = 4.76 × 236 / 1023 = 1.0981 V
+```
+
+### Lo que cuesta en la rotación del ADC: nada en los canales de CA
+
+La rotación de DC-025 pasa de cuatro pasos a ocho:
+
+```
+A0, A6, A0, A3, A0, A6, A0, BG
+```
+
+| canal | antes | después |
+| --- | --- | --- |
+| A0, inversor | 3 003/s | **3 003/s** — igual |
+| A6, red | 1 501/s | **1 501/s** — igual |
+| A3, batería | 1 501/s | 750/s |
+| bandgap | — | 750/s |
+
+**Las ventanas de RMS no se enteran:** el inversor sigue con 25 muestras por semiciclo y la red con 12.5, así que el emparejamiento de DC-028 queda intacto. Lo único que se reparte es la batería, que es una medición de CD lenta y a 750 por segundo le sobra. Y los 150 µs de asentamiento que ya tiene la rotación cubren el arranque del bandgap, que la hoja de datos pide en ~70 µs.
+
+### Honestidad sobre cuánto gana
+
+236 cuentas dan 0.42 % por cuenta, y promediando queda en **~0.2 % de AVCC** — unos 0.25 V a 120 V. No regala precisión: **convierte un error del 5 % en uno del 0.2 %**, y eso es la diferencia entre inservible y dentro del criterio.
+
+### Consecuencias
+
+- ⚠️ **La constante `MV_POR_CUENTA_X100_RED = 52954` es de banco, no de producción**, y está marcada así en el código con esta cuenta completa.
+- ⚠️ **Hay que recalibrar con la tarjeta en físico**, y ésa es la oportunidad de implementar esto en vez de volver a calibrar a mano.
+- ✅ Una vez puesto, la lectura deja de depender del riel: se puede cambiar de fuente sin recalibrar.
+- La corrida de validación es directa: **mover el riel a propósito y comprobar que la lectura no se mueve.**
+
+**Referencias:** [DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc), [DC-025](#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben), [DC-028](#dc-028-el-lazo-de-control-de-ca-comparador-para-el-cruce-rms-de-medio-ciclo-por-pares).
 
 ---
 
