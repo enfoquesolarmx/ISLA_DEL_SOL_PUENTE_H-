@@ -1136,13 +1136,70 @@ La tentación de los preescaladores rápidos nace de suponer que la sincronía e
 
 - **`ADPS` = /128 (125 kHz), fijo.** No es negociable mientras el CPU corra a 16 MHz: es el único valor dentro de la ventana de la hoja de datos.
 - **Conversión normal: 13 ciclos de ADC = 104 µs.** La primera después de habilitar el ADC toma 25 ciclos = 200 µs (inicializa la parte analógica): **se descarta**.
+> ⚠️ **Medido el 22-nov-2026: el instante es determinista DENTRO DE UN RELOJ DE ADC, no absolutamente.**
+>
+> El analizador midió el intervalo entre conversiones y no salió un número con ruido alrededor de 166.5 µs: salieron **dos valores discretos**, 168.000 y 160.000 µs, mezclados.
+>
+> La razón es que **el ADC no arranca la conversión cuando se escribe `ADSC`**: arranca en el siguiente flanco de su propio reloj, que corre libre. A /128 ese reloj tiene un periodo de **8 µs**, y el disparo no cae en su rejilla:
+>
+> ```
+> 166.5 µs ÷ 8 µs = 20.8125 pasos    →  cada intervalo es de 21 pasos (168 µs)
+>                                        o de 20 (160 µs), nunca de 20.8125
+> ```
+>
+> La mezcla la fija la fracción, y el banco la confirmó:
+>
+> | | |
+> | --- | --- |
+> | Predicho: intervalos de 168 µs | **81.25 %** |
+> | Medido (8 de 10) | **80.0 %** |
+>
+> **Qué significa.** El *sample-and-hold* sigue ocurriendo 12 µs después del **arranque de la conversión** — eso no cambia. Lo que salta es **cuándo arranca la conversión respecto al disparo**: hasta 8 µs, al azar.
+>
+> ```
+> 8 µs a 60 Hz                              =  0.173°
+> promediado sobre 25 muestras por ciclo     =  0.035°
+> ```
+>
+> **Para el PLL no es problema siempre que promedie**, que es lo que va a hacer. Pero **una estimación de fase a partir de una sola muestra carga 0.173° de error aleatorio**, y eso no estaba escrito en ningún lado.
+>
+> **No se puede quitar con esta configuración**, y las salidas conocidas se estorban entre sí:
+>
+> | Salida | Qué cuesta |
+> | --- | --- |
+> | `TOP` múltiplo de 16 (el periodo cae en la rejilla del ADC) | la frecuencia de salida empeora: con `TOP` = 336 son 60.125 Hz |
+> | Reiniciar el preescalador apagando y prendiendo `ADEN` | la primera conversión tarda 25 ciclos en vez de 13 = 200 µs, así que obliga a disparar cada 5 periodos y `fs` baja de 6006 a 4805 Hz |
+> | Disparar cada 64 periodos (ahí sí cae en la rejilla) | 2.7 ms entre muestras: inservible |
+>
+> ⚠️ **Y choca con la otra mejora pendiente.** `TOP` = 330 con 404 muestras daría 60.006 Hz en vez de 60.060 (ver la Parte C del protocolo), pero 660 ciclos **no** caen en la rejilla del ADC. `TOP` = 336 sí cae en la rejilla pero da peor frecuencia. **Con esta arquitectura hay que escoger una de las dos**, y por ahora la frecuencia pesa más, porque el error de fase se promedia y el de frecuencia no.
+
 - **El valor no se captura al final de la conversión.** El *sample-and-hold* ocurre **1.5 ciclos de ADC después del disparo = 12 µs**, que son **192 cuentas del Timer1** [26]. Ese, y no el final, es el instante de la medición — y es determinista.
-- **Disparo desde la ISR de desborde del Timer1** (modo 8: el desborde es en BOTTOM), **una conversión cada 3 desbordes**: 3 × 41.625 µs = **124.875 µs > 104 µs**, así que la conversión siempre termina antes del siguiente disparo. `fs` = 8008 Hz.
+- **Disparo desde la ISR de desborde del Timer1** (modo 8: el desborde es en BOTTOM), **una conversión cada 4 desbordes**: 4 × 41.625 µs = **166.5 µs > 104 µs**, con 62.5 µs de holgura. `fs` = **6006 Hz**.
+
+> ⚠️ **Corregido el 22-nov-2026: eran 3 desbordes y el banco dijo 4.**
+>
+> Con 3 desbordes la cuenta de la hoja de datos cerraba —124.875 µs > 104 µs— pero **en banco se perdían 434 muestras por segundo**. Al pasar a 4, los perdidos bajaron a **0** y el déficit de muestreo de −0.233 % a **+0.0008 %**, que es el piso de ±1 muestra.
+>
+> **El error estaba en comparar la conversión contra la ventana, y no contra la holgura.** Lo que importa no es que 104 µs quepan en 124.875: es que **la ISR del ADC alcance a correr en lo que sobra**, y en esa holgura puede caer una ISR del SPWM.
+>
+> Con el costo del SPWM ya **medido** (12.75 µs, Parte C del protocolo de banco, 22-nov-2026) la cuenta sale sola:
+>
+> ```
+> cada 3 desbordes:  124.875 − 104 = 20.9 µs de holgura
+>                    1 ISR de SPWM (12.75) + ISR del ADC (~13) = 25.8 µs   NO CABE
+>
+> cada 4 desbordes:  166.5 − 104 = 62.5 µs de holgura
+>                    2 ISR de SPWM (25.5) + ISR del ADC (~13) = 38.5 µs    CABE
+> ```
+>
+> Cada vez que un desborde del Timer1 caía dentro de esos 20.9 µs, la ISR del ADC no terminaba antes del siguiente disparo y la muestra se perdía. A 24 024 desbordes por segundo, eso da el orden de magnitud de los 434 perdidos.
+>
+> **Los 434 perdidos por segundo eran la medición más barata del costo de la ISR del SPWM, y no la supimos leer en su momento.**
 - **Multiplexado alternado A0 / A6:** 66.7 muestras por canal por ciclo de 60 Hz (80.1 a 50 Hz). Entre muestra y muestra del mismo canal hay 5.39°.
-- **Sesgo entre canales: 124.875 µs = 2.70° a 60 Hz** (2.25° a 50 Hz). **Constante y conocido: se resta en firmware.** Esto cierra el pendiente de DC-006.
+- **Sesgo entre canales: 166.5 µs = 3.60° a 60 Hz** (3.00° a 50 Hz). **Constante y conocido: se resta en firmware.** Esto cierra el pendiente de DC-006. *(Eran 2.70° con 3 desbordes; ver la corrección de arriba.)*
 - **Rechazo de muestras sucias.** La muestra cae siempre en la cuenta 192 del Timer1; el flanco de conmutación está en la cuenta `d`, que el firmware acaba de escribir. Cuando `|d − 192|` cae dentro de una ventana de guarda, **esa muestra se descarta**: el firmware sabe cuáles salieron sucias porque él mismo puso el flanco ahí. Son ~2 de cada 67 por medio ciclo (**3 %**), y cuesta una comparación.
 
-**Por qué el disparo es por software y no con el auto-trigger del ADC.** De las fuentes de `ADTS`, la de comparación con OC1B no está disponible porque **`OCR1B` es el tiempo muerto** de este diseño, y la de captura tampoco porque **`ICR1` es el TOP del modo 8**. Queda el desborde del Timer1, que dispara cada 41.6 µs — demasiado seguido para una conversión de 104 µs. Por eso la conversión se arranca contando a 3 dentro de la ISR de desborde **que ya existe** para actualizar el SPWM: el costo es un contador y un `ADSC`, y el jitter es la latencia de la ISR (unos pocos microsegundos, repetible mientras ninguna otra interrupción la retrase).
+**Por qué el disparo es por software y no con el auto-trigger del ADC.** De las fuentes de `ADTS`, la de comparación con OC1B no está disponible porque **`OCR1B` es el tiempo muerto** de este diseño, y la de captura tampoco porque **`ICR1` es el TOP del modo 8**. Queda el desborde del Timer1, que dispara cada 41.6 µs — demasiado seguido para una conversión de 104 µs. Por eso la conversión se arranca contando a 4 dentro de la ISR de desborde **que ya existe** para actualizar el SPWM: el costo es un contador y un `ADSC`, y el jitter es la latencia de la ISR (unos pocos microsegundos, repetible mientras ninguna otra interrupción la retrase).
 
 **Consecuencias**
 
@@ -1150,7 +1207,13 @@ La tentación de los preescaladores rápidos nace de suponer que la sincronía e
 - **La protección rápida no depende del ADC:** vive en hardware (DC-014 y [`corte_por_hardware.md`](corte_por_hardware.md)). El ADC mide para el PLL, para el RMS y para la pantalla, y las tres cosas toleran decenas de milisegundos. El ADC nunca tiene que llegar a tiempo a nada.
 - **Resuelve la advertencia de DC-006:** el desfase entre canales deja de ser un error que hay que acotar y pasa a ser una constante que se resta.
 - ⚠️ **El techo de exactitud de fase ya no lo pone el ADC.** Lo pone el desfase propio del transformador de 12 VAC más los 10 nF del pin (~2° según DC-006). Para **transferencia** se cancela, porque es igual en los dos canales. Para **inyección a red** (V3) hay que calibrarlo contra un patrón: queda apuntado como pendiente de esa versión.
-- ⚠️ **Nada de esto está medido en banco.** Es aritmética sobre la hoja de datos. Pendiente, el día que haya los dos Nano, un transformador de 12 VAC y el analizador: verificar `fs` real, el instante de muestreo (12 µs después del desborde), el ruido con el puente conmutando, y que el rechazo del 3 % se comporte como se calculó.
+- ⚠️ **Parcialmente medido.** Lo que era aritmética sobre la hoja de datos empezó a contrastarse en banco el 22-nov-2026:
+  - ✅ **`fs` real:** verificado con 4 desbordes — déficit +0.0008 %, 0 muestras perdidas.
+  - ✅ **El costo de la ISR del SPWM:** 12.75 µs medidos, que es lo que explica por qué 3 desbordes no alcanzaban.
+  - ✅ **La tasa de conversión:** 6.003 kHz medidos contra 6006 teóricos, que es exactamente lo que predice el cristal 0.030 % lento.
+  - ⚠️ **El instante de muestreo:** medido, y resultó determinista **sólo dentro de un reloj de ADC** (8 µs = 0.173° a 60 Hz). Ver el aviso de arriba.
+  - ✅ **El reparto entre canales** (DC-025): 2:1:1 exacto, con 0 disparos perdidos.
+  - ⏳ **El ruido con el puente conmutando** y el rechazo del 3 %: pendientes, **etapa 5**.
 - ⚠️ **Si se cambia de micro** (Nano Every, ESP32, Blue Pill), lo que se conserva **no es el /128**: es la metodología — el reloj del ADC dentro de la ventana que pida *su* hoja de datos, el instante de muestreo conocido, y la muestra amarrada a un punto fijo del periodo de portadora. Misma regla que en [`base_de_tiempo_spwm.md`](base_de_tiempo_spwm.md) para la base de tiempo del SPWM.
 
 **Referencias:** [6], [26].
