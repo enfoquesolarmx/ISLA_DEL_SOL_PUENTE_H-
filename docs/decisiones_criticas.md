@@ -58,7 +58,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-029](#dc-029-la-referencia-del-adc-es-avcc-y-eso-se-lleva-la-calibración-adentro) | La referencia del ADC es AVCC, y eso se lleva la calibración adentro | Control | 2026-11-24 | Vigente (por implementar) |
 | [DC-030](#dc-030-el-enlace-can-con-el-bms-la-batería-es-la-autoridad-sobre-los-límites-y-nosotros-nada-más-latimos) | El enlace CAN con el BMS: la batería es la autoridad sobre los límites | Control | 2026-11-24 | Vigente (por implementar) |
 | [DC-031](#dc-031-r3-del-canal-de-batería-sube-de-1-kω-a-47-kω-y-por-qué-un-zener-no-servía) | R3 del canal de batería sube de 1 kΩ a 47 kΩ, y por qué un zener no servía | Control | 2026-11-24 | Vigente |
-| [DC-032](#dc-032-el-filtro-antialias-va-después-del-nodo-no-sobre-el-nodo-r17-sube-de-1-kω-a-22-kω) | El filtro antialias va después del nodo, no sobre el nodo: R17 sube a 22 kΩ | Control | 2026-11-24 | Vigente |
+| [DC-032](#dc-032-el-filtro-antialias-va-después-del-nodo-no-sobre-el-nodo-r17-sube-de-1-kω-a-22-kω) | El filtro del nodo: por qué R17 se queda en 1 kΩ (decisión revertida en banco) | Control | 2026-11-24 | ⚠️ Revertida |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -2256,7 +2256,48 @@ recarga entre muestras (A3 a 750/s)     16 nA      ← nada
 
 > **El comparador de cruce por cero mira el nodo.** Todo capacitor colgado del nodo le mete fase, y la fase que mete depende de un valor que el fabricante del capacitor no garantiza. La salida no es conseguir un capacitor bueno: es que el capacitor no alcance al comparador.
 
-**Estado: vigente (V1).** Escrita el 24 de noviembre de 2026, a partir de tres mediciones de banco hechas ese mismo día.
+**Estado: ⚠️ LA DECISIÓN SE REVIRTIÓ EN BANCO EL MISMO DÍA. `R17` se queda en 1 kΩ.** El análisis de fase y la medición de la dispersión de los capacitores siguen valiendo; lo que estaba mal era la conclusión. Escrita el 24 de noviembre de 2026.
+
+> ## ⚠️ Corrección: `R17 = 22 kΩ` se probó y empeoró el comparador
+>
+> Se armó en banco el mismo día y el resultado fue inequívoco:
+>
+> | | 1 kΩ + 100 nF | **22 kΩ + 10 nF** |
+> | --- | --- | --- |
+> | `rech` por segundo | 66 | **193 – 271** |
+> | `por direccion` | ~25 | **179 – 228** |
+> | jitter del cruce | 0.59 – 0.67° | **0.78 – 1.13°** |
+> | σ del RMS | 0.0 c | **1.4 – 1.7 c** |
+> | rechazos a 100–200 µs | **0** | **36 – 98** |
+>
+> La última fila delata la causa: **una población de rechazos que antes no existía**, a 100–200 µs, o sea ruido de 2.5 a 5 kHz cruzando el umbral.
+>
+> **Lo que esta entrada no contó: esa rama hacía *tres* cosas, no dos.** Además del antialias de A6 y de la fase del nodo, era **el cortocircuito de ruido del nodo** — y el nodo es lo que el comparador ve:
+>
+> ```
+> IMPEDANCIA DEL NODO     1k+100nF    22k+10nF
+>       60 Hz               7629 Ω      8460 Ω     +0.9 dB
+>     1000 Hz               1320 Ω      5885 Ω    +13.0 dB
+>     2500 Hz                929 Ω      4299 Ω    +13.3 dB
+>     5000 Hz                838 Ω      2783 Ω    +10.4 dB
+> ```
+>
+> **Trece decibeles más de ruido justo en la banda donde aparecieron los rechazos nuevos.** Con 1 kΩ en serie la rama anclaba el nodo a ~1 kΩ arriba del kilohertz; con 22 kΩ ya no ancla nada.
+>
+> **Y el conflicto resulta ser de fondo.** La carga a 60 Hz la fija **sólo el capacitor** (1/ωC); el anclaje en alta frecuencia lo fija **la resistencia**. Para aplastar el nodo a 2.5 kHz hace falta un capacitor del orden de 100 nF, y ése por física cobra los grados a 60 Hz. **Ningún valor hace las dos cosas con un solo polo**, que es lo mismo que el protocolo ya decía de C16.
+>
+> **Hay que elegir, y las dos opciones pasan el criterio de hoy:**
+>
+> | | jitter | `rech` | fase del cruce |
+> | --- | --- | --- | --- |
+> | ✅ **1 kΩ + 100 nF** | **0.59°** | 66 | −19 a −24°, y se mueve con el capacitor |
+> | ❌ 22 kΩ + 10 nF | 0.93° | 230 | −3.5°, estable |
+>
+> Se elige el jitter sobre la estabilidad de fase porque **el margen de jitter es el que la etapa 5 se va a comer**: el puente conmutando al lado es exactamente el ruido que el anclaje de 1 kΩ absorbe. Un corrimiento de fase constante se compensa en firmware; el ruido en el instante del cruce, no.
+>
+> 📌 **Para el PCB: dejar huella sin poblar para un snubber de nodo** (resistencia + capacitor en serie, del nodo a GND). Cuesta dos huellas y cero componentes, y es lo único que no se puede agregar después de fabricar.
+>
+> 📌 **La lección, que es la cuarta de la misma familia en un día:** conté dos funciones de una pieza y tenía tres. **Antes de cambiar un componente de un nodo compartido hay que listar todo lo que cuelga de ese nodo y qué le pide cada uno.**
 
 ![Canal de CA de la red](img/acondicionamiento_ac_dc032.png)
 

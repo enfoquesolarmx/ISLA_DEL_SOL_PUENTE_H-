@@ -31,12 +31,12 @@ def build(out, dpi):
 
         # ------------------------------------------------------- títulos
         d += elm.Label().at((-10.5, YS + 6.6)).label(
-            'CANAL DE CA DE LA RED  —  el filtro antialias va DESPUES del nodo, no SOBRE el nodo',
+            'CANAL DE CA DE LA RED  —  todo lo que cuelga del nodo lo ve el comparador',
             loc='right', fontsize=30, halign='left')
         d += elm.Label().at((-10.5, YS + 5.0)).label(
-            'El comparador de cruce por cero mira EL NODO, asi que todo capacitor colgado del nodo le mete fase.\n'
-            'El filtro es el PRODUCTO R x C:  22k x 10nF = 1k x 100nF = 100 us.  Con R17 alta, la rama casi no\n'
-            'carga el nodo: A6 queda igual de filtrada y el comparador se queda donde estaba.',
+            'El comparador de cruce por cero mira EL NODO. La rama de R17 hace TRES cosas a la vez: filtra A6,\n'
+            'le mete fase al nodo, y lo ANCLA contra el ruido. Se probo subir R17 a 22k para quitar la fase y\n'
+            'el comparador empeoro: se perdio el anclaje. R17 se queda en 1k.',
             loc='right', fontsize=FS, halign='left')
 
         # --------------------------------------------- cadena de la señal
@@ -50,7 +50,7 @@ def build(out, dpi):
         # --- C16, colgada del tramo R7-nodo
         d += elm.Dot().at((-2.0, YS))
         d += elm.Capacitor().at((-2.0, YS - 1.2)).to((-2.0, YS - 3.0))\
-            .label('C16\n10nF', loc='bottom', fontsize=FS)
+            .label('C16\n100nF', loc='bottom', fontsize=FS)
         d += elm.Line().at((-2.0, YS)).to((-2.0, YS - 1.2))
         d += elm.Ground().at((-2.0, YS - 3.0))
 
@@ -68,7 +68,7 @@ def build(out, dpi):
         # --- rama de A6: R17 grande, DESPUES del nodo
         d += elm.Line().at((0.0, YS)).to((1.5, YS))
         d += elm.Resistor().at((1.5, YS)).to((4.5, YS))\
-            .label('R17\n22k', fontsize=FS, color=GREEN)
+            .label('R17\n1k', fontsize=FS, color=GREEN)
         d += elm.Line().at((4.5, YS)).to((6.0, YS))
         d += elm.Dot().at((6.0, YS))
         d += elm.Line().at((6.0, YS)).to((8.2, YS))
@@ -78,7 +78,7 @@ def build(out, dpi):
         # --- C30 del pin de A6 al bias (NO a tierra)
         d += elm.Line().at((6.0, YS)).to((6.0, YS - 1.8))
         d += elm.Capacitor().at((6.0, YS - 1.8)).to((6.0, YS - 3.6))\
-            .label('C30\n10nF', loc='bottom', fontsize=FS, color=GREEN)
+            .label('C30\n100nF', loc='bottom', fontsize=FS, color=GREEN)
         d += elm.Line().at((6.0, YS - 3.6)).to((6.0, YB))
         d += elm.Dot().at((6.0, YB))
 
@@ -112,23 +112,26 @@ def build(out, dpi):
         d += elm.Ground().at((-7.0, YB - 2.4))
         d += elm.Dot().at((-4.2, YB))
         d += elm.Capacitor2().at((-4.2, YB)).to((-4.2, YB - 2.4))\
-            .label('C5\n10uF', loc='right', fontsize=FS)
+            .label('C5\n10nF', loc='right', fontsize=FS)
         d += elm.Ground().at((-4.2, YB - 2.4))
 
         # ----------------------------------------------------- anotaciones
-        YA = YB - 5.2
+        YA = YB - 4.6
         d += elm.Label().at((-10.5, YA)).label(
-            'POR QUE 22k Y NO 1k',
+            'POR QUE R17 SE QUEDA EN 1k  (medido en banco, 2026-11-24)',
             loc='right', fontsize=26, halign='left', color=GREEN)
-        d += elm.Label().at((-10.5, YA - 1.8)).label(
-            '                       fase del comparador    antialias a 750 Hz    si C30 varia 9 %\n'
-            '   R17 = 1k , C30 = 100nF      -19 a -24 grados        -13.3 dB         la fase se corre 1.6 grados\n'
-            '   R17 = 22k, C30 = 10nF       -3.5 grados             -5.6 dB          la fase se corre 0.2 grados',
+        d += elm.Label().at((-10.5, YA - 2.6)).label(
+            '                        jitter del cruce   rechazos/s   rechazos a 100-200 us   fase\n'
+            '   R17 = 1k , C30 = 100nF      0.59 grados         66              0 (cero)         -19 a -24\n'
+            '   R17 = 22k, C30 = 10nF       0.93 grados        230            36 a 98            -3.5\n'
+            '\n'
+            '   Con 22k el nodo sube 13 dB de impedancia entre 1 y 5 kHz: deja de anclar el ruido.\n'
+            '   Se elige el jitter sobre la fase, porque la etapa 5 agrega el ruido del puente.',
             loc='right', fontsize=FS, halign='left')
-        d += elm.Label().at((-10.5, YA - 4.4)).label(
-            'MEDIDO EN BANCO el 2026-11-24:  tres capacitores marcados "104" de la misma bolsa midieron\n'
-            '126, 134 y 137 nF.  La etiqueta dice 100.  Con R17 = 1k esa dispersion mueve el cruce por cero;\n'
-            'con R17 = 22k no lo alcanza. No se trata de conseguir un capacitor bueno, sino de que no importe.',
+        d += elm.Label().at((-10.5, YA - 6.4)).label(
+            'LO QUE SE PAGA:  tres capacitores marcados "104" de la misma bolsa midieron 126, 134 y 137 nF.\n'
+            'Esa dispersion de 9 % mueve la fase del cruce 1.6 grados, y no se puede calibrar. Es el precio\n'
+            'de tener el nodo anclado. Para el PCB: dejar huella SIN POBLAR para un snubber de nodo.',
             loc='right', fontsize=FS, halign='left', color=RED)
 
 
