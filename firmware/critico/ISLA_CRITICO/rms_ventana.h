@@ -1,60 +1,72 @@
 /*
  * =============================================================================
  *  rms_ventana.h  -  Isla del Sol, micro CRÍTICO (A1)
- *  RMS de medio ciclo, acumulado dentro de la interrupción del ADC
+ *  RMS de medio ciclo, con las cuentas pesadas fuera de las interrupciones
  * -----------------------------------------------------------------------------
- *  POR QUÉ MEDIO CICLO Y NO UN CICLO
+ *  POR QUÉ MEDIO CICLO, Y POR QUÉ EN PARES
  *
- *    Porque el lazo tiene que responder rápido, y medio ciclo son 8.3 ms en
- *    vez de 16.7 ms. Es DC-023.
+ *    Medio ciclo son 8.3 ms en vez de 16.7: el lazo responde al doble de
+ *    rápido. Es DC-023.
  *
- *    El precio de medir medio ciclo es que **una componente de CD ya no se
- *    cancela sola**: en un ciclo completo los dos semiciclos se compensan, en
- *    medio ciclo no. Por eso aquí el CD se quita a mano, con la identidad
+ *    Pero el RMS **no se puede calcular sobre una sola ventana de medio
+ *    ciclo**, y eso costó una corrida de banco averiguarlo. `⟨x²⟩ − ⟨x⟩²`
+ *    sobre medio seno no le quita el bias: le quita la media rectificada,
  *
- *        RMS² = ⟨x²⟩ − ⟨x⟩²
+ *        media del semiciclo        = bias + 0.6366·A      ← no es el bias
+ *        RMS sobre su propia media  = 0.3078·A
+ *        RMS verdadero de CA        = 0.7071·A    → **2.30 veces más**
  *
- *    Se acumulan las dos sumas —Σx y Σx²— y el promedio de la ventana **es**
- *    el CD de esa ventana. Sale gratis y además es un diagnóstico: debe
- *    rondar las 511 cuentas, que es el bias de 2.5 V. Si se corre, algo pasó
- *    en el divisor.
+ *    El banco lo delató sin que nadie lo buscara: el `CD` reportado alternaba
+ *    277 y 744 cuentas, simétrico alrededor de 510.5 — el bias exacto.
  *
- *  POR QUÉ SE ACUMULA EN LA INTERRUPCIÓN Y NO EN EL LAZO
+ *    **Por eso se suman dos ventanas consecutivas = un ciclo completo**, donde
+ *    el término rectificado se cancela y `⟨x⟩` sí es el bias. Y de paso
+ *    arregla la dispersión, porque la red recibe 12.50 muestras por semiciclo
+ *    —nunca entero— pero **12 + 13 = 25 = un ciclo exacto**. El par es
+ *    deslizante, así que sigue habiendo un valor nuevo cada medio ciclo.
  *
- *    Ésta es la lección de la etapa 3, y costó una retractación: **el lazo se
- *    queda ciego justo cuando hay tráfico.** Durante los 2.63 ms de una
- *    transferencia I2C el lazo está detenido dentro de `endTransmission()`, y
- *    las ~63 interrupciones de ese rato pasan sin que nadie las recoja.
+ *  ⚠️ POR QUÉ AHORA HAY UN BÚFER CIRCULAR
  *
- *    Un RMS al que le faltan muestras cuando hay I2C no es un RMS: es un
- *    número que depende del tráfico del bus. Así que la suma se hace **dentro
- *    de la ISR del ADC**, donde no hay ventana ciega, y el lazo sólo recoge la
- *    ventana ya cerrada.
+ *    La primera versión acumulaba Σx y Σx² **dentro** de la ISR del ADC. La
+ *    multiplicación de 16×16 cuesta 24 ciclos y el resto de la acumulación
+ *    otros 29: con eso la ISR del ADC llegó a 186 ciclos, y sumada al SPWM y
+ *    al comparador el presupuesto quedó en 91 % del periodo de portadora. Al
+ *    agregar la estadística del jitter se pasó de 100 % y **empezó a perder
+ *    pasos de la onda**.
  *
- *  LAS VENTANAS SE CIERRAN DISTINTO EN CADA CANAL
+ *    Ahora la ISR sólo **encola el evento** —unos 20 ciclos— y el lazo hace
+ *    las cuentas.
  *
- *    **La red (A6): la cierra el comparador.** Medio ciclo va de un cruce al
- *    siguiente, y el único que sabe cuándo ocurrió el cruce es la ISR del
- *    comparador. Por eso llama a `rms_cerrar_red()`.
+ *    Y esto NO es lo mismo que muestrear desde el lazo, que es lo que la
+ *    etapa 3 demostró que no sirve. Ahí el lazo se quedaba ciego durante los
+ *    2.7 ms de una transferencia I2C y **las muestras se perdían**. Aquí se
+ *    encolan: en ese bloqueo entran ~12 muestras y el anillo tiene 64. El
+ *    lazo las drena después, en orden, sin perder ninguna. Y si alguna vez se
+ *    llenara, se cuenta — no se pierde en silencio.
  *
- *    **El inversor (A0): la cierra el conteo, y es exacto por construcción.**
- *    El inversor no necesita comparador porque su cruce lo sabe el firmware
- *    (DC-023). Y la cuenta cierra sin residuo:
+ *    El anillo lleva las muestras **y las fronteras de ventana mezcladas en
+ *    el mismo orden en que ocurrieron**. Eso importa: la frontera de la red
+ *    la pone la ISR del comparador y la de las muestras la del ADC, y si cada
+ *    una llevara su propio camino el lazo no sabría cuál pasó primero.
+ *
+ *  LAS FRONTERAS
+ *
+ *    **La red (A6): la pone el comparador.** Medio ciclo va de un cruce al
+ *    siguiente y el único que sabe cuándo ocurrió es él.
+ *
+ *    **El inversor (A0): la pone el conteo, y es exacta por construcción.**
  *
  *        24 024 desbordes/s ÷ 4            = 6 006 disparos de ADC/s
- *        de cada 4 disparos, 2 son A0      = 3 003 muestras/s del inversor
+ *        2 de cada 4 disparos son A0       = 3 003 muestras/s del inversor
  *        línea de 60.06 Hz                 = 120.12 semiciclos/s
  *        3 003 ÷ 120.12                    = 25.000 muestras por semiciclo
  *
- *    **Exactamente 25, sin redondeo**, porque todo sale del mismo cristal.
- *    Son las 25 muestras por ventana que DC-023 daba por supuestas.
+ *    Exactamente 25, sin redondeo, porque todo sale del mismo cristal.
  *
- *    ⚠️ Y es frágil, igual que el 2.4985 del ADC: esto se cumple porque
- *    400 muestras/ciclo, 4 desbordes por disparo y 2 ranuras de A0 de cada 4
- *    se dividen sin resto. Cambiar cualquiera de los tres rompe la alineación
- *    sin avisar. Si se pierde un disparo (`adc_perdidas()` distinto de 0) la
- *    ventana se corre y hay que resincronizar: por eso el sketch de banco
- *    compara la frontera contra el semiciclo real del SPWM y lo reporta.
+ *    ⚠️ Y es frágil igual que el 2.4985 del ADC: se cumple porque 400
+ *    muestras/ciclo, 4 desbordes por disparo y 2 ranuras de A0 de cada 4 se
+ *    dividen sin resto. Cambiar cualquiera de los tres rompe la alineación
+ *    sin avisar.
  *
  *  Licencia: MIT (ver LICENSE.md del repositorio).
  * =============================================================================
@@ -68,129 +80,84 @@
 // Muestras de A0 en medio ciclo. Exacto por construcción: ver arriba.
 #define RMS_MUESTRAS_INV    25
 
-// ============================ ACUMULADORES ===================================
-//
-// Públicos porque la función de abajo va en línea dentro de la ISR del ADC, y
-// una llamada a otra unidad de compilación costaría el salto y el marco. No se
-// tocan desde fuera del módulo.
-
-struct RmsAcum {
-  uint32_t sumaCuad;     // Σx²  — máx 25 × 1023² = 26.2e6, cabe
-  uint16_t suma;         // Σx   — máx 25 × 1023  = 25 575, cabe
-  uint8_t  n;
-};
-
-/*  DOBLE BANCO, PARA NO COPIAR NADA DENTRO DE LA ISR
- *
- *  La primera versión de esto copiaba los 7 bytes del acumulador a una zona
- *  de recogida al cerrar la ventana: **83 ciclos contados en el binario**,
- *  dentro de la ISR del ADC, y se pagan justo en el peor caso — cuando la
- *  ventana cierra encima de otra interrupción.
- *
- *  Con dos bancos no se copia: se voltea un índice y se limpia el banco que
- *  queda libre. El lazo lee el otro. Son ~25 ciclos en vez de 83, y la cuenta
- *  importa: 58 ciclos son 3.6 µs de los 41.625 del periodo.
- */
-extern volatile RmsAcum  rms_banco[4];       // [canal*2 + banco], plano a propósito
-extern volatile uint8_t  rms_vivo[2];        // en qué banco se está acumulando
-extern volatile uint8_t  rms_lista[2];       // hay una ventana sin recoger
-extern volatile uint16_t rms_desbordes;      // ventanas de red sin cerrar a tiempo
-
-/*  ⚠️ EL ARREGLO ES PLANO, Y NO ES CAPRICHO
- *
- *  La primera versión usaba `rms_banco[canal][banco]`. En el binario eso
- *  resultó **peor que la copia que vino a quitar**: con `volatile`, el
- *  compilador vuelve a leer el índice y a recalcular la dirección en CADA
- *  acceso al campo, y la ISR del ADC creció 100 instrucciones.
- *
- *  La forma correcta es calcular la dirección UNA vez en un puntero local y
- *  usar ése. El `volatile` protege contra que el compilador cachee lo que la
- *  otra ISR puede cambiar; adentro de la ISR, con las interrupciones
- *  apagadas y el banco vivo que nadie más toca, esa protección no hace falta
- *  y sí cuesta.
- */
 #define RMS_INV   0            // A0, la salida del inversor
 #define RMS_RED   1            // A6, la red
 
-#define RMS_TOPE_RED   60      // tope de seguridad si el comparador no cierra
+// Tope de seguridad de la ventana de la red, si el comparador no cierra.
+#define RMS_TOPE_RED        60
 
-/*  Cierra una ventana: voltea el banco y limpia el que queda libre. Se llama
- *  desde dentro de una ISR, así que no lleva protección.
+/*  EL ANILLO. 64 entradas de 16 bits = 128 bytes de RAM.
+ *
+ *  Dimensionado contra el peor bloqueo conocido del lazo: una transferencia
+ *  I2C de 2.7 ms deja entrar ~12 muestras de los dos canales de CA más una
+ *  frontera. 64 son cinco veces eso.
+ *
+ *  Formato de cada entrada:
+ *      bit 15     1 = frontera de ventana, 0 = muestra
+ *      bit 12     canal: 0 = inversor, 1 = red
+ *      bits 9..0  la cuenta del ADC (sólo en las muestras)
  */
-static inline void rms_cerrar(uint8_t i)
+#define RMS_ANILLO     64
+#define RMS_ANILLO_MSK (RMS_ANILLO - 1)
+#define RMS_EV_FRONTERA 0x8000u
+#define RMS_EV_CANAL    0x1000u
+
+extern volatile uint16_t rms_anillo[RMS_ANILLO];
+extern volatile uint8_t  rms_w;                 // escritura: la mueven las ISR
+extern volatile uint8_t  rms_r;                 // lectura: la mueve el lazo
+extern volatile uint16_t rms_anillo_lleno;      // eventos que no cupieron
+extern volatile uint8_t  rms_cuenta_inv;        // muestras de A0 en la ventana
+
+/*  Encola un evento. Se llama desde dentro de una ISR, así que no lleva
+ *  protección: las interrupciones ya están apagadas.
+ *
+ *  La comprobación de lleno cuesta ocho ciclos y vale cada uno: un anillo que
+ *  se desborda en silencio da un RMS que parece bueno y no lo es.
+ */
+static inline void rms_encola(uint16_t ev)
 {
-  const uint8_t nuevo = (uint8_t)(rms_vivo[i] ^ 1);
-  RmsAcum *b = (RmsAcum *)&rms_banco[(uint8_t)((i << 1) | nuevo)];
-
-  b->sumaCuad = 0;
-  b->suma     = 0;
-  b->n        = 0;
-
-  rms_vivo[i]  = nuevo;        // de aquí en adelante se acumula en el nuevo
-  rms_lista[i] = 1;            // y el lazo puede leer el otro con calma
+  if ((uint8_t)(rms_w - rms_r) >= RMS_ANILLO) { rms_anillo_lleno++; return; }
+  rms_anillo[rms_w & RMS_ANILLO_MSK] = ev;
+  rms_w++;
 }
 
 /*  Una muestra nueva. Va EN LÍNEA dentro de la ISR del ADC, vía gancho_adc.h.
  *
- *  Sólo entran los dos canales que llevan RMS. La batería (A3) no: es una
- *  medición de CD y promediarla al cuadrado no significa nada.
+ *  La batería (A3) no entra: es una medición de CD y promediarla al cuadrado
+ *  no significa nada.
  */
 static inline void rms_meter(uint8_t ranura, uint16_t cuenta)
 {
-  uint8_t i;
-  if      (ranura == ADC_RANURA_INV) i = RMS_INV;
-  else if (ranura == ADC_RANURA_RED) i = RMS_RED;
-  else return;                                   // la batería no lleva RMS
-
-  // La dirección, una sola vez. Ver el aviso de arriba.
-  RmsAcum *a = (RmsAcum *)&rms_banco[(uint8_t)((i << 1) | rms_vivo[i])];
-
-  a->suma     += cuenta;
-  a->sumaCuad += (uint32_t)cuenta * cuenta;
-
-  const uint8_t n = (uint8_t)(a->n + 1);
-  a->n = n;
-
-  if (i == RMS_INV) {
-    if (n >= RMS_MUESTRAS_INV) rms_cerrar(RMS_INV);   // medio ciclo, exacto
+  if (ranura == ADC_RANURA_INV) {
+    rms_encola(cuenta);
+    if (++rms_cuenta_inv >= RMS_MUESTRAS_INV) {
+      rms_cuenta_inv = 0;
+      rms_encola(RMS_EV_FRONTERA);             // medio ciclo del inversor
+    }
   }
-  else if (n >= RMS_TOPE_RED) {
-    /*  La red la cierra el comparador. Si no está corriendo —o no hay red—
-     *  el acumulador crecería sin freno: el tope es el seguro, y queda
-     *  contado para que el reporte lo delate.
-     */
-    rms_desbordes++;
-    rms_cerrar(RMS_RED);
+  else if (ranura == ADC_RANURA_RED) {
+    rms_encola(RMS_EV_CANAL | cuenta);
   }
 }
 
-/*  La llama la ISR del comparador en cada cruce aceptado. Está en el .cpp para
- *  que comparador_red.cpp no tenga que conocer las entrañas.
+/*  La frontera de la red. La llama la ISR del comparador en cada cruce
+ *  aceptado — reemplaza al cierre de ventana que antes se hacía ahí mismo.
  */
-void rms_cerrar_red(void);
+static inline void rms_marca_red(void)
+{
+  rms_encola(RMS_EV_FRONTERA | RMS_EV_CANAL);
+}
 
 // ========================== LO QUE USA EL LAZO ===============================
 
 void rms_preparar(void);
 
-/*  Recoge una ventana cerrada. Devuelve false si no hay nada nuevo.
- *
- *    rmsCuentas — RMS ya sin el CD, en cuentas del ADC
- *    cd         — el promedio de la ventana: debe rondar 511
- *    n          — cuántas muestras tenía (25 en el inversor; ~25 en la red)
+/*  Drena el anillo y hace las cuentas. Se llama en cada vuelta del lazo; si no
+ *  hay nada encolado regresa en seguida.
  */
-/*  ⚠️ Hay una ventana cerrada sin recoger? Leer la bandera EN LÍNEA antes de
- *  llamar a `rms_recoger()`, que cuesta ~368 ciclos contados en el binario.
- *
- *  En la etapa 4 el lazo lo llamaba dos veces por vuelta sin preguntar, y la
- *  tasa del lazo cayó de 22 016 a 10 240 vueltas por segundo. Las ventanas
- *  cierran 240 veces por segundo y el lazo gira 20 000: preguntar primero
- *  ahorra el 98.8 % de las llamadas.
- */
-static inline bool rms_hay(uint8_t i) { return rms_lista[i] != 0; }
+void rms_atender(void);
 
-/*  Recoge el RMS de UN CICLO COMPLETO, formado con las dos últimas ventanas de
- *  medio ciclo. Devuelve false si todavía no hay par.
+/*  El último RMS de un ciclo completo. false si no hay uno nuevo.
  *
  *    rmsCuentas — RMS verdadero de CA, en cuentas del ADC
  *    cd         — el bias: debe rondar 511 **y quedarse quieto**
@@ -198,11 +165,11 @@ static inline bool rms_hay(uint8_t i) { return rms_lista[i] != 0; }
  */
 bool rms_recoger(uint8_t i, uint16_t *rmsCuentas, uint16_t *cd, uint8_t *n);
 
-uint16_t rms_desbordes_red(void);
+uint16_t rms_desbordes_red(void);     // ventanas de red cerradas por el tope
+uint16_t rms_anillo_perdidos(void);   // eventos que no cupieron en el anillo
 void     rms_reiniciar(void);
 
-/*  Raíz cuadrada entera, por Newton. Se usa aquí y en el sketch de banco; se
- *  deja a la vista porque evita arrastrar la de punto flotante, que para este
- *  trabajo cuesta ~1.4 kB de flash y no aporta un dígito útil.
+/*  Raíz cuadrada entera, por Newton. Evita arrastrar la de punto flotante,
+ *  que para este trabajo cuesta ~1.4 kB de flash y no aporta un dígito útil.
  */
 uint16_t rms_isqrt32(uint32_t v);

@@ -9,62 +9,36 @@
 
 #include <util/atomic.h>
 
-volatile RmsAcum  rms_banco[4];
-volatile uint8_t  rms_vivo[2];
-volatile uint8_t  rms_lista[2];
-volatile uint16_t rms_desbordes;
+// --------------------------- el anillo --------------------------------------
 
-// La ventana anterior de cada canal, para formar el par de un ciclo completo.
-static RmsAcum rms_prev[2];
+volatile uint16_t rms_anillo[RMS_ANILLO];
+volatile uint8_t  rms_w, rms_r;
+volatile uint16_t rms_anillo_lleno;
+volatile uint8_t  rms_cuenta_inv;
 
-void rms_cerrar_red(void)
-{
-  // Se llama desde la ISR del comparador: las interrupciones ya están
-  // apagadas, así que no lleva protección.
-  rms_cerrar(RMS_RED);
-}
+// ------------------- lo que el lazo acumula (no volátil) --------------------
+//
+// Nada de esto lo toca una interrupción: el lazo es el único que suma.
 
-void rms_preparar(void)
-{
-  rms_reiniciar();
-}
+struct Acum { uint32_t sumaCuad; uint16_t suma; uint8_t n; };
 
-void rms_reiniciar(void)
-{
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-    for (uint8_t b = 0; b < 4; b++) {
-      rms_banco[b].sumaCuad = 0;
-      rms_banco[b].suma     = 0;
-      rms_banco[b].n        = 0;
-    }
-    rms_vivo[0] = rms_vivo[1] = 0;
-    rms_lista[0] = rms_lista[1] = 0;
-    for (uint8_t i = 0; i < 2; i++) {
-      rms_prev[i].sumaCuad = 0; rms_prev[i].suma = 0; rms_prev[i].n = 0;
-    }
-    rms_desbordes = 0;
-  }
-}
+static Acum    vivo[2];      // la ventana que se está llenando
+static Acum    anterior[2];  // la ventana previa, para formar el par
+static uint16_t resultado[2], bias[2];
+static uint8_t  muestrasPar[2];
+static bool     hayNuevo[2];
+static uint16_t desbordesRed;
 
-uint16_t rms_desbordes_red(void)
-{
-  uint16_t v;
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = rms_desbordes; }
-  return v;
-}
+// =============================== CUENTAS =====================================
 
-/*  Raíz cuadrada entera por Newton, con una semilla por bits.
- *
- *  Converge en 5 o 6 vueltas para los valores que nos tocan (hasta ~1e6), y
- *  cada vuelta es una división de 32 bits: ~600 ciclos en total. Corre 120
- *  veces por segundo en el lazo = 0.45 % del CPU, contra ~1.4 kB de flash y
- *  más ciclos si arrastráramos sqrt() de punto flotante.
+/*  Raíz cuadrada entera por Newton, con semilla por bits. Converge en 5 o 6
+ *  vueltas para los valores que nos tocan, y cada vuelta es una división de
+ *  32 bits: ~600 ciclos en total, 240 veces por segundo en el LAZO.
  */
 uint16_t rms_isqrt32(uint32_t v)
 {
   if (v == 0) return 0;
 
-  // Semilla: 2^(ceil(bits/2)) deja el error inicial abajo del 50 %.
   uint32_t x = v, semilla = 1;
   while (x > 3) { x >>= 2; semilla <<= 1; }
 
@@ -78,96 +52,108 @@ uint16_t rms_isqrt32(uint32_t v)
   return (uint16_t)r;
 }
 
-bool rms_recoger(uint8_t i, uint16_t *rmsCuentas, uint16_t *cd, uint8_t *n)
+/*  Cierra una ventana: la empareja con la anterior para cubrir un ciclo
+ *  completo y calcula el RMS verdadero.
+ */
+static void cerrar(uint8_t i)
 {
-  if (i > RMS_RED) return false;
+  const uint8_t nPrev = anterior[i].n;
 
-  uint32_t sc;
-  uint16_t s;
-  uint8_t  cuantas;
+  const uint32_t scTot = vivo[i].sumaCuad + anterior[i].sumaCuad;
+  const uint32_t sTot  = (uint32_t)vivo[i].suma + anterior[i].suma;
+  const uint16_t nTot  = (uint16_t)vivo[i].n + nPrev;
 
-  /*  El banco que NO está vivo es el de la ventana cerrada, y la ISR no lo
-   *  toca. Aun así la lectura va protegida: si una ventana cerrara justo en
-   *  medio, el índice cambiaría debajo de nosotros y leeríamos mitad de una y
-   *  mitad de la otra. Son ~20 ciclos con las interrupciones apagadas, en el
-   *  lazo y 240 veces por segundo: 0.03 % del CPU (DC-026).
-   */
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-    if (!rms_lista[i]) { cuantas = 0; sc = 0; s = 0; }
-    else {
-      const uint8_t muerto = (uint8_t)((i << 1) | (rms_vivo[i] ^ 1));
-      sc      = rms_banco[muerto].sumaCuad;
-      s       = rms_banco[muerto].suma;
-      cuantas = rms_banco[muerto].n;
-      rms_lista[i] = 0;
-    }
-  }
+  anterior[i] = vivo[i];
+  vivo[i].sumaCuad = 0; vivo[i].suma = 0; vivo[i].n = 0;
 
-  if (cuantas < 4) return false;   // ventana vacía o demasiado corta
+  if (nPrev == 0 || nTot < 8) return;   // la primera ventana no tiene par
 
-  /*  ⚠️ AQUÍ ESTABA EL ERROR QUE EL BANCO DESTAPÓ EL 24 DE NOVIEMBRE
-   *
-   *  La versión anterior calculaba `RMS² = ⟨x²⟩ − ⟨x⟩²` sobre **una** ventana
-   *  de medio ciclo. Eso no le quita el bias: le quita **la media rectificada
-   *  del semiciclo**, que no es lo mismo. Para medio seno de amplitud A:
-   *
-   *      media del semiciclo        = bias + 0.6366·A      ← no es el bias
-   *      RMS sobre su propia media  = 0.3078·A
-   *      RMS verdadero de CA        = 0.7071·A      → **2.30 veces más**
-   *
-   *  Y el banco lo confirmó sin que nadie lo buscara: el `CD` reportado
-   *  alternaba 277 y 744 cuentas, simétrico alrededor de 510.5 — el bias
-   *  exacto. De ahí sale A = 366.8 cuentas, el código reportaba 109.7 y la
-   *  predicción de la fórmula mala era 112.9. Cuadraba con el error, no con
-   *  la realidad.
-   *
-   *  EL ARREGLO: SUMAR DOS VENTANAS CONSECUTIVAS = UN CICLO COMPLETO.
-   *
-   *  Sobre un ciclo entero el término rectificado se cancela, así que ⟨x⟩ SÍ
-   *  es el bias y la fórmula vuelve a ser correcta. Y de paso arregla la
-   *  dispersión: el canal de la red recibe 12.50 muestras por semiciclo
-   *  —nunca entero, alterna 12 y 13— pero **12 + 13 = 25 = un ciclo exacto**.
-   *  En el inversor, 25 + 25 = 50.
-   *
-   *  La latencia no se pierde: el par es deslizante, así que sigue habiendo
-   *  un valor nuevo cada medio ciclo (8.3 ms), que es lo que DC-023 pedía.
-   */
-  const uint8_t  nPrev = rms_prev[i].n;      // ⚠️ leer ANTES de sobreescribir
-  const uint32_t scTot = sc + rms_prev[i].sumaCuad;
-  const uint32_t sTot  = (uint32_t)s + rms_prev[i].suma;
-  const uint16_t nTot  = (uint16_t)cuantas + nPrev;
-
-  rms_prev[i].sumaCuad = sc;        // esta ventana es la "anterior" de la próxima
-  rms_prev[i].suma     = s;
-  rms_prev[i].n        = cuantas;
-
-  // En la primerísima ventana no hay par todavía: se guarda y se espera.
-  if (nPrev == 0) return false;
-
-  /*  La forma escalada, por la razón numérica de siempre: dividir primero
-   *  trunca ⟨x⟩ hasta en una cuenta y el error se multiplica por 2⟨x⟩ ≈ 1 022,
-   *  lo que son 0.4 % en el RMS = medio volt a 127 V, con un criterio de
-   *  ±0.3 V.
+  /*  La forma escalada, y no es estilo: dividir primero trunca ⟨x⟩ hasta en
+   *  una cuenta, y al elevarla al cuadrado el error se multiplica por
+   *  2⟨x⟩ ≈ 1 022. Son 0.4 % en el RMS = medio volt a 127 V, contra un
+   *  criterio de ±0.3 V.
    *
    *      varianza = (N·Σx² − (Σx)²) / N²
    *
-   *  En 64 bits: con 50 muestras, N·Σx² llega a 2.6e9 y (Σx)² a 2.6e9. Las
-   *  dos cabrían en 32 bits por los pelos; en 64 no hay que pensarlo. Corre
-   *  120 veces por segundo en el lazo, no en una ISR.
+   *  En 64 bits: con 50 muestras N·Σx² llega a 2.6e9 y (Σx)² a 2.6e9. Las dos
+   *  cabrían en 32 bits por los pelos; en 64 no hay que pensarlo.
    */
   const uint64_t numerador = (uint64_t)nTot * scTot - (uint64_t)sTot * sTot;
   const uint32_t n2        = (uint32_t)nTot * nTot;
-  const uint32_t varianza  = (uint32_t)(numerador / n2);
 
-  /*  Ahora sí: sobre un ciclo completo, ⟨x⟩ es el bias. Debe rondar 511 y
-   *  —esto es lo nuevo— **debe quedarse quieto**. Si se mueve reporte a
-   *  reporte, el par no está cubriendo un ciclo entero y hay que ir a ver por
-   *  qué.
+  resultado[i]   = rms_isqrt32((uint32_t)(numerador / n2));
+  bias[i]        = (uint16_t)(sTot / nTot);   // sobre un ciclo, ⟨x⟩ ES el bias
+  muestrasPar[i] = (uint8_t)nTot;
+  hayNuevo[i]    = true;
+}
+
+// ============================ EL DRENAJE =====================================
+
+void rms_atender(void)
+{
+  /*  `rms_w` lo mueven dos interrupciones distintas, así que se lee una vez,
+   *  y de un byte: en el AVR eso es atómico y no hace falta apagar nada
+   *  (DC-026 — el `cli()` más barato es el que no existe).
    */
-  const uint16_t media = (uint16_t)(sTot / nTot);
+  uint8_t w = rms_w;
 
-  if (rmsCuentas) *rmsCuentas = rms_isqrt32(varianza);
-  if (cd)         *cd = media;
-  if (n)          *n  = (uint8_t)nTot;
+  while (rms_r != w) {
+    const uint16_t ev = rms_anillo[rms_r & RMS_ANILLO_MSK];
+    rms_r++;
+
+    const uint8_t i = (ev & RMS_EV_CANAL) ? RMS_RED : RMS_INV;
+
+    if (ev & RMS_EV_FRONTERA) {
+      cerrar(i);
+      continue;
+    }
+
+    const uint16_t cuenta = ev & 0x03FFu;
+    vivo[i].suma     += cuenta;
+    vivo[i].sumaCuad += (uint32_t)cuenta * cuenta;
+
+    /*  Tope de seguridad: si el comparador no está dando cruces, la ventana de
+     *  la red crecería sin freno hasta desbordar los acumuladores.
+     */
+    if (++vivo[i].n >= RMS_TOPE_RED) { desbordesRed++; cerrar(i); }
+  }
+}
+
+// ========================== FUNCIONES PÚBLICAS ===============================
+
+void rms_preparar(void) { rms_reiniciar(); }
+
+void rms_reiniciar(void)
+{
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    rms_w = rms_r = 0;
+    rms_anillo_lleno = 0;
+    rms_cuenta_inv = 0;
+  }
+  for (uint8_t i = 0; i < 2; i++) {
+    vivo[i].sumaCuad = 0;     vivo[i].suma = 0;     vivo[i].n = 0;
+    anterior[i].sumaCuad = 0; anterior[i].suma = 0; anterior[i].n = 0;
+    hayNuevo[i] = false;
+  }
+  desbordesRed = 0;
+}
+
+bool rms_recoger(uint8_t i, uint16_t *rmsCuentas, uint16_t *cd, uint8_t *n)
+{
+  if (i > RMS_RED || !hayNuevo[i]) return false;
+  hayNuevo[i] = false;
+
+  if (rmsCuentas) *rmsCuentas = resultado[i];
+  if (cd)         *cd = bias[i];
+  if (n)          *n  = muestrasPar[i];
   return true;
+}
+
+uint16_t rms_desbordes_red(void) { return desbordesRed; }
+
+uint16_t rms_anillo_perdidos(void)
+{
+  uint16_t v;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = rms_anillo_lleno; }
+  return v;
 }

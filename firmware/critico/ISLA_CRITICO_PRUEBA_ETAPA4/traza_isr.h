@@ -51,15 +51,31 @@ extern volatile uint16_t isr_t1;          // TCNT1 al salir, antes del epílogo
 extern volatile uint8_t  isr_lista;       // bandera: hay una muestra nueva
 extern volatile uint32_t isr_n;           // TODAS las ISR, no sólo las recogidas
 extern volatile uint16_t isr_sobrepasos;  // no terminó antes del siguiente TOV
+extern volatile uint16_t isr_t0_max;      // el PEOR caso de entrada, sin ceguera
 
 #ifdef __cplusplus
 }
 #endif
 
+/*  ⚠️ EL MÁXIMO SE GUARDA AQUÍ ADENTRO, Y HAY QUE EXPLICAR POR QUÉ.
+ *
+ *  El histograma lo arma el lazo, que sólo recoge una muestra por vuelta. Con
+ *  el I2C corriendo, el lazo se queda detenido 2.7 ms y **las ~63 ISR de esa
+ *  ventana no se recogen**. La corrida del 24-nov lo dejó en evidencia sin
+ *  lugar a dudas:
+ *
+ *      entrada máxima que reportó el histograma    269 ciclos
+ *      entrada mínima que SOBREPASOS demuestra     > 491 ciclos, 14 veces
+ *
+ *  O sea que el máximo muestreado subestimaba el real **a la mitad**. Este
+ *  `if` corre en TODAS las ISR, recogidas o no, y cuesta unos ocho ciclos.
+ */
 #define SPWM_TRAZA_ENTRA()                      \
   do {                                          \
     PORTD |= _BV(TRZ_BIT);                      \
-    isr_t0 = TCNT1;                             \
+    const uint16_t t = TCNT1;                   \
+    isr_t0 = t;                                 \
+    if (t > isr_t0_max) isr_t0_max = t;         \
   } while (0)
 
 #define SPWM_TRAZA_SALE()                       \

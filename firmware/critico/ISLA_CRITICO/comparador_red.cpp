@@ -2,6 +2,24 @@
  * =============================================================================
  *  comparador_red.cpp  -  Isla del Sol, micro CRÍTICO (A1)
  *  Implementación del cruce por cero de la red. Ver comparador_red.h.
+ * -----------------------------------------------------------------------------
+ *  ⚠️ LO QUE ESTA ISR **NO** HACE, Y ES LA LECCIÓN DE LA CORRIDA DEL 24-nov
+ *
+ *  Tuvo adentro la estadística del jitter —una multiplicación de 16×16 y dos
+ *  sumas de 32 bits— y costaba **117 ciclos**. Con eso esta ISR pasó de 216 a
+ *  333 ciclos, y la suma de las tres ISR del sistema de 606 a 723 contra un
+ *  periodo de portadora de 666 ciclos: **de 91 % a 109 %**. El banco perdió
+ *  14 pasos de la onda en 33 segundos.
+ *
+ *  La medición perturbó al sistema que medía. Ahora aquí sólo pasa lo que no
+ *  puede pasar en otro lado:
+ *
+ *      · fechar el cruce            — el instante sólo existe aquí
+ *      · decidir si es válido       — para no fechar basura
+ *      · encolar                    — diez ciclos
+ *
+ *  Todo lo demás —la σ, la frecuencia, el RMS de la red— lo hace el lazo, que
+ *  no tiene plazo que cumplir.
  * =============================================================================
  */
 
@@ -12,9 +30,14 @@
 #include <avr/interrupt.h>
 #include <util/atomic.h>
 
+/*  El contador de desbordes del Timer0 del núcleo de Arduino. No está en
+ *  ningún encabezado público, pero tiene enlace externo y lleva quince años
+ *  llamándose igual. Si algún día cambiara, esto **no compila** — falla
+ *  ruidosamente, que es la forma correcta de fallar.
+ */
+extern volatile unsigned long timer0_overflow_count;
+
 // --- Enganche de medición (protocolo de banco, Parte C, etapa 4) -------------
-// En producción no existe traza_cmp.h: las macros quedan vacías y el código
-// compilado es el mismo. El sketch de la etapa 4 pone el archivo al lado.
 #if defined(__has_include)
 #  if __has_include("traza_cmp.h")
 #    include "traza_cmp.h"
@@ -30,29 +53,9 @@
 // ============================== ESTADO =======================================
 
 static volatile uint16_t cruces, rechazados, huecos, rechDir;
-
-/*  ESTADÍSTICA DEL SEMIPERIODO — la medición que sustenta el criterio nuevo.
- *
- *  Pedir `rechazados = 0` con un comparador sin histéresis es pedir lo
- *  imposible: la pendiente en el cruce es de 0.6 mV/µs, así que unos
- *  milivolts de ruido alternan la salida. Lo que de verdad le importa al PLL
- *  no es cuántos flancos se descartaron, sino **cuánto se mueve el cruce que
- *  sí se acepta**.
- *
- *  Se acumula la desviación contra un ancla de 8 192 µs (una potencia de dos,
- *  para que la resta no cueste) y de ahí sale σ sin manejar números grandes:
- *  la desviación anda en ±300, su cuadrado en 9e4, y 120 de ellos caben de
- *  sobra en 32 bits.
- *
- *  ⚠️ σ del SEMIPERIODO no es σ del cruce: un semiperiodo es la diferencia de
- *  dos cruces, cada uno con su propio jitter, así que σ_cruce = σ_semi / √2.
- *  El sketch hace esa conversión al reportar.
- */
-#define CMP_ANCLA_US   8192
-static volatile uint16_t semiN, semiMin, semiMax;
-static volatile int32_t  semiSumaDev;
-static volatile uint32_t semiSumaDev2;
-static volatile uint8_t  acoUlt;          // ACO del último cruce aceptado
+static volatile uint16_t semiperiodo;    // el último aceptado, en µs
+static volatile uint16_t tUltimo;        // garrapatas de 4 µs del último cruce
+static volatile uint8_t  acoUlt;         // ACO del último cruce aceptado
 
 /*  Histograma de a qué distancia del cruce aceptado llegan los flancos
  *  rechazados. Es la pregunta que decide el arreglo, y se contesta desde
@@ -60,42 +63,53 @@ static volatile uint8_t  acoUlt;          // ACO del último cruce aceptado
  *
  *      si caen en los primeros ~50 µs  → REPIQUE del cruce: el comparador
  *          alterna porque no tiene histéresis y la pendiente es de
- *          0.6 mV/µs. Se arregla con histéresis (por software o por un pin).
+ *          0.6 mV/µs. Se arregla con histéresis, no con filtro.
  *      si caen a cientos de µs o a ms  → RECRUCE por armónicos: la red está
- *          achatada cerca del cero y de verdad cruza el umbral más de una
- *          vez. Ningún filtro lo quita; se arregla con el blanqueo, que ya
- *          está, y la pregunta pasa a ser si el blanqueo es suficiente.
+ *          achatada cerca del cero y de verdad cruza más de una vez.
+ *
+ *  ⚠️ Medido el 24-nov: **todo abajo de 100 µs y el 97 % abajo de 50**. Es
+ *  repique. Y el primer cajón es ciego mientras la ISR corre, así que el
+ *  repique real es más rápido de lo que estos cajones pueden resolver.
  */
 #define CMP_CAJONES  7
 static const uint16_t CMP_TOPE[CMP_CAJONES] = { 20, 50, 100, 200, 500, 1000, 2000 };
 static volatile uint16_t cmp_histo[CMP_CAJONES];
-static volatile uint16_t semiperiodo;
-static volatile uint32_t tUltimo;        // µs del último cruce aceptado
-static volatile uint32_t tPrimero;       // µs del primero de esta ventana
-static volatile uint16_t crucesVentana;  // aceptados desde cmp_reiniciar()
+
+// Anillo de semiperiodos: la ISR encola, el lazo saca la σ y la frecuencia.
+#define CMP_SEMI_ANILLO  8
+static volatile uint16_t semiAnillo[CMP_SEMI_ANILLO];
+static volatile uint8_t  semiW;
 
 // ================================ LA ISR =====================================
-//
-// Corre en cada flanco del comparador: subida Y bajada (ACIS = 00, alternar),
-// o sea los dos cruces de cada ciclo. A 60 Hz son 120 por segundo.
-//
-// Lo único que hace es fechar y decidir si el cruce es bueno. El RMS de la red
-// se cierra aquí porque este es el instante que define la ventana: medio ciclo
-// va de un cruce al siguiente, y nadie más sabe cuándo ocurrió.
 
 ISR(ANALOG_COMP_vect)
 {
   CMP_TRAZA_ENTRA();
 
-  const uint32_t t  = micros();
-  const uint32_t dt = t - tUltimo;
+  /*  EL FECHADO, SIN micros().
+   *
+   *  `micros()` cuesta ~50 ciclos: lee el contador de desbordes de 32 bits, lo
+   *  corrige si hay uno pendiente, y lo multiplica por 4 para dar
+   *  microsegundos. Aquí no hace falta nada de eso.
+   *
+   *  Se guardan las **garrapatas crudas del Timer0**: un byte del contador de
+   *  desbordes y `TCNT0`, que juntos dan 16 bits en unidades de 4 µs. Eso
+   *  envuelve cada 262 ms, de sobra para un semiperiodo de 8.3 ms.
+   *
+   *  La corrección del desborde pendiente es la misma que hace `micros()` y
+   *  hay que hacerla igual: si TOV0 está puesto, el contador se quedó atrás.
+   */
+  const uint8_t t0 = TCNT0;
+  uint8_t m8 = (uint8_t)timer0_overflow_count;
+  if ((TIFR0 & _BV(TOV0)) && (t0 < 255)) m8++;
+  const uint16_t t = (uint16_t)(((uint16_t)m8 << 8) | t0);
+
+  const uint16_t dt  = (uint16_t)((uint16_t)(t - tUltimo) << 2);   // a µs
   const uint8_t  aco = (uint8_t)((ACSR & _BV(ACO)) ? 1 : 0);
 
   /*  Repique del cruce: llegó demasiado pronto para ser real. Se cuenta y se
    *  descarta, pero NO se apaga la interrupción — un cruce bueno que cayera
    *  en la ventana ciega se perdería sin dejar rastro.
-   *
-   *  Y se anota EN QUÉ CAJÓN cayó, que es lo que dice qué clase de ruido es.
    */
   if (dt < CMP_BLANQUEO_US) {
     rechazados++;
@@ -110,13 +124,13 @@ ISR(ANALOG_COMP_vect)
    *
    *  El comparador del AVR no tiene histéresis y su salida no sale a ningún
    *  pin, así que no se puede realimentar. Pero sí se puede leer `ACO`: en un
-   *  cruce de verdad la salida queda del lado contrario al del cruce
-   *  anterior. Un flanco que llega con el MISMO lado que el anterior no es un
-   *  cruce nuevo — es repique que alcanzó a ir y volver.
+   *  cruce de verdad la salida queda del lado contrario al del cruce anterior.
+   *  Un flanco que llega con el MISMO lado es repique que fue y volvió.
    *
-   *  Cuesta cuatro ciclos y no puede equivocarse en contra: si el repique es
-   *  más rápido que la entrada a la ISR (~3 µs), `ACO` ya volvió y el flanco
-   *  se descarta, que es lo que queremos.
+   *  ⚠️ Medido: atrapa 2 a 10 por segundo de los ~80 rechazos. Sirve poco,
+   *  porque el repique es más rápido que la entrada a la ISR y `ACO` ya volvió
+   *  cuando lo leemos. Se queda porque cuesta cuatro ciclos y nunca se
+   *  equivoca en contra.
    */
   if (cruces != 0 && aco == acoUlt) {
     rechDir++;
@@ -128,28 +142,95 @@ ISR(ANALOG_COMP_vect)
   if (dt > CMP_HUECO_US) huecos++;   // se acepta igual, pero queda anotado
 
   tUltimo     = t;
-  semiperiodo = (uint16_t)dt;        // < 65 ms, cabe de sobra
+  semiperiodo = dt;
   cruces++;
 
-  /*  El jitter. Sólo entran los semiperiodos plausibles: el primero de todos
-   *  y los que vienen después de un hueco no son medidas de jitter, son
-   *  medidas de que faltó un cruce.
+  /*  El jitter, encolado. Sólo entran los semiperiodos plausibles: el primero
+   *  de todos y los que vienen después de un hueco no son medidas de jitter,
+   *  son medidas de que faltó un cruce.
    */
   if (cruces > 1 && dt < CMP_HUECO_US) {
-    const int16_t dev = (int16_t)((int32_t)dt - CMP_ANCLA_US);
-    semiSumaDev  += dev;
-    semiSumaDev2 += (uint32_t)((int32_t)dev * dev);
-    if (semiN == 0 || (uint16_t)dt < semiMin) semiMin = (uint16_t)dt;
-    if (semiN == 0 || (uint16_t)dt > semiMax) semiMax = (uint16_t)dt;
-    semiN++;
+    semiAnillo[semiW & (CMP_SEMI_ANILLO - 1)] = dt;
+    semiW++;
   }
 
-  if (crucesVentana == 0) tPrimero = t;
-  crucesVentana++;
-
-  rms_cerrar_red();                  // aquí termina una ventana y empieza otra
+  rms_marca_red();                   // aquí termina una ventana y empieza otra
 
   CMP_TRAZA_SALE();
+}
+
+// ======================= LA ESTADÍSTICA, EN EL LAZO ==========================
+
+static uint16_t jN, jMin, jMax;
+static uint8_t  jRead;
+static int32_t  jSumaDev;
+static uint32_t jSumaDev2;
+
+void cmp_atender(void)
+{
+  // Un byte, y en el AVR eso se lee atómico: el cli() más barato es el que no
+  // existe (DC-026). Misma razón que en rms_atender().
+  const uint8_t w = semiW;
+
+  while (jRead != w) {
+    const uint16_t dt = semiAnillo[jRead & (CMP_SEMI_ANILLO - 1)];
+    jRead++;
+
+    const int16_t dev = (int16_t)((int32_t)dt - CMP_ANCLA_US);
+    jSumaDev  += dev;
+    jSumaDev2 += (uint32_t)((int32_t)dev * dev);
+    if (jN == 0 || dt < jMin) jMin = dt;
+    if (jN == 0 || dt > jMax) jMax = dt;
+    jN++;
+  }
+}
+
+bool cmp_jitter(uint16_t *minUs, uint16_t *promUs, uint16_t *maxUs, uint16_t *sigmaUs)
+{
+  if (jN < 8) return false;
+
+  const int32_t promDev = jSumaDev / (int32_t)jN;
+
+  /*  σ² = ⟨d²⟩ − ⟨d⟩², en la forma escalada para no truncar antes de tiempo:
+   *  (n·Σd² − (Σd)²) / n².
+   */
+  const uint64_t num = (uint64_t)jN * jSumaDev2
+                     - (uint64_t)((int64_t)jSumaDev * jSumaDev);
+  const uint32_t var = (uint32_t)(num / ((uint32_t)jN * jN));
+
+  if (minUs)   *minUs   = jMin;
+  if (maxUs)   *maxUs   = jMax;
+  if (promUs)  *promUs  = (uint16_t)(CMP_ANCLA_US + promDev);
+  if (sigmaUs) *sigmaUs = rms_isqrt32(var);
+  return true;
+}
+
+uint32_t cmp_frecuencia_mhz(void)
+{
+  if (jN < 8) return 0;
+
+  /*  ⚠️ LA FRECUENCIA SALE DEL PROMEDIO DEL SEMIPERIODO, Y NO HACE FALTA
+   *  NINGÚN RELOJ LARGO.
+   *
+   *  Antes se medía el lapso entre el primer y el último cruce del reporte y
+   *  se dividía entre los semiperiodos — lo que pedía un reloj de 32 bits,
+   *  porque un segundo son 250 000 garrapatas y en 16 bits sólo caben 65 536.
+   *
+   *  Pero el promedio de N semiperiodos **es** (t_último − t_primero) / N: el
+   *  mismo número, calculado con lo que ya se está acumulando. Y mejor, porque
+   *  deja fuera los semiperiodos de los huecos.
+   *
+   *  Se trabaja en 256-avos de µs para no perder resolución en la división:
+   *  un µs de redondeo en el promedio serían 7.2 mHz, contra un criterio de
+   *  10 mHz. A 1/256 de µs el redondeo vale 0.028 mHz.
+   *
+   *      f = 1 / (2 · T_semi)      →     f_mHz = 5e8 / T_semi[µs]
+   */
+  const int32_t  devX256   = (int32_t)((jSumaDev * 256) / (int32_t)jN);
+  const uint32_t semiX256  = (uint32_t)((int32_t)CMP_ANCLA_US * 256 + devX256);
+  if (semiX256 == 0) return 0;
+
+  return (uint32_t)((500000000ULL * 256ULL) / semiX256);
 }
 
 // ============================ FUNCIONES PÚBLICAS =============================
@@ -176,7 +257,7 @@ void cmp_preparar(void)
    *    ACBG = 0   la entrada positiva es AIN0 (el divisor), no el bandgap
    *    ACIC = 0   ⚠️ NO amarrar a la captura del Timer1: ICR1 es el TOP de la
    *               portadora, y escribirlo cambiaría la frecuencia de
-   *               conmutación en cada cruce de la red. Ver comparador_red.h.
+   *               conmutación en cada cruce de la red.
    *    ACIS = 00  interrumpe en CUALQUIER flanco: los dos cruces del ciclo
    *    ACIE = 0   todavía no; lo prende cmp_arrancar()
    */
@@ -195,33 +276,11 @@ void cmp_detener(void)
   ACSR &= (uint8_t)~_BV(ACIE);
 }
 
-uint16_t cmp_cruces(void)      { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = cruces; }      return v; }
-uint16_t cmp_rech_direccion(void) { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = rechDir; } return v; }
-
-bool cmp_jitter(uint16_t *minUs, uint16_t *promUs, uint16_t *maxUs, uint16_t *sigmaUs)
-{
-  uint16_t n, mn, mx;
-  int32_t  sd;
-  uint32_t sd2;
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-    n = semiN; mn = semiMin; mx = semiMax; sd = semiSumaDev; sd2 = semiSumaDev2;
-  }
-  if (n < 8) return false;
-
-  const int32_t promDev = sd / (int32_t)n;
-
-  /*  σ² = ⟨d²⟩ − ⟨d⟩², en la forma escalada de siempre para no truncar antes
-   *  de tiempo: (n·Σd² − (Σd)²) / n².
-   */
-  const uint64_t num = (uint64_t)n * sd2 - (uint64_t)((int64_t)sd * sd);
-  const uint32_t var = (uint32_t)(num / ((uint32_t)n * n));
-
-  if (minUs)   *minUs   = mn;
-  if (maxUs)   *maxUs   = mx;
-  if (promUs)  *promUs  = (uint16_t)(CMP_ANCLA_US + promDev);
-  if (sigmaUs) *sigmaUs = rms_isqrt32(var);
-  return true;
-}
+uint16_t cmp_cruces(void)          { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = cruces; }      return v; }
+uint16_t cmp_rechazados(void)      { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = rechazados; }  return v; }
+uint16_t cmp_huecos(void)          { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = huecos; }      return v; }
+uint16_t cmp_rech_direccion(void)  { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = rechDir; }     return v; }
+uint16_t cmp_semiperiodo_us(void)  { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = semiperiodo; } return v; }
 
 uint16_t cmp_histograma(uint8_t k)
 {
@@ -235,50 +294,34 @@ uint16_t cmp_histograma_tope(uint8_t k)
 {
   return (k < CMP_CAJONES) ? CMP_TOPE[k] : 0;
 }
-uint16_t cmp_rechazados(void)  { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = rechazados; }  return v; }
-uint16_t cmp_huecos(void)      { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = huecos; }      return v; }
-uint16_t cmp_semiperiodo_us(void) { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = semiperiodo; } return v; }
 
 bool cmp_red_presente(void)
 {
-  uint32_t t;
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { t = tUltimo; }
-  return (micros() - t) < ((uint32_t)CMP_SIN_RED_MS * 1000UL);
-}
-
-uint32_t cmp_frecuencia_mhz(void)
-{
-  uint32_t t0, t1;
-  uint16_t n;
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { t0 = tPrimero; t1 = tUltimo; n = crucesVentana; }
-
-  if (n < 3) return 0;             // hacen falta al menos dos semiperiodos
-
-  const uint32_t lapso = t1 - t0;  // µs entre el primer y el último cruce
-  if (lapso == 0) return 0;
-
-  /*  n cruces aceptados dejan n-1 semiperiodos en `lapso`. Entonces
-   *
-   *      periodo = 2 × lapso / (n-1)        f = (n-1) / (2 × lapso)
-   *
-   *  y en milihertz, con lapso en µs:
-   *
-   *      f_mHz = (n-1) × 1e6 × 1000 / (2 × lapso) = (n-1) × 5e8 / lapso
-   *
-   *  Se hace en 64 bits porque 120 × 5e8 ya no cabe en 32. Corre una vez por
-   *  reporte, en el lazo, así que el costo da igual.
+  /*  `tUltimo` son garrapatas de 4 µs de 16 bits, así que la comparación se
+   *  hace en garrapatas: 50 ms son 12 500 de ellas, y envuelven cada 262 ms.
    */
-  return (uint32_t)(((uint64_t)(n - 1) * 500000000ULL) / lapso);
+  uint16_t t;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { t = tUltimo; }
+
+  const uint8_t t0 = TCNT0;
+  uint8_t m8 = (uint8_t)timer0_overflow_count;
+  if ((TIFR0 & _BV(TOV0)) && (t0 < 255)) m8++;
+  const uint16_t ahora = (uint16_t)(((uint16_t)m8 << 8) | t0);
+
+  return (uint16_t)(ahora - t) < (uint16_t)((CMP_SIN_RED_MS * 1000UL) / 4);
 }
 
 void cmp_reiniciar(void)
 {
+  jN = jMin = jMax = 0;
+  jRead = 0;
+  jSumaDev = 0;
+  jSumaDev2 = 0;
+
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     cruces = rechazados = huecos = rechDir = 0;
-    crucesVentana = 0;
     semiperiodo = 0;
-    semiN = 0; semiMin = 0; semiMax = 0;
-    semiSumaDev = 0; semiSumaDev2 = 0;
+    semiW = 0;
     for (uint8_t k = 0; k < CMP_CAJONES; k++) cmp_histo[k] = 0;
   }
 }

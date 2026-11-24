@@ -376,6 +376,7 @@ volatile uint16_t isr_t1;
 volatile uint8_t  isr_lista;
 volatile uint32_t isr_n;
 volatile uint16_t isr_sobrepasos;
+volatile uint16_t isr_t0_max;   // el peor caso de entrada, sin ventana ciega
 
 // ============================== ESTADÍSTICAS =================================
 
@@ -621,8 +622,15 @@ void loop()
      *  etapa 4 lo llamaba dos veces por vuelta sin preguntar. Eso bajó el lazo
      *  de 22 016 a 10 240 vueltas/s.
      */
-    if (rms_hay(RMS_INV) && rms_recoger(RMS_INV, &r, &cd, &n)) est_mete(est[RMS_INV], r, cd, n);
-    if (rms_hay(RMS_RED) && rms_recoger(RMS_RED, &r, &cd, &n)) est_mete(est[RMS_RED], r, cd, n);
+    /*  Los dos anillos se drenan aquí, en el lazo, que es lo que permitió
+     *  sacar 190 ciclos de las interrupciones. Si no hay nada encolado, las
+     *  dos funciones regresan en seguida.
+     */
+    rms_atender();
+    cmp_atender();
+
+    if (rms_recoger(RMS_INV, &r, &cd, &n)) est_mete(est[RMS_INV], r, cd, n);
+    if (rms_recoger(RMS_RED, &r, &cd, &n)) est_mete(est[RMS_RED], r, cd, n);
   }
 
   /*  SECCIÓN CRÍTICA MÍNIMA — ésta es la diferencia de la v5.
@@ -765,6 +773,16 @@ void loop()
   const uint16_t sobNuevos = (uint16_t)(sob - sobPrev);
   sobPrev = sob;
 
+  uint16_t t0max;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { t0max = isr_t0_max; isr_t0_max = 0; }
+  Serial.print(F("  t0max="));
+  Serial.print(t0max);
+  Serial.print(F("c"));
+  /*  El límite duro: entrada + cuerpo(140) + epílogo(35) < 666. Arriba de 491
+   *  se pierde un paso, y esto lo ve TODO — no tiene ventana ciega.
+   */
+  if (t0max > 491) Serial.print(F(" <<< ARRIBA DEL LIMITE"));
+
   Serial.print(F("  SOBREPASOS=+"));
   Serial.print(sobNuevos);
   Serial.print(F(" (total "));
@@ -840,7 +858,9 @@ void loop()
     const uint32_t esp = corrieron / ADC_DESBORDES_POR_DISPARO;
     Serial.print(F(" esperadas=")); Serial.print(esp);
 
-    Serial.print(F(" PERDIDAS=")); Serial.print(pe);
+    Serial.print(F(" anillo="));
+  Serial.print(rms_anillo_perdidos());
+  Serial.print(F(" PERDIDAS=")); Serial.print(pe);
 
     Serial.print(F("  cuentas=")); Serial.print(adc_cuentas(ADC_RANURA_INV));
     Serial.print('/');             Serial.print(adc_cuentas(ADC_RANURA_RED));

@@ -89,6 +89,7 @@ uint16_t cmp_rech_direccion(void);// mismo lado que el anterior: repique ida y v
  *      concentrado abajo de ~50 µs  → repique del cruce (falta histéresis)
  *      repartido en cientos de µs   → recruce por armónicos de la red
  */
+#define CMP_ANCLA_US   8192   // ancla de la desviación: potencia de dos
 #define CMP_CAJONES_N  7
 uint16_t cmp_histograma(uint8_t k);
 uint16_t cmp_histograma_tope(uint8_t k);
@@ -105,13 +106,19 @@ bool cmp_jitter(uint16_t *minUs, uint16_t *promUs, uint16_t *maxUs, uint16_t *si
 uint16_t cmp_semiperiodo_us(void);// el último aceptado
 bool     cmp_red_presente(void);
 
-/*  Frecuencia en milihertz (60043 = 60.043 Hz), promediada sobre todos los
- *  cruces desde el último `cmp_reiniciar()`. Devuelve 0 si no hay suficientes.
+/*  Hay que llamarla en cada vuelta del lazo: drena el anillo de semiperiodos
+ *  y acumula la estadística. Lo que antes costaba 117 ciclos dentro de la ISR
+ *  —y hacía perder pasos de la onda— aquí no le cuesta nada a nadie.
+ */
+void cmp_atender(void);
+
+/*  Frecuencia en milihertz (60043 = 60.043 Hz), del promedio de los
+ *  semiperiodos desde el último `cmp_reiniciar()`. 0 si no hay suficientes.
  *
- *  No se saca de un semiperiodo: se saca del tiempo entre el PRIMER y el
- *  ÚLTIMO cruce de la ventana, dividido entre los semiperiodos que hubo. Así
- *  los 4 µs de `micros()` se reparten entre un segundo entero y el error de
- *  cuantización queda en ~0.0005 Hz.
+ *  El promedio de N semiperiodos ES (t_último − t_primero)/N, así que da lo
+ *  mismo que medir el lapso completo — sin necesitar un reloj de 32 bits, y
+ *  dejando fuera los semiperiodos de los huecos. Se calcula en 256-avos de µs
+ *  para que el redondeo valga 0.028 mHz contra un criterio de 10.
  */
 uint32_t cmp_frecuencia_mhz(void);
 
