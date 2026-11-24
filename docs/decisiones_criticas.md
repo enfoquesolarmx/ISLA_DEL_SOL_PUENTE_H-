@@ -58,6 +58,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-029](#dc-029-la-referencia-del-adc-es-avcc-y-eso-se-lleva-la-calibración-adentro) | La referencia del ADC es AVCC, y eso se lleva la calibración adentro | Control | 2026-11-24 | Vigente (por implementar) |
 | [DC-030](#dc-030-el-enlace-can-con-el-bms-la-batería-es-la-autoridad-sobre-los-límites-y-nosotros-nada-más-latimos) | El enlace CAN con el BMS: la batería es la autoridad sobre los límites | Control | 2026-11-24 | Vigente (por implementar) |
 | [DC-031](#dc-031-r3-del-canal-de-batería-sube-de-1-kω-a-47-kω-y-por-qué-un-zener-no-servía) | R3 del canal de batería sube de 1 kΩ a 47 kΩ, y por qué un zener no servía | Control | 2026-11-24 | Vigente |
+| [DC-032](#dc-032-el-filtro-antialias-va-después-del-nodo-no-sobre-el-nodo-r17-sube-de-1-kω-a-22-kω) | El filtro antialias va después del nodo, no sobre el nodo: R17 sube a 22 kΩ | Control | 2026-11-24 | Vigente |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -2248,6 +2249,91 @@ recarga entre muestras (A3 a 750/s)     16 nA      ← nada
 - El fusible de 0.5 A en el cable de la batería **se queda**, para lo que sí cubre: el corto franco y el arco. No protege el pin y eso está escrito aquí para que nadie lo suponga.
 
 **Referencias:** [DC-007](#dc-007-sensado-del-voltaje-de-la-batería), [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-029](#dc-029-la-referencia-del-adc-es-avcc-y-eso-se-lleva-la-calibración-adentro). Hoja de datos del ATmega328P, máximos absolutos y sección del ADC (referencia 6).
+
+---
+
+## DC-032. El filtro antialias va después del nodo, no sobre el nodo: R17 sube de 1 kΩ a 22 kΩ
+
+> **El comparador de cruce por cero mira el nodo.** Todo capacitor colgado del nodo le mete fase, y la fase que mete depende de un valor que el fabricante del capacitor no garantiza. La salida no es conseguir un capacitor bueno: es que el capacitor no alcance al comparador.
+
+**Estado: vigente (V1).** Escrita el 24 de noviembre de 2026, a partir de tres mediciones de banco hechas ese mismo día.
+
+![Canal de CA de la red](img/acondicionamiento_ac_dc032.png)
+
+### Cómo apareció, y es una historia de dos errores míos
+
+Preparando la etapa 4 se pidió agregar un RC en el nodo de la red para proteger el comparador del ruido de conmutación. **Ese filtro ya estaba en el esquemático** —R17 de 1 kΩ con C30 de 10 nF—, pero en el banco se armó con **100 nF**, que era el capacitor que había. Diez veces la capacidad.
+
+Al calcular lo que eso costaba aparecieron dos errores escritos en la documentación, los dos míos:
+
+| | Lo que decía | Lo que es |
+| --- | --- | --- |
+| 1 | El movimiento del bias «está en fase con la señal, así que solo cambia la atenuación» | Los 265 Ω del bias son un **capacitor**, ángulo −87°: el movimiento está en **cuadratura** y lo que produce es **fase** |
+| 2 | El filtro mete «2.16° de retardo constante y compensable» | En la red completa son **−19°** con el capacitor del banco |
+
+**Y la causa de los dos es la misma:** calculé **una rama aislada** en vez de resolver la red. El bias, C16 y C30 comparten dos nodos, y cada uno cambia lo que los otros hacen. La cuenta buena es un sistema de dos ecuaciones con números complejos, no una regla de tres con magnitudes.
+
+### La medición que lo volvió un hecho
+
+Tres corridas de banco del 24 de noviembre, con la red verificada **quieta en 120.35 ± 0.05 V** con el multímetro:
+
+**(1) Quitando C30 por completo**, el RMS de la red subió de 227 a **249.9 cuentas (+10.1 %)**. El modelo predijo +7.2 %, con el trimmer y el valor real del capacitor como incógnitas. Esa coincidencia es lo que le da crédito a lo demás.
+
+**(2) Cambiando el capacitor por otro de la misma bolsa**, los tres marcados `104`:
+
+| | lectura del canal | C30 que implica | fase del comparador |
+| --- | --- | --- | --- |
+| capacitor 1 | 120.35 V | ~126 nF | −21.97° |
+| capacitor 2 | 119.10 V | ~134 nF | −23.07° |
+| capacitor 3 | 118.57 V | ~137 nF | −23.52° |
+
+**Los tres entre 26 y 37 % arriba de la etiqueta, y 9 % dispersos entre sí.** Eso son **1.55° de fase** nada más por cambiar de capacitor. Son cerámicos Y5V o Z5U, cuya tolerancia de catálogo es **+80 / −20 %** y que además se mueven con la temperatura — eso último no se midió y es peor que la dispersión de unidad a unidad.
+
+**(3) Y el filtro sí estaba ayudando al jitter**, cosa que nunca habíamos separado:
+
+```
+con 100 nF   jitter del cruce 0.58 – 0.66°
+sin C30      jitter del cruce 0.67 – 0.72°     (+0.08°, en los diez reportes)
+```
+
+### La decisión: subir R17, no bajar C30
+
+El filtro es el **producto** R × C. Los mismos 100 µs salen de `22 kΩ × 10 nF` igual que de `1 kΩ × 100 nF`. La diferencia es cuánto **carga el nodo** esa rama, y el nodo es lo único que el comparador ve:
+
+| | fase del comparador | antialias a 750 Hz | a 1501 Hz | si C30 varía 9 % |
+| --- | --- | --- | --- | --- |
+| `1 kΩ + 100 nF` | **−19 a −24°** | −13.3 dB | −19.2 dB | ±1.6° |
+| `1 kΩ + 10 nF` (el esquemático anterior) | −3.54° | −2.2 dB | −5.7 dB | ±0.2° |
+| ✅ **`22 kΩ + 10 nF`** | **−3.52°** | **−5.6 dB** | **−11.4 dB** | **±0.2°** |
+
+**Filtra dos veces y media mejor que lo que había y deja el comparador exactamente donde estaba.**
+
+**Por qué funciona, y es lo que se va a olvidar:** la fase de A6 **no le importa a nadie**. El cruce por cero lo da el comparador, no el ADC; el RMS no tiene fase; y la comparación entre los dos canales se cancela porque los dos tienen la misma red. **El único que necesita fase limpia es el nodo.** Entonces se filtra *después* del nodo, con una rama de impedancia alta que no lo jala.
+
+R17 es la perilla: con 47 kΩ serían −8 dB a 750 Hz y el comparador seguiría en −3.5°. El techo lo pone la impedancia de fuente del ADC, y ahí aplica el mismo argumento de [DC-031](#dc-031-r3-del-canal-de-batería-sube-de-1-kω-a-47-kω-y-por-qué-un-zener-no-servía): **quien surte al condensador de muestreo es C30, no la resistencia** — 14 pF pidiendo 21 pC a 10 nF son 2.1 mV de caída sobre 4 V, el 0.05 % contra un criterio de 0.25 %.
+
+### Lo que está medido y lo que es modelo
+
+⚠️ **Separado a propósito, porque no es lo mismo:**
+
+| | |
+| --- | --- |
+| **Medido** | el +10.1 % al quitar C30 · la dispersión de 9 % entre tres capacitores · el jitter de 0.58–0.66 contra 0.67–0.72° |
+| **Modelo** | **todos los números de fase de esta entrada** |
+
+La fase absoluta **nunca se ha medido**: la etapa 4 midió jitter y frecuencia, y las dos son insensibles a un desfase constante. El modelo acertó la magnitud dentro del 2.7 %, y eso es lo que le da crédito, pero no es lo mismo que haberla medido.
+
+**La corrida que lo cierra** es con el osciloscopio de dos canales: las dos tierras en GND, los dos canales en acoplamiento AC, CH1 en J17-1 y CH2 en el nodo, cursores sobre los cruces. Predicción: **881 µs con 100 nF, 164 µs con la tarjeta de 22 kΩ.** ⚠️ Y la trampa que mata el circuito: **nunca una pinza de tierra en `NEUTRO-GRID`** — ese nodo está a 2.5 V sobre GND y aterrizarlo cortocircuita el bias.
+
+### Consecuencias
+
+- ⚠️ **Esquemático y PCB: R17 y su gemela del canal del inversor pasan de 1 kΩ a 22 kΩ.** C30 se queda en 10 nF. Es el único cambio.
+- ⚠️ **No se ponga un capacitor grande en el nodo** para mejorar el antialias. Es la trampa que esta entrada existe para evitar, y se ve razonable desde afuera.
+- ✅ La tolerancia del capacitor deja de ser un problema de calidad de componente y pasa a ser un problema que el circuito ya no tiene.
+- ⚠️ **El presupuesto de fase completo sigue abierto.** El comparador aporta −3.5°, la DC-020 aporta 2.70° entre canales, y el retardo propio del comparador no se ha medido. Contra una ventana de ±5°, eso hay que sumarlo bien antes de la transferencia.
+- 📌 **Queda anotado que el instrumento bueno somos nosotros.** El canal repite 0.01 V y el multímetro 0.1 V. El multímetro fija el cero; para comparar dos configuraciones entre sí, el ADC es diez veces mejor — fue lo que permitió ver 0.45 % entre dos capacitores.
+
+**Referencias:** [DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13), [DC-031](#dc-031-r3-del-canal-de-batería-sube-de-1-kω-a-47-kω-y-por-qué-un-zener-no-servía). Diagrama: [`img/acondicionamiento_ac_dc032.py`](img/acondicionamiento_ac_dc032.py).
 
 ---
 

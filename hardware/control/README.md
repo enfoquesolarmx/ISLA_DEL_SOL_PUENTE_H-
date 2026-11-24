@@ -248,12 +248,14 @@ Dos canales iguales:
 | Inversor | Red | Valor | Qué hace | Por qué |
 | --- | --- | --- | --- | --- |
 | **J2** | **J17** | Bornera | Entrada de **12 VAC** de un transformador chico (120 → 12 V) | Pieza de trinchera. **Sin rectificar**: el ADC ve la onda completa, con su polaridad y su cruce por cero. Serigrafía "12VAC / RET", nunca "L / N" |
-| **R27** | **R7** | 100 kΩ | Parte de arriba del divisor | Con 16 VAC en vacío (22.6 V de pico) deja como máximo ±2.1 V sobre el bias: **el ADC nunca satura** |
+| **R27** | **R7** | **110 kΩ** | Parte de arriba del divisor | Con 16 VAC en vacío (22.6 V de pico) deja como máximo ±2.1 V sobre el bias: **el ADC nunca satura**. Subió de 100 kΩ en la Parte A: se paga 8 % de rango de ADC por margen contra el riel, y la repetibilidad no se movió (σ idéntica, 0.069 %) |
 | **R9** | **R8** | 8.2 kΩ | Parte de abajo, fija | — |
 | **RV2** | **RV1** | Trimmer 2 kΩ (Bourns 3296W) | Calibración de ±10 % | **Conectado como reóstato** (cursor unido a un extremo): si el cursor pierde contacto, queda en 2 kΩ y el canal no flota |
 | **R29 + R30** | **R5 + R6** | 10 kΩ + 10 kΩ | Bias de 2.5 V (la "tierra" de la señal AC) | El ADC solo lee de 0 a 5 V: la onda se monta sobre 2.5 V |
 | **C2 + C3** | **C5 + C4** | 10 µF + 100 nF | Mantienen quieto el bias | **Un bias por canal**, para que una señal no se cuele en la otra |
-| **C7** | **C16** | 10 nF | Filtro pegado al pin A0 / A6 | Quita la conmutación de 24 kHz. Desfasa ~2°, **igual en los dos canales**, así que se cancela en la sincronía |
+| **C7** | **C16** | 10 nF | Filtro **en el nodo** | Quita la conmutación de 24 kHz. ⚠️ **Está sobre el nodo, así que el comparador lo ve**: aporta la mayor parte de los −3.5° de fase del cruce por cero ([DC-032](../../docs/decisiones_criticas.md#dc-032-el-filtro-antialias-va-después-del-nodo-no-sobre-el-nodo-r17-sube-de-1-kω-a-22-kω)). **No subir este valor** para mejorar el antialias |
+| *(su gemela)* | **R17** | **22 kΩ** | Serie del nodo al pin A0 / A6 | **El antialias de verdad, y va *después* del nodo.** Con C30 forma 100 µs sin cargar el nodo: −5.6 dB a 750 Hz y el comparador se queda en −3.5°. Subió de 1 kΩ el 2026-11-24, [DC-032](../../docs/decisiones_criticas.md#dc-032-el-filtro-antialias-va-después-del-nodo-no-sobre-el-nodo-r17-sube-de-1-kω-a-22-kω) |
+| *(su gemela)* | **C30** | 10 nF | Del pin al **bias**, no a tierra | El tanque que surte al condensador de muestreo del ADC. ⚠️ **No subirlo a 100 nF:** con R17 de 1 kΩ eso metía −19° al cruce por cero, y la dispersión de los cerámicos baratos (9 % medido entre tres piezas) movía la fase 1.6° |
 | **TP1** | **TP2** | Test point | Señal en el pin | — |
 
 **Calibración en trinchera:** mide la salida con el multímetro y gira el trimmer hasta que el microcontrolador reporte el mismo valor. El ajuste fino va por software (EEPROM).
