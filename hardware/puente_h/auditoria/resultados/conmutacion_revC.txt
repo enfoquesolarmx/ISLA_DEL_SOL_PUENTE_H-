@@ -1,0 +1,234 @@
+AUDITORÍA DE CONMUTACIÓN — Isla del Sol, Puente H
+tarjeta: PUENTE_H_INV48V_REV_C_2026-10_GATE_CENTRO.kicad_pcb
+piezas leídas: 70 ; polígonos de cobre: 52
+
+==========================================================================
+M1. Geometría del nodo conmutado (INFORMATIVA, sin veredicto)
+==========================================================================
+Tres distancias, y esta medida NO juzga ninguna. Las reporta y dice
+quién sí las juzga, porque cada una cuesta algo distinto:
+
+  (a) Entre los dos MOSFET de la pierna. Es el tramo del nodo conmutado
+      por donde se cierra la corriente que CONMUTA. Cuesta inductancia,
+      pero cuánta depende de si va encimada sobre cobre quieto. Quien la
+      juzga es M4b (encimado) y M6 (el lazo), no esta distancia.
+  (b) De cada MOSFET a su borne de salida. Es el camino de la corriente
+      de CARGA, y cada pierna tiene DOS bornes, uno pegado a cada
+      MOSFET, que se juntan afuera en el transformador: la corriente de
+      carga no cruza la tarjeta. Cuesta resistencia y calor, y quien lo
+      juzga es auditoria_cobre.py midiendo el cobre real, no la línea
+      recta entre dos centros.
+  (c) El desbalance entre las dos mitades. Importa, pero tampoco se
+      juzga aquí: un pad puede estar corrido a propósito para abrirle
+      cobre al nodo, y entonces la línea recta se alarga mientras el
+      cobre se ensancha. De nuevo: lo dice el cobre, no el centro.
+
+  Esta medida existía antes con un criterio de 25 mm heredado de una
+  regla genérica que supone un solo borne por pierna y ningún encimado.
+  Aquí hay dos bornes y sí hay encimado, así que la regla no aplica y
+  marcaba fuera de meta un layout que está bien. Se quitó el veredicto.
+
+    pierna A: (a) Q1 a Q2 = 74.5 mm
+                (b) Q1 pad 3 -> J27 a 24.9 mm   (el otro, J24, a 56.2 mm)
+                (b) Q2 pad 2 -> J24 a 20.5 mm   (el otro, J27, a 52.2 mm)
+                (c) desbalance de la línea recta: 18 % (24.9 contra 20.5 mm)
+
+    pierna B: (a) Q3 a Q4 = 74.6 mm
+                (b) Q3 pad 3 -> J22 a 24.8 mm   (el otro, J23, a 56.1 mm)
+                (b) Q4 pad 2 -> J23 a 20.7 mm   (el otro, J22, a 52.3 mm)
+                (c) desbalance de la línea recta: 17 % (24.8 contra 20.7 mm)
+
+
+==========================================================================
+M2. Reparto de área de cobre por net y por capa
+==========================================================================
+Regla: el nodo conmutado se hace lo más CHICO que la corriente y el
+térmico permitan; los rieles quietos se hacen GRANDES. Si un nodo
+conmutado tiene más cobre que un riel quieto en la misma capa, el
+reparto está invertido.
+
+    NET               B.Cu      B.Mask        F.Cu   tipo
+    48V                135           0        9760   quieto
+    GND               9852           0        6972   quieto
+    GND_IN            1409           0        1408   quieto
+    VS1               3121           0        1322   CONMUTADO
+    VS2               3223           0        1317   CONMUTADO
+    (mm² de cobre real, ya descontados los huecos)
+
+  EN META    B.Cu: VS1 = 3121 mm² contra 9852 mm² del riel quieto.
+  EN META    B.Cu: VS2 = 3223 mm² contra 9852 mm² del riel quieto.
+  EN META    F.Cu: VS1 = 1322 mm² contra 9760 mm² del riel quieto.
+  EN META    F.Cu: VS2 = 1317 mm² contra 9760 mm² del riel quieto.
+
+  FUERA META B.Cu: el nodo conmutado ocupa 6344 mm² de 17740 mm² = 36 % de la cara (criterio: <= 15 %)
+  EN META    F.Cu: el nodo conmutado ocupa 2638 mm² de 20778 mm² = 13 % de la cara (criterio: <= 15 %)
+
+  FUERA META 48V tiene 9760 mm² en la otra cara pero sólo 135 mm² en B.Cu: el bus no es sándwich, es una sola cara.
+
+==========================================================================
+M3. Capacitancia al chasis del nodo conmutado
+==========================================================================
+El cobre de la cara B.Cu ve al chasis. Si ahí vive el nodo que
+brinca 48 V, esa área es un capacitor que inyecta corriente de modo común
+en el chasis cada flanco. Es la vía principal de ruido del aparato y la
+que decide qué tan difícil será la corriente de fuga (DC-015).
+
+    VS1 en B.Cu: 3121 mm²
+    VS2 en B.Cu: 3223 mm²
+    total conmutado: 6344 mm²
+    separación al chasis supuesta: 10 mm ; flanco: 50 ns (dv/dt = 0.96 V/ns)
+    C = 5.62 pF  ->  5.39 mA de pico de modo común
+  FUERA META 5.39 mA de pico (criterio: <= 1.0 mA)
+
+==========================================================================
+M4. Solapamiento del bus entre capas (sándwich 48V / GND)
+==========================================================================
+La inductancia del lazo se desploma cuando la ida y el regreso van
+encimados en capas opuestas: sus campos se cancelan. Si el 48 V vive
+en una cara y GND en la otra pero no se traslapan, no hay cancelación.
+
+    48V(F.Cu) bajo GND(B.Cu): 3776 mm² de 9760 mm²  ->  39 % encimado
+    48V(B.Cu) bajo GND(F.Cu): 0 mm² de 135 mm²  ->  0 % encimado
+  CERCA      mejor solapamiento del bus: 39 % (criterio: >= 60 %)
+
+==========================================================================
+M4b. Qué hay encima del camino de conmutación, milímetro por milímetro
+==========================================================================
+La ida y el regreso de la corriente que conmuta se cancelan sólo si van
+encimadas. Así que no sirve promediar el área del nodo: hay que recorrer
+el camino de Q-alto a Q-bajo y ver, en cada milímetro, qué hay en la
+cara de enfrente. Salen tres casos muy distintos:
+
+  ENCIMADO   48V o GND arriba. Par a 1.6 mm, los campos se cancelan.
+             Es física: mu0*h/w da de 0.067 a 0.201 nH/mm de LAZO según
+             el ancho efectivo del par (30 a 10 mm). El tramo bueno.
+  DOBLADO    el MISMO nodo conmutado arriba. No es regreso: es el mismo
+             conductor en las dos caras, o sea más gordo. Baja algo la
+             inductancia, pero NO cancela nada.
+  SUELTO     nada arriba. El regreso se va por donde pueda.
+
+    pierna A: de Q1 pad 3 a Q2 pad 2, 76.6 mm
+        0.0 a   3.0 mm ( 4.0 mm) | arriba: nada   -> SUELTO
+        4.0 a  19.9 mm (16.9 mm) | arriba: 48V    -> ENCIMADO
+       20.9 a  27.9 mm ( 8.0 mm) | arriba: nada   -> SUELTO
+       28.9 a  38.8 mm (10.9 mm) | arriba: 48V    -> ENCIMADO
+       39.8 a  39.8 mm ( 1.0 mm) | arriba: nada   -> SUELTO
+       40.8 a  50.8 mm (10.9 mm) | arriba: GND    -> ENCIMADO
+       51.8 a  51.8 mm ( 1.0 mm) | arriba: nada   -> SUELTO
+       52.8 a  76.6 mm (24.9 mm) | arriba: VS1    -> DOBLADO
+      SUMA: encimado 38.8 mm, doblado 24.9 mm, suelto 13.9 mm
+  EN META    pierna A: 51 % del camino va encimado sobre cobre quieto (criterio: >= 50 %)
+
+    pierna B: de Q3 pad 3 a Q4 pad 2, 76.8 mm
+        0.0 a   3.0 mm ( 4.0 mm) | arriba: nada   -> SUELTO
+        4.0 a  19.9 mm (17.0 mm) | arriba: 48V    -> ENCIMADO
+       20.9 a  28.9 mm ( 9.0 mm) | arriba: nada   -> SUELTO
+       29.9 a  38.9 mm (10.0 mm) | arriba: 48V    -> ENCIMADO
+       39.9 a  39.9 mm ( 1.0 mm) | arriba: nada   -> SUELTO
+       40.9 a  50.9 mm (11.0 mm) | arriba: GND    -> ENCIMADO
+       51.9 a  51.9 mm ( 1.0 mm) | arriba: nada   -> SUELTO
+       52.9 a  76.8 mm (24.9 mm) | arriba: VS2    -> DOBLADO
+      SUMA: encimado 37.9 mm, doblado 24.9 mm, suelto 15.0 mm
+  CERCA      pierna B: 49 % del camino va encimado sobre cobre quieto (criterio: >= 50 %)
+
+    Dónde se gana: los tramos DOBLADO y SUELTO son los caros. Poner
+    48V o GND en la cara opuesta justo ahí es lo que baja el lazo, y
+    no se gana ensanchando: se gana cambiando QUÉ net va encima.
+    Ojo con el tramo DOBLADO: ese cobre de la cara de enfrente está
+    llevando corriente de carga al borne, así que quitarlo tiene un
+    costo térmico. Es un canje, no un olvido.
+
+==========================================================================
+M5. Qué plano queda debajo de cada red de compuerta
+==========================================================================
+El lazo de compuerta de cada MOSFET se cierra por su propio SOURCE. El
+plano debajo de esa red debe ser el net de ese source. Si debajo hay
+OTRO nodo conmutado, ese nodo le acopla dv/dt al gate: es el camino
+clásico al encendido parásito y a la conducción cruzada.
+
+    Q1: source = VS1 ; gate = Net-(Q1-G)
+  CERCA      Q1: R1 sobre 48V en F.Cu, y su referencia es VS1.
+  CERCA      Q1: R2 sobre 48V en F.Cu, y su referencia es VS1.
+  CERCA      Q1: R3 sobre 48V en F.Cu, y su referencia es VS1.
+
+    Q2: source = GND ; gate = Net-(Q2-G)
+  EN META    Q2: R7 sobre GND en F.Cu (su propia referencia).
+  EN META    Q2: R8 sobre GND en F.Cu (su propia referencia).
+  EN META    Q2: R9 sobre GND en F.Cu (su propia referencia).
+
+    Q3: source = VS2 ; gate = Net-(Q3-G)
+  CERCA      Q3: R4 sobre 48V en F.Cu, y su referencia es VS2.
+  CERCA      Q3: R5 sobre 48V en F.Cu, y su referencia es VS2.
+  CERCA      Q3: R6 sobre 48V en F.Cu, y su referencia es VS2.
+
+    Q4: source = GND ; gate = Net-(Q4-G)
+  EN META    Q4: R10 sobre GND en F.Cu (su propia referencia).
+  EN META    Q4: R11 sobre GND en F.Cu (su propia referencia).
+  EN META    Q4: R12 sobre GND en F.Cu (su propia referencia).
+
+
+==========================================================================
+M6. Lazo de conmutación y sobretiro al apagar (estimación)
+==========================================================================
+Recorrido: 48V -> drenaje del alto -> source del alto -> drenaje del
+bajo -> source del bajo -> GND -> regreso por el desacoplo.
+
+El lazo se arma sumando tramos, y cada tramo cobra según lo que tiene
+encima, que es lo que midió M4b milímetro por milímetro. Esto NO se
+supone: antes esta medida cobraba 1.0 nH/mm en todo el camino, que es
+el valor de un conductor con el regreso lejos, y exageraba el lazo
+varias veces. Pero tampoco se puede cobrar 0.07 en todo: sólo la mitad
+del camino va encimada sobre cobre quieto.
+
+Sigue siendo BANDA y la verdad SE MIDE con sonda. Sólo se marca fuera
+de meta si ni el extremo optimista deja margen.
+
+    pierna A:
+      encimado   38.8 mm x 0.07-0.20 nH/mm =   2.6 a   7.8 nH
+      doblado    24.9 mm x 0.60-1.40 nH/mm =  14.9 a  34.9 nH
+      suelto     13.9 mm x 1.00-2.00 nH/mm =  13.9 a  27.8 nH
+      desacoplo   9.2 mm x 0.64-1.30 nH/mm =   5.9 a  12.0 nH   (C2, sándwich 39 %)
+      LAZO COMPLETO: entre 37 y 82 nH
+      flanco  50 ns -> sobretiro entre 16 y 35 V -> pico total 64 a 83 V de 100 V
+      flanco 100 ns -> sobretiro entre 8 y 17 V -> pico total 56 a 65 V de 100 V
+  EN META    pierna A: margen al límite del MOSFET entre +17 V (pesimista) y +36 V (optimista). Aguanta en los dos extremos.
+
+    pierna B:
+      encimado   37.9 mm x 0.07-0.20 nH/mm =   2.5 a   7.6 nH
+      doblado    24.9 mm x 0.60-1.40 nH/mm =  14.9 a  34.9 nH
+      suelto     15.0 mm x 1.00-2.00 nH/mm =  15.0 a  30.0 nH
+      desacoplo   7.9 mm x 0.64-1.30 nH/mm =   5.0 a  10.3 nH   (C3, sándwich 39 %)
+      LAZO COMPLETO: entre 38 y 83 nH
+      flanco  50 ns -> sobretiro entre 16 y 35 V -> pico total 64 a 83 V de 100 V
+      flanco 100 ns -> sobretiro entre 8 y 17 V -> pico total 56 a 65 V de 100 V
+  EN META    pierna B: margen al límite del MOSFET entre +17 V (pesimista) y +36 V (optimista). Aguanta en los dos extremos.
+
+
+==========================================================================
+M7. Distancia del desacoplo más cercano a cada medio puente
+==========================================================================
+El capacitor que cierra el lazo de alta frecuencia debe estar pegado al
+medio puente, no en la banda central con los electrolíticos.
+
+    pierna A: C1 (820µF 100V Rubycon ZLH) a 18.6 mm del medio puente
+    pierna A: C2 (820µF 100V Rubycon ZLH) a 9.2 mm del medio puente
+    pierna A: C3 (820µF 100V Rubycon ZLH) a 57.0 mm del medio puente
+    pierna A: C9 (1µF 250V MKP) a 35.7 mm del medio puente
+    pierna B: C2 (820µF 100V Rubycon ZLH) a 55.6 mm del medio puente
+    pierna B: C3 (820µF 100V Rubycon ZLH) a 7.9 mm del medio puente
+    pierna B: C4 (820µF 100V Rubycon ZLH) a 16.3 mm del medio puente
+
+==========================================================================
+RESUMEN
+==========================================================================
+    fuera de meta: 3    cerca: 8
+
+    Esto NO dice que la tarjeta esté mal. Una tarjeta puede ser correcta,
+    pasar DRC, pasar corriente y pasar térmica, y aun así tener margen de
+    optimización en la conmutación. Eso es lo que mide esta herramienta.
+
+    Lo que sí conviene saber: las metas fuera de rango son estructurales.
+    No se alcanzan ensanchando pistas. Casi siempre dependen de dónde
+    están puestas las piezas, así que se ganan moviendo, no ruteando.
+
+[guardado] auditoria/resultados/conmutacion_revC.json
