@@ -10,5 +10,6 @@ Cada diagrama se genera con su script de Python (schemdraw), así se puede corre
 | [esquematico_modulo_sensor_dc_u4.png](esquematico_modulo_sensor_dc_u4.png) | [sensor_mod.py](sensor_mod.py) | DC-016, módulo sensor V0.2 |
 | [esquematico_transferencia_v1_dc019.png](esquematico_transferencia_v1_dc019.png) | [esquematico_transferencia_v1_dc019.py](esquematico_transferencia_v1_dc019.py) | DC-019 (transferencia, SW_TN, filtro C_F) |
 | [referencia_outback_fx.png](referencia_outback_fx.png) | [referencia_outback_fx.py](referencia_outback_fx.py) | [referencia_outback_fx.md](../referencia_outback_fx.md) |
+| [acondicionamiento_ac_dc032.png](acondicionamiento_ac_dc032.png) | [acondicionamiento_ac_dc032.py](acondicionamiento_ac_dc032.py) | DC-032 (canal de CA: por qué el filtro va después del nodo) |
 
 `outback_fx/`: fotos de banco del OutBack FX (evidencia del estudio de referencia).
