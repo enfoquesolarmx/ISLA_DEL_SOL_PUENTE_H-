@@ -83,14 +83,14 @@ La tarjeta de control lleva **dos microcontroladores** (módulos Arduino Nano co
 | **D3** | `LB_IN` | **LB:** pierna B, lado bajo (60/50 Hz) → 74HC08 | Salida | **BAJO** | ISR del Timer1 | [12](#12-corte-del-pwm-por-hardware) |
 | **D4** | `INV_D4` | **INV_CMD:** la casa pasa al inversor (K4 + K2), vía R39 | Salida | **BAJO** (casa en la red) | Lógica de transferencia | [15](#15-órdenes-a-la-tarjeta-de-transferencia-j15), [16](#16-caída-automática-a-la-red) |
 | **D5** | `CARG_CMD` | **CARG_CMD:** el transformador se conecta a la red para cargar (K1 + K3) | Salida | **BAJO** | Lógica de transferencia | [15](#15-órdenes-a-la-tarjeta-de-transferencia-j15) |
-| **D6** | `TN_CMD` | **TN_CMD:** unión N–PE (K5), solo en INVERSOR CASA | Salida | **BAJO** | Lógica de transferencia | [15](#15-órdenes-a-la-tarjeta-de-transferencia-j15) |
-| D7 | — | **Libre.** Reservado para medir la carga de las interrupciones (DC-017) | Salida | BAJO | Pruebas | — |
+| **D6** | `AC_FB_GRID_A6` | **AIN0:** entrada **+** del comparador — el nodo del divisor AC de red, tomado en C7 | **Solo analógica** (buffer digital apagado con `DIDR1`) | — | Comparador | DC-023 |
+| **D7** | `NEUTRO-GRID` | **AIN1:** entrada **−** del comparador — el bias del canal de red | **Solo analógica** (buffer digital apagado con `DIDR1`) | — | Comparador | DC-023 |
 | **D8** | `CRIT_D8_EN_SENSE` | **EN_SENSE:** lee si EN_HW está en alto (alguien quitó el permiso) | **Entrada** (nunca salida: R38) | Entrada, sin pull-up | — | [12](#12-corte-del-pwm-por-hardware) |
 | **D9** | `HA_IN` | **HA:** pierna A, lado alto (24 kHz) → 74HC08 | Salida | **BAJO** | **Timer1** (OC1A) | [12](#12-corte-del-pwm-por-hardware) |
 | **D10** | `LA_IN` | **LA:** pierna A, lado bajo (24 kHz) → 74HC08 | Salida | **BAJO** | **Timer1** (OC1B) | [12](#12-corte-del-pwm-por-hardware) |
 | **D11** | `HB_IN` | **HB:** pierna B, lado alto (60/50 Hz) → 74HC08 | Salida | **BAJO** | ISR del Timer1 | [12](#12-corte-del-pwm-por-hardware) |
 | **D12** | `D12_ON_OF` | **EN_HW:** permiso del puente, vía R25 y el interruptor J4 | Salida | **BAJO** (puente bloqueado) | Arranque / protecciones | [12](#12-corte-del-pwm-por-hardware) |
-| D13 | — | Libre (LED del Nano) | Salida | BAJO | — | — |
+| **D13** | `TN_CMD` | **TN_CMD:** unión N–PE (K5), solo en INVERSOR CASA. **Se mudó de D6** para liberar AIN0 (DC-023). El LED del Nano queda como indicador de la unión | Salida | **BAJO** | Lógica de transferencia | [15](#15-órdenes-a-la-tarjeta-de-transferencia-j15), DC-023 |
 | **A0** | `AC_FB_A0` | Voltaje AC de **salida del inversor** (lazo de amplitud) | Analógica | — | ADC | [8](#8-sensado-ac-del-inversor-y-de-la-red) |
 | **A1** | `TEMP_A1` | **NTC** del disipador; ~5 V = sensor ausente → no arrancar | Analógica | — | ADC | [11](#11-temperatura-ntc-10-k) |
 | **A2** | `I_AC` | Corriente AC, pinza **SCT-013-015** | Analógica | — | ADC | [9](#9-corriente-ac-con-pinza-sct-013-015) |
@@ -100,6 +100,12 @@ La tarjeta de control lleva **dos microcontroladores** (módulos Arduino Nano co
 | **A7** | `A7` | **P9:** tiempo muerto que pide cada gate driver (R12, R13, R14) | **Solo analógica** | — | ADC | [13](#13-lectura-de-p9-tiempo-muerto) |
 
 **Timers del CRÍTICO:** Timer1 = SPWM (completo, con su interrupción). Timer0 = `millis()` de Arduino: no se reconfigura. Timer2 = libre.
+
+**Comparador analógico del CRÍTICO (DC-023).** `AIN0` = D6 y `AIN1` = D7 están **cableados en silicio** y no se pueden mover: por eso `TN_CMD` se mudó a D13. Detecta el cruce por cero del **canal de la red**; el canal del inversor no lo necesita, porque su periodo son un número entero de periodos de portadora por construcción y el firmware ya sabe dónde cruza.
+
+> ⚠️ **Ya no quedan pines digitales libres en el CRÍTICO, y eso se lleva el pin de traza de B5.** D7 estaba reservado para medir la duración de las ISR con el analizador lógico ([DC-017](../../docs/decisiones_criticas.md#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809)). Se propuso usar **D13**, aprovechando que en banco `INV_CMD` está bajo y Q2 bloquea el relé — **y el ruteo lo descartó.** `AC_FB_GRID_A6` acabó corriendo **44 mm paralelo a `TN_CMD` con 0.27 mm de separación**, así que conmutar D13 a 24 kHz serían 48 000 flancos por segundo junto a la entrada del comparador: lo dejaría inservible durante justo la medición que se busca.
+>
+> **La salida es medir las ISR en un Nano de protoboard** con el mismo firmware, sin tocar la tarjeta buena. No cuesta pines y además deja instrumentar con libertad.
 
 #### AUX (A2): comunicación, interfaz y vigilancia
 
@@ -365,7 +371,7 @@ Dos canales iguales:
 | 2, 4, 6, 8 | GND | — | Cada señal viaja entre dos tierras |
 | 3 | **INV_CMD** | **D4 del CRÍTICO** → R39 (1 kΩ) | K4 + K2: la casa pasa al inversor |
 | 5 | **CARG_CMD** | **D5 del CRÍTICO** | K1 + K3: el transformador se conecta a la red para cargar |
-| 7 | **TN_CMD** | **D6 del CRÍTICO** | K5: unión N–PE, solo en modo INVERSOR CASA y solo si INV está activo (Q2 de la tarjeta de transferencia) |
+| 7 | **TN_CMD** | **D13 del CRÍTICO** (se mudó de D6, DC-023) | K5: unión N–PE, solo en modo INVERSOR CASA y solo si INV está activo (Q2 de la tarjeta de transferencia) |
 
 - Los pull-downs, el candado Q1 (el inversor bloquea al cargador) y Q2 (la unión N–PE solo con inversor) están **en la tarjeta de transferencia**. Sin 15 V, con el cable suelto o con el CRÍTICO en reset, **la casa queda en la red**.
 - La transferencia sale del CRÍTICO porque es el que **decide el instante** de la sincronía con la red.
@@ -480,7 +486,7 @@ Dos canales iguales:
 - **Placa:** 91 × 170 mm, 2 capas, 4 barrenos M2.5. **Versión V0.1** (serigrafía: "VER 0.1.J.G NOV 2026").
 - **Conectores en las orillas:** sensores a la izquierda, SPWM A/B a la derecha, y relés, ventilador y gate drivers abajo.
 - **Zonas de GND en las dos caras**, unidas por los pines THT.
-- **Verificado con script:** el esquemático y el PCB coinciden pin por pin, todas las redes están completas y no hay pistas ni pads a menos de 0.2 mm de otra red. **DRC: 0 errores** (solo el aviso de serigrafía en los barrenos de J12, que viene de la huella de la biblioteca).
+- **Verificado con script:** el esquemático y el PCB coinciden pin por pin, todas las redes están completas y no hay pistas ni pads a menos de 0.2 mm de otra red. **DRC: 0 errores, 0 redes sin conectar, 0 pistas sin rutear.** Quedan 55 avisos (relleno de zona aislado y desajustes de huella contra la biblioteca) y 10 exclusiones de serigrafía en **J30**, que son los solapamientos del jack del CT: cosméticas, no afectan fabricación.
 
 ![Cara inferior 3D](img/vista_3d_inferior.png)
 
@@ -492,6 +498,8 @@ Dos canales iguales:
 | --- | --- | --- |
 | ![F.Cu](img/layout_fcu.png) | ![B.Cu](img/layout_bcu.png) | ![Serigrafía](img/layout_serigrafia.png) |
 
+*Caras actuales, ya con el ruteo de **DC-023**: TN_CMD movido a **D13**, **D6/D7 libres como AIN0/AIN1** del comparador, y **AC_FB_GRID_A6** conectado directo al nodo del divisor con la pista corta. La serigrafía sigue diciendo "VER 0.1.J.G NOV 2026".*
+
 ---
 
 ## Pendientes de esta tarjeta
@@ -501,7 +509,7 @@ Dos canales iguales:
 - [ ] Prueba de banco de la caída automática con AUX_KILL (módulo 16).
 - [ ] Firmware: tratar el NTC desconectado como "sensor ausente" (módulo 11).
 - [ ] Render 3D en perspectiva (opcional).
-- [x] DC-019 actualizado: asignación real de J15 (D4 / D5 / D6 del CRÍTICO) y caída automática con R39 + D11.
+- [x] DC-019 actualizado: asignación real de J15 (D4 / D5 / **D13** del CRÍTICO — `TN_CMD` se mudó de D6 a D13 en DC-023) y caída automática con R39 + D11.
 
 ## Referencias
 
