@@ -29,7 +29,24 @@
 
 // ============================== ESTADO =======================================
 
-static volatile uint16_t cruces, rechazados, huecos;
+static volatile uint16_t cruces, rechazados, huecos, rechDir;
+static volatile uint8_t  acoUlt;          // ACO del último cruce aceptado
+
+/*  Histograma de a qué distancia del cruce aceptado llegan los flancos
+ *  rechazados. Es la pregunta que decide el arreglo, y se contesta desde
+ *  adentro — sin analizador y sin ventana ciega.
+ *
+ *      si caen en los primeros ~50 µs  → REPIQUE del cruce: el comparador
+ *          alterna porque no tiene histéresis y la pendiente es de
+ *          0.6 mV/µs. Se arregla con histéresis (por software o por un pin).
+ *      si caen a cientos de µs o a ms  → RECRUCE por armónicos: la red está
+ *          achatada cerca del cero y de verdad cruza el umbral más de una
+ *          vez. Ningún filtro lo quita; se arregla con el blanqueo, que ya
+ *          está, y la pregunta pasa a ser si el blanqueo es suficiente.
+ */
+#define CMP_CAJONES  7
+static const uint16_t CMP_TOPE[CMP_CAJONES] = { 20, 50, 100, 200, 500, 1000, 2000 };
+static volatile uint16_t cmp_histo[CMP_CAJONES];
 static volatile uint16_t semiperiodo;
 static volatile uint32_t tUltimo;        // µs del último cruce aceptado
 static volatile uint32_t tPrimero;       // µs del primero de esta ventana
@@ -50,16 +67,41 @@ ISR(ANALOG_COMP_vect)
 
   const uint32_t t  = micros();
   const uint32_t dt = t - tUltimo;
+  const uint8_t  aco = (uint8_t)((ACSR & _BV(ACO)) ? 1 : 0);
 
   /*  Repique del cruce: llegó demasiado pronto para ser real. Se cuenta y se
    *  descarta, pero NO se apaga la interrupción — un cruce bueno que cayera
    *  en la ventana ciega se perdería sin dejar rastro.
+   *
+   *  Y se anota EN QUÉ CAJÓN cayó, que es lo que dice qué clase de ruido es.
    */
   if (dt < CMP_BLANQUEO_US) {
     rechazados++;
+    for (uint8_t k = 0; k < CMP_CAJONES; k++) {
+      if (dt <= CMP_TOPE[k]) { cmp_histo[k]++; break; }
+    }
     CMP_TRAZA_SALE();
     return;
   }
+
+  /*  LA HISTÉRESIS QUE EL HARDWARE NO DA.
+   *
+   *  El comparador del AVR no tiene histéresis y su salida no sale a ningún
+   *  pin, así que no se puede realimentar. Pero sí se puede leer `ACO`: en un
+   *  cruce de verdad la salida queda del lado contrario al del cruce
+   *  anterior. Un flanco que llega con el MISMO lado que el anterior no es un
+   *  cruce nuevo — es repique que alcanzó a ir y volver.
+   *
+   *  Cuesta cuatro ciclos y no puede equivocarse en contra: si el repique es
+   *  más rápido que la entrada a la ISR (~3 µs), `ACO` ya volvió y el flanco
+   *  se descarta, que es lo que queremos.
+   */
+  if (cruces != 0 && aco == acoUlt) {
+    rechDir++;
+    CMP_TRAZA_SALE();
+    return;
+  }
+  acoUlt = aco;
 
   if (dt > CMP_HUECO_US) huecos++;   // se acepta igual, pero queda anotado
 
@@ -119,6 +161,20 @@ void cmp_detener(void)
 }
 
 uint16_t cmp_cruces(void)      { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = cruces; }      return v; }
+uint16_t cmp_rech_direccion(void) { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = rechDir; } return v; }
+
+uint16_t cmp_histograma(uint8_t k)
+{
+  if (k >= CMP_CAJONES) return 0;
+  uint16_t v;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = cmp_histo[k]; }
+  return v;
+}
+
+uint16_t cmp_histograma_tope(uint8_t k)
+{
+  return (k < CMP_CAJONES) ? CMP_TOPE[k] : 0;
+}
 uint16_t cmp_rechazados(void)  { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = rechazados; }  return v; }
 uint16_t cmp_huecos(void)      { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = huecos; }      return v; }
 uint16_t cmp_semiperiodo_us(void) { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = semiperiodo; } return v; }
@@ -158,8 +214,9 @@ uint32_t cmp_frecuencia_mhz(void)
 void cmp_reiniciar(void)
 {
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-    cruces = rechazados = huecos = 0;
+    cruces = rechazados = huecos = rechDir = 0;
     crucesVentana = 0;
     semiperiodo = 0;
+    for (uint8_t k = 0; k < CMP_CAJONES; k++) cmp_histo[k] = 0;
   }
 }

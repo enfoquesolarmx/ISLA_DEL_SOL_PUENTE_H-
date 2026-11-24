@@ -14,6 +14,9 @@ volatile uint8_t  rms_vivo[2];
 volatile uint8_t  rms_lista[2];
 volatile uint16_t rms_desbordes;
 
+// La ventana anterior de cada canal, para formar el par de un ciclo completo.
+static RmsAcum rms_prev[2];
+
 void rms_cerrar_red(void)
 {
   // Se llama desde la ISR del comparador: las interrupciones ya están
@@ -36,6 +39,9 @@ void rms_reiniciar(void)
     }
     rms_vivo[0] = rms_vivo[1] = 0;
     rms_lista[0] = rms_lista[1] = 0;
+    for (uint8_t i = 0; i < 2; i++) {
+      rms_prev[i].sumaCuad = 0; rms_prev[i].suma = 0; rms_prev[i].n = 0;
+    }
     rms_desbordes = 0;
   }
 }
@@ -99,31 +105,69 @@ bool rms_recoger(uint8_t i, uint16_t *rmsCuentas, uint16_t *cd, uint8_t *n)
 
   if (cuantas < 4) return false;   // ventana vacía o demasiado corta
 
-  /*  RMS² = ⟨x²⟩ − ⟨x⟩², y de paso ⟨x⟩ es el CD de la ventana.
+  /*  ⚠️ AQUÍ ESTABA EL ERROR QUE EL BANCO DESTAPÓ EL 24 DE NOVIEMBRE
    *
-   *  ⚠️ NO se calcula así de directo, y la razón es numérica. Dividiendo
-   *  primero, `⟨x⟩ = Σx / n` se trunca hasta en una cuenta, y al elevarla al
-   *  cuadrado ese error se multiplica por 2⟨x⟩ ≈ 1 022. Contra una varianza de
-   *  ~122 500 (un RMS de 350 cuentas) son 0.83 % en la varianza y **0.4 % en
-   *  el RMS**: medio volt a 127 V. El criterio de la etapa 4 es ±0.3 V, así
-   *  que ese atajo no pasa la prueba.
+   *  La versión anterior calculaba `RMS² = ⟨x²⟩ − ⟨x⟩²` sobre **una** ventana
+   *  de medio ciclo. Eso no le quita el bias: le quita **la media rectificada
+   *  del semiciclo**, que no es lo mismo. Para medio seno de amplitud A:
    *
-   *  La forma escalada no divide hasta el final y es exacta:
+   *      media del semiciclo        = bias + 0.6366·A      ← no es el bias
+   *      RMS sobre su propia media  = 0.3078·A
+   *      RMS verdadero de CA        = 0.7071·A      → **2.30 veces más**
    *
-   *      varianza = (n·Σx² − (Σx)²) / n²
+   *  Y el banco lo confirmó sin que nadie lo buscara: el `CD` reportado
+   *  alternaba 277 y 744 cuentas, simétrico alrededor de 510.5 — el bias
+   *  exacto. De ahí sale A = 366.8 cuentas, el código reportaba 109.7 y la
+   *  predicción de la fórmula mala era 112.9. Cuadraba con el error, no con
+   *  la realidad.
    *
-   *  El numerador se hace en 64 bits: con 60 muestras, n·Σx² llega a 3.8e9 y
-   *  en 32 bits quedaría a un pelo del tope (4.29e9). Corre 120 veces por
-   *  segundo en el lazo, no en una ISR, así que el costo da igual.
+   *  EL ARREGLO: SUMAR DOS VENTANAS CONSECUTIVAS = UN CICLO COMPLETO.
+   *
+   *  Sobre un ciclo entero el término rectificado se cancela, así que ⟨x⟩ SÍ
+   *  es el bias y la fórmula vuelve a ser correcta. Y de paso arregla la
+   *  dispersión: el canal de la red recibe 12.50 muestras por semiciclo
+   *  —nunca entero, alterna 12 y 13— pero **12 + 13 = 25 = un ciclo exacto**.
+   *  En el inversor, 25 + 25 = 50.
+   *
+   *  La latencia no se pierde: el par es deslizante, así que sigue habiendo
+   *  un valor nuevo cada medio ciclo (8.3 ms), que es lo que DC-023 pedía.
    */
-  const uint64_t numerador = (uint64_t)cuantas * sc - (uint64_t)s * s;
-  const uint32_t n2        = (uint32_t)cuantas * cuantas;
+  const uint8_t  nPrev = rms_prev[i].n;      // ⚠️ leer ANTES de sobreescribir
+  const uint32_t scTot = sc + rms_prev[i].sumaCuad;
+  const uint32_t sTot  = (uint32_t)s + rms_prev[i].suma;
+  const uint16_t nTot  = (uint16_t)cuantas + nPrev;
+
+  rms_prev[i].sumaCuad = sc;        // esta ventana es la "anterior" de la próxima
+  rms_prev[i].suma     = s;
+  rms_prev[i].n        = cuantas;
+
+  // En la primerísima ventana no hay par todavía: se guarda y se espera.
+  if (nPrev == 0) return false;
+
+  /*  La forma escalada, por la razón numérica de siempre: dividir primero
+   *  trunca ⟨x⟩ hasta en una cuenta y el error se multiplica por 2⟨x⟩ ≈ 1 022,
+   *  lo que son 0.4 % en el RMS = medio volt a 127 V, con un criterio de
+   *  ±0.3 V.
+   *
+   *      varianza = (N·Σx² − (Σx)²) / N²
+   *
+   *  En 64 bits: con 50 muestras, N·Σx² llega a 2.6e9 y (Σx)² a 2.6e9. Las
+   *  dos cabrían en 32 bits por los pelos; en 64 no hay que pensarlo. Corre
+   *  120 veces por segundo en el lazo, no en una ISR.
+   */
+  const uint64_t numerador = (uint64_t)nTot * scTot - (uint64_t)sTot * sTot;
+  const uint32_t n2        = (uint32_t)nTot * nTot;
   const uint32_t varianza  = (uint32_t)(numerador / n2);
 
-  const uint16_t media = (uint16_t)(s / cuantas);    // ⟨x⟩ = el CD, diagnóstico
+  /*  Ahora sí: sobre un ciclo completo, ⟨x⟩ es el bias. Debe rondar 511 y
+   *  —esto es lo nuevo— **debe quedarse quieto**. Si se mueve reporte a
+   *  reporte, el par no está cubriendo un ciclo entero y hay que ir a ver por
+   *  qué.
+   */
+  const uint16_t media = (uint16_t)(sTot / nTot);
 
   if (rmsCuentas) *rmsCuentas = rms_isqrt32(varianza);
   if (cd)         *cd = media;
-  if (n)          *n  = cuantas;
+  if (n)          *n  = (uint8_t)nTot;
   return true;
 }

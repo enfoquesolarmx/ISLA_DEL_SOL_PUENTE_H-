@@ -82,6 +82,16 @@ void cmp_detener(void);
 uint16_t cmp_cruces(void);        // aceptados: deben ser 120/s a 60 Hz
 uint16_t cmp_rechazados(void);    // llegaron dentro de la ventana ciega
 uint16_t cmp_huecos(void);        // tardaron más de CMP_HUECO_US
+uint16_t cmp_rech_direccion(void);// mismo lado que el anterior: repique ida y vuelta
+
+/*  Histograma de la distancia al cruce de los flancos rechazados. Contesta
+ *  qué clase de ruido es, desde adentro del micro:
+ *      concentrado abajo de ~50 µs  → repique del cruce (falta histéresis)
+ *      repartido en cientos de µs   → recruce por armónicos de la red
+ */
+#define CMP_CAJONES_N  7
+uint16_t cmp_histograma(uint8_t k);
+uint16_t cmp_histograma_tope(uint8_t k);
 uint16_t cmp_semiperiodo_us(void);// el último aceptado
 bool     cmp_red_presente(void);
 

@@ -591,8 +591,12 @@ void loop()
   {
     uint16_t r, cd;
     uint8_t  n;
-    if (rms_recoger(RMS_INV, &r, &cd, &n)) est_mete(est[RMS_INV], r, cd, n);
-    if (rms_recoger(RMS_RED, &r, &cd, &n)) est_mete(est[RMS_RED], r, cd, n);
+    /*  La bandera se lee en línea; `rms_recoger` cuesta ~368 ciclos y en la
+     *  etapa 4 lo llamaba dos veces por vuelta sin preguntar. Eso bajó el lazo
+     *  de 22 016 a 10 240 vueltas/s.
+     */
+    if (rms_hay(RMS_INV) && rms_recoger(RMS_INV, &r, &cd, &n)) est_mete(est[RMS_INV], r, cd, n);
+    if (rms_hay(RMS_RED) && rms_recoger(RMS_RED, &r, &cd, &n)) est_mete(est[RMS_RED], r, cd, n);
   }
 
   /*  SECCIÓN CRÍTICA MÍNIMA — ésta es la diferencia de la v5.
@@ -869,13 +873,41 @@ void loop()
     Serial.print(cmp_semiperiodo_us());
     Serial.print(F("us"));
 
-    // Criterio (a): 120 cruces por segundo exactos, y (b) rechazados en 0.
-    const uint16_t crucesEsperados = (uint16_t)(120 * SEGUNDOS_POR_REPORTE);
-    if (cmp_red_presente() && (cruces < crucesEsperados - 1 || cruces > crucesEsperados + 1))
-      Serial.print(F("   <<< CRUCES FUERA DE 120/s"));
-    if (rech) Serial.print(F("   <<< CRUCE CON RUIDO: revisar antes de cerrar el lazo"));
+    /*  Criterio (a): dos cruces por ciclo de línea.
+     *
+     *  ⚠️ Corregido el 24-nov. Antes comparaba contra `120 × segundos`, y el
+     *  reporte NO dura un segundo: su base de tiempo son los desbordes del
+     *  SPWM y varió entre 23 193 y 24 937 — ±2 %. `cruces` seguía esa
+     *  variación al pie de la letra (114 en un reporte corto, 121 en uno
+     *  largo) y mi aviso daba falsa alarma. Lo correcto es
+     *
+     *      esperados = ISR × 120.12 / 24024 = ISR / 200
+     */
+    const uint16_t crucesEsperados = (uint16_t)(corrieron / 200UL);
+    const int16_t  faltan = (int16_t)crucesEsperados - (int16_t)cruces;
+    Serial.print(F(" esp="));
+    Serial.print(crucesEsperados);
+    if (cmp_red_presente() && (faltan > 3 || faltan < -3))
+      Serial.print(F("   <<< CRUCES FUERA DE CUENTA"));
 
     Serial.println();
+
+    /*  LA PREGUNTA QUE DECIDE EL ARREGLO: a qué distancia del cruce llegan los
+     *  flancos rechazados. Concentrados abajo de 50 µs = repique por falta de
+     *  histéresis. Repartidos en cientos de µs = recruce por armónicos.
+     */
+    if (rech || cmp_rech_direccion()) {
+      Serial.print(F("   rechazos por distancia al cruce (us):"));
+      for (uint8_t k = 0; k < CMP_CAJONES_N; k++) {
+        Serial.print(F("  <="));
+        Serial.print(cmp_histograma_tope(k));
+        Serial.print('=');
+        Serial.print(cmp_histograma(k));
+      }
+      Serial.print(F("   por direccion="));
+      Serial.println(cmp_rech_direccion());
+    }
+
     cmp_reiniciar();
   }
 

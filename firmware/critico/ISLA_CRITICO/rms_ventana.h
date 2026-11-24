@@ -179,6 +179,23 @@ void rms_preparar(void);
  *    cd         — el promedio de la ventana: debe rondar 511
  *    n          — cuántas muestras tenía (25 en el inversor; ~25 en la red)
  */
+/*  ⚠️ Hay una ventana cerrada sin recoger? Leer la bandera EN LÍNEA antes de
+ *  llamar a `rms_recoger()`, que cuesta ~368 ciclos contados en el binario.
+ *
+ *  En la etapa 4 el lazo lo llamaba dos veces por vuelta sin preguntar, y la
+ *  tasa del lazo cayó de 22 016 a 10 240 vueltas por segundo. Las ventanas
+ *  cierran 240 veces por segundo y el lazo gira 20 000: preguntar primero
+ *  ahorra el 98.8 % de las llamadas.
+ */
+static inline bool rms_hay(uint8_t i) { return rms_lista[i] != 0; }
+
+/*  Recoge el RMS de UN CICLO COMPLETO, formado con las dos últimas ventanas de
+ *  medio ciclo. Devuelve false si todavía no hay par.
+ *
+ *    rmsCuentas — RMS verdadero de CA, en cuentas del ADC
+ *    cd         — el bias: debe rondar 511 **y quedarse quieto**
+ *    n          — muestras del par: 25 en la red, 50 en el inversor
+ */
 bool rms_recoger(uint8_t i, uint16_t *rmsCuentas, uint16_t *cd, uint8_t *n);
 
 uint16_t rms_desbordes_red(void);
