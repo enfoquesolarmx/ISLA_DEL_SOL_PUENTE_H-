@@ -307,7 +307,33 @@
  *  Ejemplo: 127.0 V con 352 cuentas → 127000 × 100 / 352 = 36079.
  *  Es una calibración de un punto: vale para la zona donde se tomó.
  */
-#define MV_POR_CUENTA_X100_RED  0
+/*  ⚠️ CONSTANTE DE BANCO, NO DE PRODUCCIÓN — calibrada el 24-nov-2026 con:
+ *
+ *      primario    120.1 V        (Hantek 2C42)
+ *      secundario   14.23 V       razón 8.443, contra 8.3986 medida en A6
+ *      RMS medido  226.8 cuentas  con el RC de 1 kΩ + 100 nF en D6 puesto
+ *      AVCC          4.76 V       medido en el protoboard
+ *
+ *      120100 × 100 / 226.8 = 52954
+ *
+ *  ⚠️⚠️ ESTA CONSTANTE SE LLEVA AVCC ADENTRO. El ADC mide la razón entre la
+ *  entrada y su referencia, y la referencia es AVCC. Cuando la tarjeta de
+ *  control entregue 5.00 V del regulador en vez de los 4.76 del USB:
+ *
+ *      las cuentas escalan como 1/AVCC   → 226.8 × 4.76/5.00 = 215.9
+ *      y esto reportaría                 → 114.3 V en vez de 120.1
+ *      error                             → −5.8 V = −4.8 %, 19× el criterio
+ *
+ *  Se recalibra con la tarjeta en físico. Y la solución de fondo —medir el
+ *  bandgap de 1.1 V con AVCC como referencia para que el firmware sepa cuánto
+ *  vale AVCC— va como revisión de DC-006 y DC-025, con su propia corrida.
+ */
+#define MV_POR_CUENTA_X100_RED  52954
+
+/*  El inversor no se puede calibrar todavía: sin etapa de potencia, A0 está
+ *  al aire. Y ojo con lo que lee mientras tanto — ver la nota de la etapa 4
+ *  sobre el canal que lee a su vecino.
+ */
 #define MV_POR_CUENTA_X100_INV  0
 
 /*  Frecuencia de línea esperada, en milihertz, para el aviso de desvío.
@@ -908,6 +934,39 @@ void loop()
       Serial.println(cmp_rech_direccion());
     }
 
+    /*  EL JITTER DEL CRUCE ACEPTADO — el criterio que de verdad importa, en
+     *  vez de pedir `rech = 0` a un comparador que no tiene histéresis.
+     */
+    {
+      uint16_t jmin, jprom, jmax, jsig;
+      if (cmp_jitter(&jmin, &jprom, &jmax, &jsig)) {
+        Serial.print(F("   semiperiodo "));
+        Serial.print(jmin); Serial.print('/');
+        Serial.print(jprom); Serial.print('/');
+        Serial.print(jmax);
+        Serial.print(F("us  sigma="));
+        Serial.print(jsig);
+        Serial.print(F("us"));
+
+        /*  σ del cruce = σ del semiperiodo / √2, porque el semiperiodo es la
+         *  diferencia de dos cruces independientes. Y a grados: un ciclo de
+         *  60 Hz son 16 667 µs = 360°, o sea 46.3 µs por grado.
+         *
+         *  Se hace en enteros: ×1000/√2 = ×707, y ×360/16667 = ×1000/46297.
+         */
+        const uint32_t sigCruceMil = ((uint32_t)jsig * 707UL);          // µs ×1000
+        const uint32_t gradoMil    = sigCruceMil / 46UL;                // milésimas de grado
+        Serial.print(F("  -> jitter del cruce "));
+        Serial.print(gradoMil / 1000);
+        Serial.print('.');
+        Serial.print((gradoMil % 1000) / 100);
+        Serial.print((gradoMil % 100) / 10);
+        Serial.print(F(" grados (criterio: < 2.0)"));
+        if (gradoMil > 2000) Serial.print(F("   <<< JITTER ALTO"));
+        Serial.println();
+      }
+    }
+
     cmp_reiniciar();
   }
 
@@ -927,6 +986,9 @@ void loop()
       Serial.print(est[RMS_RED].nUlt);
       Serial.print(F(" vent="));
       Serial.print(est[RMS_RED].vent);
+      // El par de la red son 12 + 13 = 25 muestras = un ciclo exacto.
+      if (est[RMS_RED].nUlt < 24 || est[RMS_RED].nUlt > 26)
+        Serial.print(F("   <<< PAR DE LA RED INCOMPLETO"));
     } else {
       Serial.print(F("sin ventanas"));
     }
@@ -941,9 +1003,12 @@ void loop()
       Serial.print(est[RMS_INV].nUlt);
       Serial.print(F(" vent="));
       Serial.print(est[RMS_INV].vent);
-      // El inversor debe dar 25 muestras por ventana, exacto por construcción.
-      if (est[RMS_INV].nUlt != RMS_MUESTRAS_INV)
-        Serial.print(F("   <<< VENTANA DESALINEADA"));
+      /*  ⚠️ Corregido el 24-nov: comparaba contra 25 cuando el RMS pasó a
+       *  trabajar por PARES, así que el par del inversor trae 50 y el de la
+       *  red 25. Daba falsa alarma en todos los reportes.
+       */
+      if (est[RMS_INV].nUlt != 2 * RMS_MUESTRAS_INV)
+        Serial.print(F("   <<< PAR DEL INVERSOR INCOMPLETO"));
     } else {
       Serial.print(F("sin ventanas"));
     }

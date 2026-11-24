@@ -30,6 +30,28 @@
 // ============================== ESTADO =======================================
 
 static volatile uint16_t cruces, rechazados, huecos, rechDir;
+
+/*  ESTADÍSTICA DEL SEMIPERIODO — la medición que sustenta el criterio nuevo.
+ *
+ *  Pedir `rechazados = 0` con un comparador sin histéresis es pedir lo
+ *  imposible: la pendiente en el cruce es de 0.6 mV/µs, así que unos
+ *  milivolts de ruido alternan la salida. Lo que de verdad le importa al PLL
+ *  no es cuántos flancos se descartaron, sino **cuánto se mueve el cruce que
+ *  sí se acepta**.
+ *
+ *  Se acumula la desviación contra un ancla de 8 192 µs (una potencia de dos,
+ *  para que la resta no cueste) y de ahí sale σ sin manejar números grandes:
+ *  la desviación anda en ±300, su cuadrado en 9e4, y 120 de ellos caben de
+ *  sobra en 32 bits.
+ *
+ *  ⚠️ σ del SEMIPERIODO no es σ del cruce: un semiperiodo es la diferencia de
+ *  dos cruces, cada uno con su propio jitter, así que σ_cruce = σ_semi / √2.
+ *  El sketch hace esa conversión al reportar.
+ */
+#define CMP_ANCLA_US   8192
+static volatile uint16_t semiN, semiMin, semiMax;
+static volatile int32_t  semiSumaDev;
+static volatile uint32_t semiSumaDev2;
 static volatile uint8_t  acoUlt;          // ACO del último cruce aceptado
 
 /*  Histograma de a qué distancia del cruce aceptado llegan los flancos
@@ -109,6 +131,19 @@ ISR(ANALOG_COMP_vect)
   semiperiodo = (uint16_t)dt;        // < 65 ms, cabe de sobra
   cruces++;
 
+  /*  El jitter. Sólo entran los semiperiodos plausibles: el primero de todos
+   *  y los que vienen después de un hueco no son medidas de jitter, son
+   *  medidas de que faltó un cruce.
+   */
+  if (cruces > 1 && dt < CMP_HUECO_US) {
+    const int16_t dev = (int16_t)((int32_t)dt - CMP_ANCLA_US);
+    semiSumaDev  += dev;
+    semiSumaDev2 += (uint32_t)((int32_t)dev * dev);
+    if (semiN == 0 || (uint16_t)dt < semiMin) semiMin = (uint16_t)dt;
+    if (semiN == 0 || (uint16_t)dt > semiMax) semiMax = (uint16_t)dt;
+    semiN++;
+  }
+
   if (crucesVentana == 0) tPrimero = t;
   crucesVentana++;
 
@@ -162,6 +197,31 @@ void cmp_detener(void)
 
 uint16_t cmp_cruces(void)      { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = cruces; }      return v; }
 uint16_t cmp_rech_direccion(void) { uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = rechDir; } return v; }
+
+bool cmp_jitter(uint16_t *minUs, uint16_t *promUs, uint16_t *maxUs, uint16_t *sigmaUs)
+{
+  uint16_t n, mn, mx;
+  int32_t  sd;
+  uint32_t sd2;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    n = semiN; mn = semiMin; mx = semiMax; sd = semiSumaDev; sd2 = semiSumaDev2;
+  }
+  if (n < 8) return false;
+
+  const int32_t promDev = sd / (int32_t)n;
+
+  /*  σ² = ⟨d²⟩ − ⟨d⟩², en la forma escalada de siempre para no truncar antes
+   *  de tiempo: (n·Σd² − (Σd)²) / n².
+   */
+  const uint64_t num = (uint64_t)n * sd2 - (uint64_t)((int64_t)sd * sd);
+  const uint32_t var = (uint32_t)(num / ((uint32_t)n * n));
+
+  if (minUs)   *minUs   = mn;
+  if (maxUs)   *maxUs   = mx;
+  if (promUs)  *promUs  = (uint16_t)(CMP_ANCLA_US + promDev);
+  if (sigmaUs) *sigmaUs = rms_isqrt32(var);
+  return true;
+}
 
 uint16_t cmp_histograma(uint8_t k)
 {
@@ -217,6 +277,8 @@ void cmp_reiniciar(void)
     cruces = rechazados = huecos = rechDir = 0;
     crucesVentana = 0;
     semiperiodo = 0;
+    semiN = 0; semiMin = 0; semiMax = 0;
+    semiSumaDev = 0; semiSumaDev2 = 0;
     for (uint8_t k = 0; k < CMP_CAJONES; k++) cmp_histo[k] = 0;
   }
 }

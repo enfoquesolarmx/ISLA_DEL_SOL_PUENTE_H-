@@ -92,6 +92,16 @@ uint16_t cmp_rech_direccion(void);// mismo lado que el anterior: repique ida y v
 #define CMP_CAJONES_N  7
 uint16_t cmp_histograma(uint8_t k);
 uint16_t cmp_histograma_tope(uint8_t k);
+
+/*  EL JITTER DEL CRUCE ACEPTADO — el criterio que de verdad importa.
+ *
+ *  Devuelve el mínimo, el promedio, el máximo y la σ del semiperiodo, en µs.
+ *  false si todavía no hay suficientes.
+ *
+ *  ⚠️ σ del semiperiodo no es σ del cruce: el semiperiodo es la diferencia de
+ *  dos cruces independientes, así que σ_cruce = σ_semi / √2.
+ */
+bool cmp_jitter(uint16_t *minUs, uint16_t *promUs, uint16_t *maxUs, uint16_t *sigmaUs);
 uint16_t cmp_semiperiodo_us(void);// el último aceptado
 bool     cmp_red_presente(void);
 
