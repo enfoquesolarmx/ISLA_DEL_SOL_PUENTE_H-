@@ -51,6 +51,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-022](#dc-022-socket-de-diagnóstico-autodiagnóstico-de-la-etapa-de-potencia-antes-de-la-primera-energización) | Socket de diagnóstico: autodiagnóstico de la etapa de potencia antes de la primera energización | Control + potencia | 2026-11-21 | Objetivo (no vigente) |
 | [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13) | Comparador analógico interno para el cruce por cero, y `TN_CMD` se muda a D13 | Control | 2026-11-21 | Vigente (V1, ruteado y verificado) |
 | [DC-024](#dc-024-análisis-armónico-selectivo-goertzel-fuera-de-la-v1-y-qué-haría-falta-para-la-v2) | Análisis armónico selectivo (Goertzel): fuera de la V1, y qué haría falta para la V2 | Control | 2026-11-22 | Objetivo (V2, no vigente) |
+| [DC-025](#dc-025-reparto-del-adc-entre-los-canales-tres-prioridades-y-por-qué-caben) | Reparto del ADC entre los canales: tres prioridades y por qué caben | Control | 2026-11-22 | Vigente |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -1587,6 +1588,101 @@ Por si el documento vuelve a circular, queda anotado lo que traía mal:
 - Dos números suyos quedaron obsoletos esa misma noche: «140 V → 4.69 V en el pin» era con `Rt` = 100 kΩ (hoy son **4.51 V** con 110 kΩ), y «300 muestras = 3 ciclos exactos» son **2.997**, que es justo el supuesto que produjo el batido de 77 mV.
 
 **Referencias:** [DC-017](#dc-017-presupuesto-de-cpu-y-memoria-de-los-atmega328p-y-alternativa-en-el-mismo-socket-nano-every-atmega4809), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13), y el registro de banco de A6 en [`protocolo_banco_control.md`](protocolo_banco_control.md).
+
+---
+
+## DC-025. Reparto del ADC entre los canales: tres prioridades y por qué caben
+
+> **No hace falta más ADC: hace falta repartir los disparos que ya tenemos.** Los tres canales caben en la misma ocupación del 62.5 % con la que hoy corre uno solo.
+
+**Estado: vigente (V1).** Decidido el 22 de noviembre de 2026 con el presupuesto calculado sobre los tiempos medidos en banco.
+
+### Las tres prioridades
+
+1. **`A0` — voltaje de salida del inversor.** El lazo cerrado de amplitud. Es el único que necesita forma de onda completa, porque de ahí sale el RMS verdadero que regula.
+2. **`A6` — voltaje de la red.** Para el enganche con la red.
+3. **`A3` — bus de CD / batería.**
+
+### Capacidad y reparto
+
+```
+  conversion del ADC a 125 kHz  = 104 us  ->  maximo absoluto 9615 conv/s
+  disparos de hoy               = 6006 /s ->  ocupacion 62.5 %
+```
+
+Patrón `A0, A6, A0, A3` rotando, un canal por disparo:
+
+| Canal | Fracción | Muestras/s | **Por ciclo a 60 Hz** |
+| --- | --- | --- | --- |
+| **`A0`** inversor | 2 de 4 | 3003 | **50.1** |
+| **`A6`** red | 1 de 4 | 1501 | **25.0** |
+| **`A3`** bus de CD | 1 de 4 | 1501 | **25.0** |
+
+Un RMS con armónicos hasta la 13ª pide **32–50 muestras por ciclo**: `A0` cae justo en el rango bueno y los otros dos no lo necesitan. **La ocupación del ADC no sube: sigue en 62.5 %**, porque es el mismo número de disparos repartido.
+
+### La prioridad 2 ya no le pide tiempo real al ADC
+
+Esto lo cambió [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13). **La fase de la red la da el comparador por hardware**, así que lo que le queda al ADC en `A6` es sólo la amplitud — «¿está la red y está en rango?», una pregunta lenta y promediada.
+
+Sin el comparador, el enganche habría necesitado resolución de forma de onda en `A6` y el presupuesto se apretaba. Con él, 25 muestras por ciclo sobran. **Es la tercera vez que esa pieza se paga sola.**
+
+### El crosstalk del multiplexor NO es problema con nuestras impedancias
+
+Conviene dejarlo escrito porque la intuición dice lo contrario, y porque en banco se midió un caso que *parece* confirmarlo y no lo hace.
+
+```
+  capacitor de muestreo y retencion   14 pF
+  impedancia de fuente del divisor    9.36 kohm
+                                      ──────────
+  tau                                 131 ns
+
+  ventana de muestreo (1.5 ciclos de ADC a 125 kHz)   12 us  =  92 tau
+  asentamiento a 1/2 LSB de 10 bits: ln(2048) = 7.6 tau  =  1 us
+```
+
+**No hace falta descartar la primera conversión tras cambiar de canal.** Hay doce microsegundos para un transitorio que se acaba en uno.
+
+> **Qué fue lo que se midió el 2026-11-20, entonces.** Con el sketch de dos canales, el canal **al aire** leía el 99 % del canal anterior, retrasado exactamente un turno. Eso **no** es un defecto del multiplexor: es el caso patológico de **impedancia de fuente infinita**, donde nada descarga el capacitor. Con las tres fuentes por debajo de 10 kΩ el round-robin es limpio. La regla práctica que queda: **cualquier canal que se multiplexe debe estar manejado por menos de 10 kΩ, y ningún canal del barrido puede quedar al aire.**
+
+### La prioridad 3 está dentro de la prioridad 1
+
+`A3` no es monitoreo. El voltaje del bus alimenta el techo de amplitud de [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no):
+
+```
+  amplitud_max = V_primario_nominal x raiz(2) / V_bus
+```
+
+**Es entrada de control.** Y trae una consecuencia práctica: durante el hundimiento de un arranque de motor el bus cae, y si la lectura de `A3` va atrasada el techo se calcula con un bus que ya no existe. El error va hacia el lado seguro —techo más bajo del necesario, no más alto— pero **limita la salida justo en el caso que el diseño existe para manejar.**
+
+Por eso `A3` necesita ser **rápida**, no sólo exacta, y por eso lleva 25 muestras por ciclo y no cuatro. De paso, con esa tasa se ve el rizo de 120 Hz del bus, que dice tanto del banco de capacitores como del promedio.
+
+### Cuando llegue el CT
+
+Patrón `A0, A2, A0, A6, A0, A2, A0, A3`:
+
+| Canal | Por ciclo |
+| --- | --- |
+| `A0` inversor | 50.1 |
+| `A2` corriente | 25.0 |
+| `A6` red | 12.5 |
+| `A3` bus | 12.5 |
+
+Sigue cabiendo en el mismo 62.5 %. Y queda anotado el error que introduce multiplexar voltaje y corriente en vez de muestrearlos a la vez:
+
+```
+  un disparo de separacion  =  166.5 us  =  3.60 grados a 60 Hz
+  error en el factor de potencia  =  1 - cos(3.60 deg)  =  0.20 %
+```
+
+**Fijo, conocido y corregible por software**, porque el desfase es siempre el mismo número de disparos. No hace falta muestreo simultáneo ni un segundo ADC.
+
+### Lo que queda abierto
+
+- **El reparto es una propuesta con la cuenta hecha, no una medición.** Lo que lo valida es B5: hasta saber cuánto dura de verdad la ISR del SPWM no se sabe cuánto margen hay para el barrido de canales.
+- **La ventana del RMS de `A0` será de medio ciclo** ([DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13)), que con 50 muestras por ciclo son 25 por ventana. Suficiente para el RMS, pero conviene confirmarlo en banco antes de cerrar el lazo.
+- **El canal del inversor no necesita comparador** porque su periodo son un número entero de periodos de portadora por construcción; el cruce lo sabe el firmware. Eso está en DC-023 y es lo que permite que un solo comparador alcance.
+
+**Referencias:** [DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-021](#dc-021-transformador-fuera-de-rango-qué-pasa-qué-se-detecta-solo-y-qué-no), [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13) y el registro de banco de A6 en [`protocolo_banco_control.md`](protocolo_banco_control.md).
 
 ---
 
