@@ -57,6 +57,7 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-028](#dc-028-el-lazo-de-control-de-ca-comparador-para-el-cruce-rms-de-medio-ciclo-por-pares) | El lazo de control de CA: comparador para el cruce, RMS de medio ciclo por pares | Control | 2026-11-24 | Vigente (medido en banco) |
 | [DC-029](#dc-029-la-referencia-del-adc-es-avcc-y-eso-se-lleva-la-calibración-adentro) | La referencia del ADC es AVCC, y eso se lleva la calibración adentro | Control | 2026-11-24 | Vigente (por implementar) |
 | [DC-030](#dc-030-el-enlace-can-con-el-bms-la-batería-es-la-autoridad-sobre-los-límites-y-nosotros-nada-más-latimos) | El enlace CAN con el BMS: la batería es la autoridad sobre los límites | Control | 2026-11-24 | Vigente (por implementar) |
+| [DC-031](#dc-031-r3-del-canal-de-batería-sube-de-1-kω-a-47-kω-y-por-qué-un-zener-no-servía) | R3 del canal de batería sube de 1 kΩ a 47 kΩ, y por qué un zener no servía | Control | 2026-11-24 | Vigente |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -258,7 +259,7 @@ Se necesitan dos lecturas AC: la salida del inversor (para el lazo de amplitud) 
 
 - **Divisor 68k + 68k + 10k** (ganancia de 0.0685): 48 V → 3.29 V; 58.4 V → 4.00 V; el ADC llega a 5 V con **~73 V**. Cubre cualquier química de 48 V.
 - **Dos de 68k en serie:** si una se pone en corto, la otra sigue limitando, y cada una solo ve ~27 V.
-- **R3 de 1k + C1 de 1 µF en el pin A3:** fuente de baja impedancia para el ADC, y R3 limita la corriente hacia los diodos de protección.
+- **R3 de 47k + C1 de 1 µF en el pin A3:** C1 es la fuente de baja impedancia para el ADC y R3 limita la corriente hacia los diodos de protección. **R3 subió de 1 kΩ a 47 kΩ el 2026-11-24** ([DC-031](#dc-031-r3-del-canal-de-batería-sube-de-1-kω-a-47-kω-y-por-qué-un-zener-no-servía)): con 1 kΩ, un error de cableado que llevara el nodo a BAT+ metía 48 mA al pin, arriba del máximo absoluto.
 - **Falla segura:** si R4 se abre, la lectura sube, el firmware ve un "sobrevoltaje" y apaga.
 
 **Consecuencias**
@@ -2136,6 +2137,117 @@ De ahí sale la regla para el *timeout* del CAN, que es una decisión y no una o
 - El primer firmware del módulo `can_bms` **sólo escucha y reporta**, sin que nada dependa de él. Es la forma de validar el enlace sin arriesgar una decisión de operación a un protocolo que todavía no hemos visto correr.
 
 **Referencias:** [DC-008](#dc-008-tablero-de-diagnóstico-de-la-alimentación-led-test-points-y-valores-de-referencia), [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms), [DC-027](#dc-027-el-enlace-i2c-al-revés-el-crítico-es-maestro-del-bus-y-maestro-del-bus-no-es-quien-manda). Fuentes externas: [27], [28], [29] y [9].
+
+---
+
+## DC-031. R3 del canal de batería sube de 1 kΩ a 47 kΩ, y por qué un zener no servía
+
+> El pin se protege con **la resistencia que ya está**, no con un componente nuevo. Un sujetador en un nodo de alta impedancia cuesta más en fuga de lo que la medición vale.
+
+**Estado: vigente (V1).** Decidido el 24 de noviembre de 2026, al preparar la validación del canal A3 contra una batería física.
+
+### Cómo apareció
+
+Al preparar la medición de A3 con una Pylontech de 48 V se buscó qué pasa si el nodo del divisor toca el positivo por un error de cableado:
+
+```
+48 V por R3 = 1 kΩ   →   48 mA al diodo de protección de A3
+```
+
+Contra un **máximo absoluto de 40 mA por pin**. El micro se muere, y un fusible de 0.5 A en el cable de la batería no se entera: ve 48 mA y los deja pasar.
+
+La propuesta inicial fue un zener de 4.7 V en el pin. **No pasa el presupuesto de fuga**, y vale la pena dejar la cuenta escrita porque es el argumento que evita que alguien lo vuelva a proponer.
+
+### El presupuesto de fuga, que es el corazón de esta entrada
+
+Cualquier fuga en A3 sale del divisor, y el divisor es de alta impedancia:
+
+```
+Thévenin del divisor    136 kΩ ‖ 10 kΩ = 9.32 kΩ
+más R3                                   1 kΩ
+                                      ─────────
+                                      10.3 kΩ
+```
+
+Una cuenta del ADC son **70 mV de batería**, o sea **4.8 mV en el nodo**. De ahí sale el presupuesto:
+
+> **466 nA.** Más que eso y la fuga del sujetador vale más que la resolución del instrumento.
+
+| Fuga | Error en el nodo | Error en la batería | |
+| --- | --- | --- | --- |
+| 100 nA | 1.0 mV | 15 mV | ✅ |
+| 466 nA | 4.8 mV | 70 mV = 1 cuenta | el límite |
+| 2 µA | 20 mV | 0.30 V | ⚠️ |
+| 10 µA | 103 mV | 1.5 V | ❌ |
+| 50 µA | 515 mV | 7.5 V | ❌ |
+
+**Un zener de 4.7 V declara 10 µA de fuga inversa máxima — medidos a 1 V.** El nodo trabaja a **4.00 V con la batería cargada**, pegado a la rodilla, donde la fuga real es mucho mayor. O sea que **aun con la cifra más favorable de su hoja de datos se pasa veinte veces del presupuesto**, y no se puede calibrar porque la fuga se duplica cada ~10 °C.
+
+No es mala suerte, es física: los zeners **abajo de 5.6 V** conducen por efecto túnel y no por avalancha, así que tienen la rodilla suave. Es el peor rango posible para sujetar cerca del propio voltaje de trabajo. Un Schottky tipo BAT54S tampoco sirve: arranca en ~2 µA y empeora con la temperatura.
+
+### La decisión: R3 = 47 kΩ
+
+```
+falla: el nodo toca BAT+   →   48 V / 47 kΩ = 1.02 mA
+                               58.4 V / 47 kΩ = 1.24 mA
+```
+
+**Cero componentes nuevos y cero fuga agregada**, porque no se agrega nada. 1 mA es el orden que el diodo de protección del AVR maneja sin daño, contra los 48 mA de antes.
+
+⚠️ **Con la batería cargada la falla da 1.24 mA**, un poco arriba del miliampere. Si se quisiera quedar debajo en todo el rango, **68 kΩ** da 0.86 V… 0.86 mA en el peor caso, pero cuesta más tiempo de respuesta y más margen de fuga. Se eligió 47 kΩ como el balance.
+
+### Lo que cuesta, y lo que regala
+
+**Cuesta tiempo de respuesta.** La constante de tiempo la fija la impedancia total, y ahora R3 domina:
+
+| | antes | después |
+| --- | --- | --- |
+| τ con C1 = 1 µF | (9.32 + 1) kΩ × 1 µF = **10.3 ms** | (9.32 + 47) kΩ × 1 µF = **56.3 ms** |
+| asentamiento (3τ) | 31 ms | 170 ms |
+| frecuencia de corte | 15.5 Hz | 2.83 Hz |
+
+**Y regala rechazo de rizo.** A 120 Hz la atenuación pasa de 7.7× a **42×** — 5.5 veces mejor. Con una fuente de banco en vez de batería, donde el rizo de 120 Hz llega a volts, eso viene bien.
+
+**170 ms de asentamiento es aceptable** porque A3 es la protección de batería, un evento lento: queda muy dentro de los 500 ms del latido que ya obliga al CRÍTICO a protegerse con su propia lectura ([DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms)).
+
+### La fuga del pin pasa a ser un término visible, y ya estaba cubierta
+
+Con 47 kΩ la fuga del propio pin vale `I × 56.3 kΩ` en vez de `I × 10.3 kΩ`:
+
+```
+decenas de nA típicas  →  ~2.8 mV en el nodo  →  ~41 mV de batería
+```
+
+Media cuenta. Lo que lo mantiene ahí es que **el búfer de entrada digital del pin esté desactivado**, porque la hoja de datos garantiza hasta 1 µA de fuga para ese búfer — y 1 µA serían **0.82 V de error**, fuera del presupuesto.
+
+✅ **Ya estaba hecho:** `adc_portadora.cpp` pone `DIDR0 |= _BV(ADC0D) | _BV(ADC3D)` desde [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad). Se puso para ahorrar corriente y resulta que era **la condición para que este cambio funcione**. Queda anotado para que nadie lo quite pensando que es cosmético.
+
+⚠️ La fuga residual del multiplexor **no está garantizada en la hoja de datos**, así que no se escribe como dato: se mide en la corrida de calibración, donde cae dentro del cero y se resta.
+
+### Por qué el ADC sigue viendo una fuente de baja impedancia
+
+La hoja de datos pide **≤ 10 kΩ**, y 56.3 kΩ parece violarlo. No lo viola, porque lo que el ADC ve es el capacitor, no la resistencia:
+
+```
+condensador de muestreo                14 pF
+salto desde el canal anterior (A0)      ~1.5 V
+carga que pide                          21 pC
+caída en C1 = 1 µF                      21 nV      ← nada
+recarga entre muestras (A3 a 750/s)     16 nA      ← nada
+```
+
+**C1 es el tanque y R3 nada más lo rellena.** Y la batería se mueve miles de veces más lento que los 56 ms de τ, así que el tanque nunca se queda corto.
+
+### Consecuencias
+
+- ✅ La falla de cableado pasa de **48 mA a 1 mA**: el pin sobrevive.
+- ✅ Cero componentes, cero fuga, y mejor rechazo del rizo de 120 Hz.
+- ⚠️ **El esquemático y el PCB de la tarjeta de control hay que actualizarlos**: R3 de 1 kΩ a 47 kΩ. Es el único cambio.
+- ⚠️ **No se quite `DIDR0`** del canal A3. Sin él el presupuesto de fuga no se cumple.
+- ⚠️ **La falla segura de R4 no cambia:** si la resistencia de abajo se abre, la lectura sube y el firmware ve sobrevoltaje y apaga.
+- El fusible de 0.5 A en el cable de la batería **se queda**, para lo que sí cubre: el corto franco y el arco. No protege el pin y eso está escrito aquí para que nadie lo suponga.
+
+**Referencias:** [DC-007](#dc-007-sensado-del-voltaje-de-la-batería), [DC-010](#dc-010-reparto-de-tareas-entre-los-dos-atmega-enlace-i2c-con-latido-y-can-para-el-bms), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-029](#dc-029-la-referencia-del-adc-es-avcc-y-eso-se-lleva-la-calibración-adentro). Hoja de datos del ATmega328P, máximos absolutos y sección del ADC (referencia 6).
 
 ---
 
