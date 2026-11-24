@@ -98,7 +98,23 @@ Se mide en **A1**, y hay que llegar con las tres opciones en la bolsa porque la 
 - **El capacitor le gana al operacional en la frecuencia que importa.** El seguidor necesita los 10 Ω en serie para no oscilar con la carga capacitiva, y esos 10 Ω son 15 veces peor que lo que ya da un simple 10 µF a 24 kHz, que es donde está el ruido del puente. La opción 4 solo gana en DC y a baja frecuencia.
 - **La opción 3 es la buena:** diez veces menos impedancia en *todas* las frecuencias, por el precio de un capacitor más grande.
 
-**Lo que el bias tiene que aguantar de verdad.** La corriente de señal que pasa por el divisor AC es de **206 µA pico** (22.6 V de pico sobre 110 kΩ). Con la opción 1 eso mueve el bias **54.5 mV a 60 Hz**, un 2.6 % de la señal. **No es un error:** ese movimiento está en fase con la señal, así que solo cambia un poco la relación de atenuación, y el trimmer lo absorbe al calibrar.
+**Lo que el bias tiene que aguantar de verdad.** La corriente de señal que pasa por el divisor AC es de **206 µA pico** (22.6 V de pico sobre 110 kΩ). Con la opción 1 eso mueve el bias **54.5 mV a 60 Hz**, un 2.6 % de la señal.
+
+> ⚠️ **Corrección del 2026-11-24.** Esta sección decía que ese movimiento «está en fase con la señal, así que solo cambia la relación de atenuación, y el trimmer lo absorbe al calibrar». **Es falso.** Los 265 Ω de la opción 1 son un capacitor: su ángulo es de **−87°**, así que el movimiento del bias está casi en **cuadratura** con la señal, no en fase. Y lo que un movimiento en cuadratura produce no es atenuación: es **fase**.
+>
+> La cuenta completa, con el bias en serie con la pata de abajo del divisor:
+>
+> | C del bias | \|Z\| a 60 Hz | Error de ganancia | **Fase del canal** | τ de arranque |
+> | --- | --- | --- | --- | --- |
+> | 10 µF (opción 1) | 265 Ω | +0.18 % | **−1.51°** | 50 ms |
+> | 47 µF | 56 Ω | +0.01 % | −0.32° | 235 ms |
+> | **100 µF (opción 3)** | **27 Ω** | **0.00 %** | **−0.15°** | 500 ms |
+>
+> **El trimmer absorbe la atenuación; la fase no la absorbe nada.** El error estuvo en razonar con magnitudes y describir el resultado como si la impedancia fuera resistiva — la cuenta hay que hacerla con el ángulo.
+>
+> ✅ **No cambia la decisión, la refuerza:** la opción 3 ya estaba elegida por la impedancia a 24 kHz, y de paso deja la fase en −0.15°, que es despreciable. Con los 10 µF de la DC-006 **habría que compensar −1.51° en el firmware**, y peor: dos electrolíticos de 10 µF con ±20 % dan **0.6° de diferencia entre canales**, que no se cancela y deriva con la temperatura y la edad. Con 100 µF esa dispersión baja a 0.13°.
+>
+> ⚠️ **El costo de la opción 3 es el arranque:** τ de 500 ms, o sea ~1.5 s hasta que el bias se asienta. **El firmware no debe creerle a los canales de CA durante ese tiempo**, y hoy no lo sabe. Queda pendiente: esperar al arranque, o mejor, esperar a que la lectura de los dos canales se quede quieta antes de habilitar la transferencia.
 
 Donde sí sería un error es **si los dos canales compartieran el bias**: entonces los 54.5 mV de un canal se le aparecen al otro como señal ajena. Por eso DC-006 pide **un bias por canal**, y por eso A1 incluye la prueba de acoplamiento. Esa prueba es más importante que la de impedancia.
 
