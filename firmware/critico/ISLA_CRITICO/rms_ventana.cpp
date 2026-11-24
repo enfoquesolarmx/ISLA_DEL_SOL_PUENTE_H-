@@ -14,6 +14,7 @@
 volatile uint16_t rms_anillo[RMS_ANILLO];
 volatile uint8_t  rms_w, rms_r;
 volatile uint16_t rms_anillo_lleno;
+volatile uint16_t rms_fronteras_perdidas;
 volatile uint8_t  rms_cuenta_inv;
 
 // ------------------- lo que el lazo acumula (no volátil) --------------------
@@ -166,9 +167,16 @@ void rms_reiniciar(void)
     hayNuevo[i] = false;
   }
   desbordesRed = 0;
-  descartadas = 0;
-  llenoPrev = 0;
-  sucio[0] = sucio[1] = 0;
+
+  /*  ⚠️ `descartadas`, `llenoPrev` y `sucio` NO se borran aquí, y es a
+   *  propósito. En la v7 sí se borraban, y el resultado fue que
+   *  `descartadas` imprimía 0 en todos los reportes, funcionara o no el
+   *  descarte: el contador se imprime en la línea 2, los descartes ocurren
+   *  8.3 ms después —cuando cierra la ventana— y el reinicio del final del
+   *  reporte los borraba antes de que nadie los viera.
+   *
+   *  Un contador que se reinicia antes de poder contar no mide nada.
+   */
 }
 
 bool rms_recoger(uint8_t i, uint16_t *rmsCuentas, uint16_t *cd, uint8_t *n)
@@ -184,6 +192,13 @@ bool rms_recoger(uint8_t i, uint16_t *rmsCuentas, uint16_t *cd, uint8_t *n)
 
 uint16_t rms_desbordes_red(void)  { return desbordesRed; }
 uint16_t rms_descartadas(void)    { return descartadas; }
+
+uint16_t rms_fronteras_perdidas_n(void)
+{
+  uint16_t v;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = rms_fronteras_perdidas; }
+  return v;
+}
 
 uint16_t rms_anillo_perdidos(void)
 {

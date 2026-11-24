@@ -117,6 +117,7 @@ extern volatile uint16_t rms_anillo[RMS_ANILLO];
 extern volatile uint8_t  rms_w;                 // escritura: la mueven las ISR
 extern volatile uint8_t  rms_r;                 // lectura: la mueve el lazo
 extern volatile uint16_t rms_anillo_lleno;      // eventos que no cupieron
+extern volatile uint16_t rms_fronteras_perdidas;// ⚠️ FRONTERAS que no cupieron
 extern volatile uint8_t  rms_cuenta_inv;        // muestras de A0 en la ventana
 
 /*  Encola un evento. Se llama desde dentro de una ISR, así que no lleva
@@ -127,7 +128,15 @@ extern volatile uint8_t  rms_cuenta_inv;        // muestras de A0 en la ventana
  */
 static inline void rms_encola(uint16_t ev)
 {
-  if ((uint8_t)(rms_w - rms_r) >= RMS_ANILLO) { rms_anillo_lleno++; return; }
+  if ((uint8_t)(rms_w - rms_r) >= RMS_ANILLO) {
+    rms_anillo_lleno++;
+    /*  Perder una FRONTERA es peor que perder una muestra: dos semiciclos se
+     *  fusionan en una ventana de ciclo y medio, donde ⟨x⟩ ya no es el bias y
+     *  el RMS sale BAJO. Se cuenta aparte porque es otro modo de falla.
+     */
+    if (ev & RMS_EV_FRONTERA) rms_fronteras_perdidas++;
+    return;
+  }
   rms_anillo[rms_w & RMS_ANILLO_MSK] = ev;
   rms_w++;
 }
@@ -185,6 +194,7 @@ uint16_t rms_anillo_perdidos(void);   // eventos que no cupieron en el anillo
  *  que quedó incompleto.
  */
 uint16_t rms_descartadas(void);
+uint16_t rms_fronteras_perdidas_n(void);
 void     rms_reiniciar(void);
 
 /*  Raíz cuadrada entera, por Newton. Evita arrastrar la de punto flotante,

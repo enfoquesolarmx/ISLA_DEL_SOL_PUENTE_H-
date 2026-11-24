@@ -866,6 +866,8 @@ void loop()
   Serial.print(rms_anillo_perdidos());
   Serial.print(F(" descartadas="));
   Serial.print(rms_descartadas());
+  Serial.print(F(" frontPerd="));
+  Serial.print(rms_fronteras_perdidas_n());
   Serial.print(F(" PERDIDAS=")); Serial.print(pe);
 
     Serial.print(F("  cuentas=")); Serial.print(adc_cuentas(ADC_RANURA_INV));
@@ -1009,6 +1011,15 @@ void loop()
       imprime_ac(prom, MV_POR_CUENTA_X100_RED);
       Serial.print(F("  sigma="));
       imprime_ac(sigma, MV_POR_CUENTA_X100_RED);
+      /*  ⚠️ EL MÍNIMO Y EL MÁXIMO, que llevaba tres versiones acumulando sin
+       *  imprimir. Con σ sola no se distingue UNA ventana muy mala de MUCHAS
+       *  ventanas un poco malas, y esas dos cosas se arreglan distinto.
+       */
+      Serial.print(F("  min/max="));
+      Serial.print(est[RMS_RED].minimo);
+      Serial.print('/');
+      Serial.print(est[RMS_RED].maximo);
+      Serial.print('c');
       Serial.print(F("  CD="));
       Serial.print(est[RMS_RED].cdUlt);
       Serial.print(F(" n="));
