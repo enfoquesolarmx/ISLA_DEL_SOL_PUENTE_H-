@@ -23998,7 +23998,7 @@
 				)
 			)
 		)
-		(property "Value" "1k"
+		(property "Value" "47k"
 			(at -2.1 0 0)
 			(layer "F.SilkS")
 			(uuid "5358ec98-20ce-45b9-aa7d-d322516a4284")
