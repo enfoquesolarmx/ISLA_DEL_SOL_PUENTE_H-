@@ -321,6 +321,20 @@ Margen a 140 V con la `Rt` real: **+88 mV** con cresta senoidal, **+67 mV** con 
 
 > ⚠️ **Orden de conexión. El Nano se conecta al último.** Primero se arma el divisor y se mide el pico **con el multímetro**, con el pin del ADC **al aire**. Sólo cuando el pico confirmado esté abajo de 4.60 V se conecta el Nano. Armar al revés —Nano puesto y después girar el ajuste— es la forma fácil de pasarse del riel sin enterarse.
 
+> ⚠️ **Y el trimmer se calibra contra el MÁXIMO que toleramos, no contra el nominal** ([DC-033](decisiones_criticas.md#dc-033-el-contrato-con-la-fuente-de-afuera-ventanas-de-red-y-de-generador-y-cuándo-cortar)). Ajustarlo para quedar apenas abajo de 4.60 V con la red del día deja **sin reserva** la parte alta del rango, que es justo donde la protección tiene que seguir midiendo bien.
+>
+> ```
+> pico objetivo con el pin al aire  =  2.50 V  +  1.80 V × (V_red / 140)
+> ```
+>
+> | red del día | pico que debes ver |
+> | --- | --- |
+> | 120 V | 4.043 V |
+> | 127 V | **4.133 V** |
+> | 130 V | 4.171 V |
+>
+> Eso deja **300 mV de margen con la red a 140 V**, contra los 67 mV que quedaban ajustando al nominal. Cuesta 11.5 % de resolución — y es resolución que sobra: el RMS pasa de ~225 a ~199 cuentas con `sigma` en **0.0** de todas formas.
+
 **Procedimiento.**
 1. Trimmer al tope, **pin del ADC al aire**. Medir el pico. Si hay osciloscopio, directo; si solo hay multímetro, medir en AC y multiplicar por √2 (la red es senoidal, el error es pequeño).
 2. Trimmer al mínimo. Medir otra vez.
