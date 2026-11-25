@@ -606,6 +606,68 @@ Con 4 canales (A0, A6, A3 y A2) a ~104 µs por conversión, cada canal se lee ca
 - ⚠️ El CRÍTICO suma un cuarto canal de ADC: hay que medir en el banco el tiempo de las interrupciones (DC-010).
 - **Pines del CRÍTICO después de este cambio:** D2 reservado para el FAULT, D8 y D13 libres; ya no quedan entradas analógicas libres.
 
+### Actualización 2026-11-25: el modelo que se consigue es de 30 A, y se compensa con vueltas
+
+El `SCT-013-015` no se consigue; **el más chico disponible es el `-030`**. No hace falta cambiar un solo componente del circuito: los dos son de **salida de voltaje con la resistencia de carga adentro** y los dos dan **1 V RMS a fondo de escala**, así que los niveles son idénticos. Lo único que cambia es a cuántos amperes corresponde ese volt.
+
+> ⚠️ **Tiene que ser un modelo de salida de voltaje (`-005` … `-060`).** El `-000` es de **salida de corriente** (100 A : 50 mA) y **sin resistencia interna**: con ése el circuito no mide, y además la pinza queda en circuito abierto, que es donde una pinza genera decenas de volts. Se ven idénticos por fuera.
+
+**La resolución se recupera pasando el cable dos veces por la ventana.** Una pinza mide **ampere-vuelta**, así que con dos vueltas un `-030` se comporta exactamente como el `-015`:
+
+| corriente | `-030`, 1 vuelta | `-030`, **2 vueltas** |
+| --- | --- | --- |
+| inversor 1 kW (7.9 A) | 54 cuentas | **107** |
+| cargador a 105 V (10.4 A) | 71 | **142** |
+
+La ventana del SCT-013 es de 13 mm y un calibre 12 con aislamiento anda en 4 mm: dos vueltas entran cómodas.
+
+⚠️ **Lo que cuesta:** con 2 vueltas el núcleo **satura a 15 A de cable** (30 A-vuelta), así que el arranque de un motor va a leer bajo. No importa para proteger — el corte rápido cuelga del comparador de CD ([DC-014](#dc-014-corte-del-pwm-por-hardware-con-lógica-fail-safe-sensor_ok-y-doble-candado)), no de aquí. Y **si una vuelta se zafa, la lectura se va a la mitad sin avisar**: el cable se amarra.
+
+### El piso: el RMS de cero no es cero
+
+El bias **se cancela exacto**, porque el RMS resta la media. Lo que no se cancela es el ruido:
+
+```
+RMS medido = √(señal² + ruido²)
+```
+
+Promediar más ventanas reduce la **dispersión de la estimación**, no la estimación: con corriente cero el canal converge al RMS de su propio ruido. Con **1 cuenta** de ruido y 2 vueltas:
+
+| | corriente | a 127 V |
+| --- | --- | --- |
+| **Piso** | 0.07 A | **9 W** |
+| Útil (±15 %) | 0.22 A | 28 W |
+| Exacto (±1 %) | 0.51 A | 65 W |
+
+⏳ **Ese «1 cuenta» es estimación, no medición, y se mide directo:** pinza cerrada en el aire o sobre un cable sin corriente, y **lo que lea el RMS *es* el piso**. Misma técnica de nulidad con la que se cerró la impedancia del bias el 24-nov.
+
+### Detección de pinza desconectada, que sale gratis
+
+En el esquemático el bias le llega al pin **a través de la bobina de la pinza**:
+
+```
+BIAS_I_AC → manga del jack → BOBINA → punta → R15 → A2
+```
+
+| | `CD` del canal |
+| --- | --- |
+| pinza conectada | **≈ 511** (el bias) |
+| pinza desconectada | **≈ 0** — el pin pierde su camino de CD |
+
+**Importa porque sin esto una pinza floja se ve igual que «no hay carga»**, y de este canal cuelga la alarma de relé pegado de [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo). Implementado en `sct_pinza_presente()`.
+
+### Lo que cambió en el firmware
+
+**La rotación del ADC pasó de 4 a 8 pasos** (`A0 A6 A0 A3 A0 A6 A0 A2`), y el punto es que **A0 no se mueve**: sigue tocando 4 de cada 8, los mismos 3003 muestras/s, **con lo que se conserva intacta la alineación exacta de 25 muestras por semiciclo de [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13)**, que es frágil y está validada en banco. A6 también se queda igual. El que paga es A3, que baja de 1501.5 a 750.75 — y le sobra, porque con `R3` en 47 kΩ su constante de tiempo es de 56 ms ([DC-031](#dc-031-r3-del-canal-de-batería-sube-de-1-kω-a-47-kω-y-por-qué-un-zener-no-servía)).
+
+A2 queda en **750.75 muestras/s = 12.5 por ciclo**, y la ventana son **25 muestras = 2 ciclos exactos**, el mismo truco de cerrar por cuenta en vez de por cruce.
+
+⚠️ **Y un error que se corrigió antes de subirlo:** la primera versión hacía la raíz entera y dos divisiones de 32 bits **dentro de la ISR**. Es el mismo error que costó 14 pasos de onda en la etapa 4 cuando la estadística del jitter se metió en la ISR del comparador. Ahora la ISR sólo acumula y copia; la cuenta la hace `sct_atender()` desde el lazo.
+
+**Costo medido en el binario: +4 instrucciones en la ISR del ADC** (98 → 102), porque el filtro de ranura es un `inline` del encabezado. Dejándolo dentro de la función eran **+10**, ya que el compilador empuja cuatro registros antes de mirar la ranura y las 7 muestras de 8 que no son la pinza pagaban el prólogo completo.
+
+⏳ **Pendiente de banco:** el costo real en ciclos y que `SOBREPASOS` siga en 0. El presupuesto de las cuatro interrupciones está en 507 de 666 ciclos.
+
 ---
 
 ## DC-014. Corte del PWM por hardware con lógica fail-safe (SENSOR_OK) y doble candado

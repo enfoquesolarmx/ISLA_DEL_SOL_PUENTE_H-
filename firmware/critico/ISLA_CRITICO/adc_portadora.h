@@ -48,11 +48,12 @@
  *
  *  EL REPARTO ENTRE CANALES (DC-025)
  *
- *        rotación:   A0  →  A6  →  A0  →  A3  →  (repite)
+ *        rotación:   A0 → A6 → A0 → A3 → A0 → A6 → A0 → A2 → (repite)
  *
  *        A0  AC_FB_A0        salida del inversor   3003 muestras/s   50/ciclo
  *        A6  AC_FB_GRID_A6   la red                1501.5            25/ciclo
- *        A3  DC_FB_A3        batería               1501.5            25/ciclo
+ *        A3  DC_FB_A3        batería                750.75            12.5/ciclo
+ *        A2  I_AC            pinza de corriente     750.75            12.5/ciclo
  *
  *    El inversor va doble porque es el único de los tres que cierra un lazo
  *    dentro del periodo. La red sólo necesita fase y la batería se mueve
@@ -94,7 +95,8 @@
 #define ADC_RANURA_INV   0      // A0 — salida del inversor
 #define ADC_RANURA_RED   1      // A6 — la red
 #define ADC_RANURA_BAT   2      // A3 — batería
-#define ADC_RANURAS      3
+#define ADC_RANURA_COR   3      // A2 — pinza de corriente SCT-013 (DC-013)
+#define ADC_RANURAS      4
 
 // ------------------------------- Interfaz -----------------------------------
 

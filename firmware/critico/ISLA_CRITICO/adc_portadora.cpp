@@ -44,13 +44,23 @@
 /*  La rotación de DC-025. Cuatro pasos, tres ranuras: el inversor aparece dos
  *  veces porque es el único que cierra un lazo dentro del periodo.
  *
- *      paso:      0      1      2      3
- *      canal:    A0     A6     A0     A3
- *      ranura:  INV    RED    INV    BAT
+ *      paso:    0    1    2    3    4    5    6    7
+ *      canal:  A0   A6   A0   A3   A0   A6   A0   A2
+ *      ranura: INV  RED  INV  BAT  INV  RED  INV  COR
+ *
+ *  ⚠️ LA ROTACION PASO DE 4 A 8 PASOS PARA METER A2, Y EL PUNTO ES QUE
+ *     **A0 NO SE MUEVE**. Sigue tocando 4 de cada 8 pasos, o sea los mismos
+ *     3003 muestras/s, y con eso se conserva intacta la alineacion exacta de
+ *     25 muestras por semiciclo de DC-023, que es fragil y esta validada en
+ *     banco. A6 tambien se queda igual (2 de 8). El que paga es A3, que baja
+ *     de 1501.5 a 750.75 muestras/s — y le sobra, porque con R3 en 47k su
+ *     constante de tiempo es de 56 ms (DC-031).
  */
-static const uint8_t CANAL[4]  = { 0, 6, 0, 3 };
-static const uint8_t RANURA[4] = { ADC_RANURA_INV, ADC_RANURA_RED,
-                                   ADC_RANURA_INV, ADC_RANURA_BAT };
+static const uint8_t CANAL[8]  = { 0, 6, 0, 3, 0, 6, 0, 2 };
+static const uint8_t RANURA[8] = { ADC_RANURA_INV, ADC_RANURA_RED,
+                                   ADC_RANURA_INV, ADC_RANURA_BAT,
+                                   ADC_RANURA_INV, ADC_RANURA_RED,
+                                   ADC_RANURA_INV, ADC_RANURA_COR };
 
 static volatile uint8_t  paso;                      // dónde va la rotación
 static volatile uint16_t cuentas[ADC_RANURAS];
@@ -89,7 +99,7 @@ ISR(ADC_vect)
    */
   ADC_CADA_MUESTRA(r, c);
 
-  const uint8_t sig = (uint8_t)((p + 1) & 3);
+  const uint8_t sig = (uint8_t)((p + 1) & 7);
   paso  = sig;
   ADMUX = admux_de(sig);          // listo con 150 µs de sobra
 
@@ -114,7 +124,7 @@ void adc_preparar(void)
    *  quita una fuente de ruido en el pin. A6 no lleva: en el 328P los canales
    *  6 y 7 no tienen buffer digital que apagar.
    */
-  DIDR0 |= _BV(ADC0D) | _BV(ADC3D);
+  DIDR0 |= _BV(ADC0D) | _BV(ADC2D) | _BV(ADC3D);
 
   /*  Preescalador /128 → reloj de ADC = 125 kHz.
    *
