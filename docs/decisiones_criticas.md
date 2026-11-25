@@ -59,6 +59,8 @@ Las decisiones de este documento **pueden criticarse**, y deben hacerlo: si algu
 | [DC-030](#dc-030-el-enlace-can-con-el-bms-la-batería-es-la-autoridad-sobre-los-límites-y-nosotros-nada-más-latimos) | El enlace CAN con el BMS: la batería es la autoridad sobre los límites | Control | 2026-11-24 | Vigente (por implementar) |
 | [DC-031](#dc-031-r3-del-canal-de-batería-sube-de-1-kω-a-47-kω-y-por-qué-un-zener-no-servía) | R3 del canal de batería sube de 1 kΩ a 47 kΩ, y por qué un zener no servía | Control | 2026-11-24 | Vigente |
 | [DC-032](#dc-032-el-filtro-antialias-va-después-del-nodo-no-sobre-el-nodo-r17-sube-de-1-kω-a-22-kω) | El filtro del nodo: por qué R17 se queda en 1 kΩ (decisión revertida en banco) | Control | 2026-11-24 | ⚠️ Revertida |
+| [DC-033](#dc-033-el-contrato-con-la-fuente-de-afuera-ventanas-de-red-y-de-generador-y-cuándo-cortar) | El contrato con la fuente de afuera: ventanas de red y de generador, y cuándo cortar | Control | 2026-11-25 | Vigente (por implementar) |
+| [DC-034](#dc-034-programación-de-la-corriente-de-carga-el-límite-se-hace-cumplir-en-ca-no-en-la-batería) | Programación de la corriente de carga: el límite se hace cumplir en CA | Control | 2026-11-25 | Vigente (por implementar) |
 | [Críticas esperadas](#críticas-esperadas-y-preguntas-abiertas) | Lo que sabemos que se puede discutir | — | 2026-11-06 | Abierto |
 
 ---
@@ -2381,6 +2383,173 @@ La fase absoluta **nunca se ha medido**: la etapa 4 midió jitter y frecuencia, 
 - 📌 **Queda anotado que el instrumento bueno somos nosotros.** El canal repite 0.01 V y el multímetro 0.1 V. El multímetro fija el cero; para comparar dos configuraciones entre sí, el ADC es diez veces mejor — fue lo que permitió ver 0.45 % entre dos capacitores.
 
 **Referencias:** [DC-006](#dc-006-sensado-ac-con-dos-transformadores-de-12-v-directos-al-adc), [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13), [DC-031](#dc-031-r3-del-canal-de-batería-sube-de-1-kω-a-47-kω-y-por-qué-un-zener-no-servía). Diagrama: [`img/acondicionamiento_ac_dc032.py`](img/acondicionamiento_ac_dc032.py).
+
+---
+
+## DC-033. El contrato con la fuente de afuera: ventanas de red y de generador, y cuándo cortar
+
+> **Cortar es barato.** Para un inversor que inyecta a la red, desconectarse es perder producción, así que aguanta todo lo que puede. Para la Isla del Sol, desconectarse es **que entre la batería** — que es exactamente para lo que existe. En la duda, se corta.
+
+**Estado: vigente (V1), pendiente de implementar.** Escrita el 25 de noviembre de 2026, antes de la etapa 6, que es la que va a dar por supuestos estos números si no están escritos.
+
+### Por qué IEEE 1547 no nos aplica, ni siquiera de referencia
+
+La norma de interconexión existe para que un equipo **no energice una línea muerta** mientras alguien trabaja en ella. Sus umbrales de desconexión están calibrados contra ese riesgo.
+
+**La Isla del Sol nunca energiza la red** ([DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo)): transfiere la carga con relés y, en modo cargador, toma de la red. No hay paralelo y no hay inyección.
+
+Así que los números **no salen de una norma de interconexión**. Salen de dos preguntas propias:
+
+1. ¿Qué tolera lo que vamos a alimentar?
+2. ¿Con qué puede trabajar el cargador?
+
+⚠️ **Y la segunda fuente no es la red: es un generador de gasolina viejo.** Ése es el caso que manda, porque es el más pobre.
+
+### Lo que un generador hace y la red no
+
+Un generador sin inversor saca la frecuencia de las **RPM del motor**. Se ajusta en vacío a 61–63 Hz para que al cargarlo caiga cerca de 60, uno gastado cae más, y con el arranque de un motor se hunde y se recupera en segundos.
+
+> ⚠️ **Una ventana de frecuencia de ±0.5 Hz jamás dejaría entrar a un generador.**
+
+De ahí sale la corrección más importante de esta entrada. La medición de frecuencia entrega **dos cosas distintas** y hay que usarlas por separado:
+
+| | qué prueba | cómo se usa |
+| --- | --- | --- |
+| **el valor** (¿es 60 Hz?) | que la fuente es del tipo que esperamos | **ancho: 55 a 65 Hz** |
+| **la consistencia** (jitter sano, sin huecos) | **que no es ruido** | **apretado, y es la condición de seguridad** |
+
+**Lo que descarta el ruido no es que dé 60.013 Hz: es que 120 cruces seguidos sean regulares.** Un semiperiodo de 8331 µs con σ = 44 µs tiene un coeficiente de variación de 0.53 %; flancos al azar darían 100 %. Son **190 veces más apretado que el azar**, y esa regularidad la tiene un generador malo igual que la red. Lo que el generador no tiene es el valor exacto.
+
+### Las ventanas
+
+| V de red | qué pasa |
+| --- | --- |
+| arriba de **140 V** sostenido | **corta** |
+| **127 a 140 V** | normal |
+| **110 a 127 V** | **normal — la ventana de operación** |
+| abajo de **110 V** | **alarma «VOLTAJE DE RED BAJO»** y **el cargador baja corriente o se detiene** |
+| abajo de **105 V** por más de ~2 s | **corta a inversor** |
+| para volver | **112 V** sostenidos (2 V de histéresis sobre la alarma) |
+
+**Frecuencia:** opera entre **55 y 65 Hz**, con el jitter y los huecos como condición de validez.
+
+**Los 105 V son el peor caso que se atraviesa, no donde se opera.** Entre 105 y 110 el sistema sigue dando luz, pero ya avisa y ya dejó de cargar.
+
+### El cargador es la primera palanca, no la última
+
+Y esto es lo que hace que la entrada valga más que una tabla.
+
+Si la fuente se está hundiendo, **el cargador es la única carga que nosotros controlamos.** Un generador al tope que además está cargando baterías se hunde más, lo que hunde más su propia salida: se realimenta.
+
+> **Lo primero no es cortar la transferencia: es bajarle al cargador.** Muchas veces con eso el voltaje se recupera solo y la casa nunca pierde la red.
+
+Por eso en la tabla la respuesta a 110 V es alarma **más** reducción de carga, y el corte espera hasta 105. Son tres niveles de respuesta, no dos.
+
+### El límite de arriba lo fija el transformador, no los MOSFET
+
+Se verificó, porque la intuición dice lo contrario:
+
+```
+red a 150 V, transformador de 26 V  →  secundario 30.7 V  →  pico rectificado 43 V
+el puente ya ve 64 V con la bateria en ecualizacion       →  43 V no es el que manda
+IRF100P219                                                →  100 V, lejos
+```
+
+**El que sufre es el transformador.** Uno de 127 V alimentado a 150 trabaja con **18 % más flujo** del que fue diseñado: se acerca a la saturación, la corriente de magnetización se dispara y se calienta sin que haya carga.
+
+De ahí los **140 V**, que son +10 %, el margen con el que se especifican normalmente.
+
+⚠️ Importa con generador más que con la red: cuando a un generador se le cae una carga grande de golpe, el AVR tarda en reaccionar y **el voltaje se dispara**. Picos de 140 a 150 V por medio segundo son normales en equipo viejo.
+
+### El derrateo, para que nadie lo reporte como falla
+
+**A 105 V el cargador entrega ~17 % menos potencia para la misma corriente de CA.** El cargador de 1 kVA se vuelve de **~830 VA** cuando la red está baja o el generador va cargado.
+
+No es falla, es física. Queda escrito para que aparezca en el manual y no en un reporte de bug.
+
+### Consecuencias
+
+- ✅ **La frecuencia se parte en dos condiciones**, y la de seguridad es la consistencia, no el valor.
+- ⚠️ **Tres niveles de respuesta, no dos:** reducir carga → alarmar → cortar.
+- ⚠️ **`cmp_red_presente()` hoy sólo pregunta si hubo un cruce hace menos de 50 ms.** No mira amplitud, ni frecuencia, ni jitter. Hay que extenderla antes de que la etapa 6 la use, o el sistema declarará «hay red» con ruido.
+- 📌 La ventana del **cargador** puede ser más angosta que la de la **transferencia**: puede haber red suficientemente buena para darle luz a la casa pero no para cargar. Se decide a propósito, no por omisión.
+- El transformador de **26 V** queda mejor que el de 24 para este rango: a 105 V pide 1.92× de boost contra 2.08×.
+
+**Referencias:** [DC-013](#dc-013-corriente-ac-con-pinza-sct-013-015-en-el-crítico-a2), [DC-018](#dc-018-modulación-híbrida-a-24-khz-también-en-el-cargador-y-socket-multimodelo-atmega328p--atmega4809), [DC-019](#dc-019-transferencia-red--inversor--cargador-tres-estados-y-ninguna-falla-de-un-relé-forma-paralelo), [DC-034](#dc-034-programación-de-la-corriente-de-carga-el-límite-se-hace-cumplir-en-ca-no-en-la-batería). Los umbrales de IEEE 1547-2018 se consultaron como referencia y **se descartaron por no aplicar**: [NRECA, *Guide to IEEE 1547-2018*](https://outage.nrel.gov/grid/ieee-standard-1547/assets/pdfs/guide-to-ieee-1547-2018-march-2019.pdf), tablas 3 y 4.
+
+---
+
+## DC-034. Programación de la corriente de carga: el límite se hace cumplir en CA, no en la batería
+
+> El usuario programa amperes de **batería**. El generador siente amperes de **CA**. Y no son proporcionales: **para la misma potencia, la corriente de CA sube cuando el voltaje baja** — justo cuando la fuente menos puede darla. Un firmware que haga cumplir el límite del lado de la batería falla exactamente en el caso para el que la función existe.
+
+**Estado: vigente (V1), pendiente de implementar.** Escrita el 25 de noviembre de 2026.
+
+### Por qué hace falta
+
+Con la red da igual: sobra. **Con un generador chico, no.** Si el generador da 1 kW y el cargador pide 1 kVA, el generador se hunde, y al hundirse el cargador le pide más corriente para la misma potencia. Se realimenta hasta que algo se rinde.
+
+Es una función de operación, no de lujo: **sin ella, la Isla del Sol no se puede usar con generador.**
+
+### La trampa, con números
+
+| ajuste | potencia a batería | **A de CA a 127 V** | **a 110 V** | **a 105 V** |
+| --- | --- | --- | --- | --- |
+| 5 A | 240 W | 2.2 A | 2.5 A | 2.6 A |
+| 10 A | 480 W | 4.3 A | 5.0 A | 5.2 A |
+| 15 A | 720 W | 6.4 A | 7.4 A | 7.8 A |
+| **20 A** | 960 W | **8.6 A** | **9.9 A** | **10.4 A** |
+
+Con ~88 % de eficiencia en transformador + rectificador + boost, y 48 V de batería.
+
+**Con el generador hundido a 105 V, un ajuste de 20 A le pide 10.4 A en vez de 8.6 — un 21 % más.** Es el lazo que quema generadores chicos.
+
+> **Decisión: el firmware hace cumplir el límite de CA.** El menú de 5 / 10 / 15 / 20 A es la forma de presentárselo al usuario, y el firmware traduce usando el voltaje de red que ya mide en A6. Si se programara sólo el lado de batería, la protección fallaría en el peor momento.
+
+### El generador que hace falta, sólo para cargar
+
+| ajuste | generador mínimo recomendado |
+| --- | --- |
+| 5 A | 500 W |
+| 10 A | 900 W |
+| 15 A | 1.3 kW |
+| 20 A | **1.8 kW** |
+
+A 70–75 % de placa, que es como se debe hacer trabajar un generador en continuo. ⚠️ **Y eso es sólo la carga:** las cargas de la casa van encima, porque cuelgan del mismo generador.
+
+### ⚠️ Lo que el hardware de hoy NO permite
+
+La pinza SCT-013-015 abraza el cable del transformador, entre el transformador y los relés ([DC-013](#dc-013-corriente-ac-con-pinza-sct-013-015-en-el-crítico-a2)). En modo cargador eso mide **exactamente la corriente del cargador**, que es justo lo que hace falta para hacer cumplir el límite.
+
+**Pero no ve la carga de la casa.** Y la casa cuelga del mismo generador.
+
+| | se puede hoy | hace falta |
+| --- | --- | --- |
+| **Límite fijo** que programa el usuario | ✅ | — |
+| **Reparto automático** («toma lo que al generador le sobre») | ❌ | **una segunda pinza en la entrada de red** |
+
+📌 **Decisión pendiente, y es de las que no se pueden agregar después de fabricar:** una segunda pinza en la entrada de red cuesta un canal de ADC y un sensor, y convierte el límite fijo en reparto automático — la función buena de los equipos comerciales. Va en la misma lista que la huella del snubber de nodo de [DC-032](#dc-032-el-filtro-antialias-va-después-del-nodo-no-sobre-el-nodo-r17-sube-de-1-kω-a-22-kω).
+
+### Cómo se le presenta al usuario
+
+Para un trinchero, «15 A» no significa nada. **«Generador de 1.3 kW» sí.** El menú muestra las dos cosas:
+
+```
+CARGA:  15 A  (gen. 1.3 kW)
+```
+
+Mismo ajuste, pero elegirlo deja de ser adivinanza.
+
+El valor vive en EEPROM del AUX. ⚠️ Una escritura de EEPROM son ~3.4 ms por byte — es el bloqueo legítimo más largo del AUX y la razón de que su *watchdog* esté en 1 s, no en 15 ms.
+
+### Consecuencias
+
+- ✅ **El límite se hace cumplir en CA**, traducido desde el ajuste de batería con el voltaje medido en A6.
+- ⚠️ Con el ajuste en 20 A y la red a 105 V, la corriente de CA llega a **10.4 A**: el dimensionamiento del cableado y del fusible de entrada del cargador se hace contra ese número, no contra los 8.6 A nominales.
+- ⚠️ **Sin la segunda pinza no hay reparto automático.** Queda como límite fijo, y el usuario tiene que saber qué generador tiene.
+- 📌 Esta función es también la primera palanca de [DC-033](#dc-033-el-contrato-con-la-fuente-de-afuera-ventanas-de-red-y-de-generador-y-cuándo-cortar): cuando la red baja de 110 V, lo que se reduce es esto, antes de cortar nada.
+
+**Referencias:** [DC-013](#dc-013-corriente-ac-con-pinza-sct-013-015-en-el-crítico-a2), [DC-018](#dc-018-modulación-híbrida-a-24-khz-también-en-el-cargador-y-socket-multimodelo-atmega328p--atmega4809), [DC-033](#dc-033-el-contrato-con-la-fuente-de-afuera-ventanas-de-red-y-de-generador-y-cuándo-cortar).
 
 ---
 
