@@ -242,10 +242,16 @@ Se necesitan dos lecturas AC: la salida del inversor (para el lazo de amplitud) 
 
 **Decisión y valores**
 
-- **Divisor:** 100 kΩ + (8.2 kΩ + **trimmer Bourns 3296W de 2 kΩ**). Rango de ajuste de ±10 %, sin saturar nunca el ADC: con 16 VAC en vacío, como máximo ±2.1 V sobre el bias.
+- **Divisor:** **110 kΩ** + (8.2 kΩ + **trimmer Bourns 3296W de 2 kΩ**).
+
+  > ⚠️ **Actualizado con mediciones de banco; el texto original decía 100 kΩ y «16 VAC en vacío».** La Parte A mostró el 2026-11-21 que **con 100 kΩ la cadena recorta con la red a 140 V**, con cualquiera de las dos crestas supuestas, así que `Rt` subió a 110 kΩ (montada como 100 k + 10 k en serie, efectiva 109.6 kΩ). Y el dimensionado ya no se hace contra «16 VAC en vacío» —que equivalen a unos 135 V de red— sino **contra el máximo que la [DC-033](#dc-033-el-contrato-con-la-fuente-de-afuera-ventanas-de-red-y-de-generador-y-cuándo-cortar) tolera.**
+  >
+  > **El trimmer se calibra contra ese máximo, nunca contra el nominal.** Ajustarlo mirando los 127 V del día se come la reserva justo cuando hace falta.
 - **El trimmer se conecta como reóstato** (el cursor unido a un extremo): si el cursor pierde contacto, la resistencia se va a 2 kΩ y el canal no queda flotando.
 - **Bias de 2.5 V con 10k/10k + 10 µF + 100 nF,** uno por canal, para que una señal no se cuele en la otra.
-- **10 nF pegados al pin del microcontrolador** (A0 y A6): filtran la conmutación de 24 kHz. Desfase de ~2° a 60 Hz, **igual en los dos canales**, así que se cancela en la sincronía.
+- **Filtro antialias en el pin** (A0 y A6): `R17` de 1 kΩ en serie con `C30` de 100 nF al bias, más `C16` de 100 nF en el nodo.
+
+  > ⚠️ **El texto original decía «10 nF, desfase de ~2°, igual en los dos canales, así que se cancela». Las tres partes resultaron falsas** y la [DC-032](#dc-032-el-filtro-antialias-va-después-del-nodo-no-sobre-el-nodo-r17-sube-de-1-kω-a-22-kω) las corrigió con mediciones: los valores son de 100 nF, el desfase real del cruce por cero anda en **−19 a −24°**, y **no se cancela** en lo que importa, porque el instante del cruce lo da el comparador y no la comparación entre canales. Además la rama de `R17` **ancla el nodo contra el ruido**, que es una tercera función que este texto no contaba: subirla a 22 kΩ se probó en banco y empeoró el comparador.
 - **A6 solo existe en el ATmega328P TQFP** (el del Nano). En el DIP-28 no hay A6: hay que usar A1–A3.
 - **Serigrafía "12VAC / RET",** no "L1 / N": nadie debe pensar que ahí entra la red de 120 V.
 
@@ -2424,8 +2430,10 @@ De ahí sale la corrección más importante de esta entrada. La medición de fre
 
 | V de red | qué pasa |
 | --- | --- |
-| arriba de **140 V** sostenido | **corta** |
-| **127 a 140 V** | normal |
+| lectura **pegada al tope de escala** | **corta ya, sin retardo** |
+| arriba de **135 V** por más de ~2 s | **corta** |
+| **130 a 135 V** | se tolera unos segundos, con alarma «RED ALTA» |
+| **127 a 130 V** | normal |
 | **110 a 127 V** | **normal — la ventana de operación** |
 | abajo de **110 V** | **alarma «VOLTAJE DE RED BAJO»** y **el cargador baja corriente o se detiene** |
 | abajo de **105 V** por más de ~2 s | **corta a inversor** |
@@ -2445,7 +2453,50 @@ Si la fuente se está hundiendo, **el cargador es la única carga que nosotros c
 
 Por eso en la tabla la respuesta a 110 V es alarma **más** reducción de carga, y el corte espera hasta 105. Son tres niveles de respuesta, no dos.
 
-### El límite de arriba lo fija el transformador, no los MOSFET
+### ⚠️ Un umbral de protección no se pone en el borde del instrumento
+
+**Corrección del 25 de noviembre, el mismo día.** La primera versión de esta entrada ponía el corte en **140 V**, que es justamente donde el divisor de sensado recorta. **Eso está mal, y el error es de principio:**
+
+> Si el corte está donde el medidor se queda ciego, la protección dispara en el instante en que deja de poder distinguir «141 V» de «180 V».
+
+El margen que queda al pin del ADC antes del techo de 4.60 V, con `R7` en 110 kΩ:
+
+| red | pico en el pin | margen | en cuentas |
+| --- | --- | --- | --- |
+| 127 V | 4.344 V | 256 mV | ~55 |
+| 130 V | 4.388 V | 212 mV | ~45 |
+| 135 V | 4.461 V | 139 mV | ~30 |
+| **140 V** | 4.533 V | **67 mV** | **~14** |
+
+**Catorce cuentas de reserva es vivir del aire**: se las come el trimmer mal puesto, una razón de transformador 0.5 % distinta, o la cresta de la red a las siete de la tarde.
+
+**Y hay una tensión que la primera versión no vio:** cortar a 130 V significaría cortar con red legítimamente alta —el nominal es 127 y una red sana se pasea hasta 133—, y **cada corte innecesario tira de la batería**. «Cortar es barato» vale para la red caída, no para la red alta.
+
+### La salida: comprar margen con el trimmer
+
+**Se baja la ganancia del divisor un 11.5 %** y el margen a 140 V pasa de 67 a **300 mV**. Entonces el corte puede ponerse en 135 V con el instrumento todavía midiendo bien.
+
+Lo que cuesta es **resolución, que es justo de lo que andamos sobrados**: el RMS pasa de ~225 a ~199 cuentas y `sigma` sigue en **0.0 cuentas**. No se pierde nada útil.
+
+> **El ajuste, para la mesa.** Con el pin del ADC **al aire** y midiendo el pico con el multímetro:
+>
+> ```
+> pico objetivo  =  2.50 V  +  1.80 V × (V_red / 140)
+> ```
+>
+> | red | pico que debes ver |
+> | --- | --- |
+> | 120 V | 4.043 V |
+> | 127 V | **4.133 V** |
+> | 130 V | 4.171 V |
+
+⚠️ **De aquí sale una regla de procedimiento que faltaba:** el trimmer **se calibra contra el máximo que toleramos, no contra el nominal.** Ajustarlo mirando los 127 V de hoy se come la reserva de los 135.
+
+### El recorte no es una falla: es una señal
+
+Si la lectura se pega al tope de la escala, **no sabemos cuánto hay, pero sabemos que es demasiado** — y eso alcanza para cortar. Por eso el primer renglón de la tabla corta **sin retardo**: cubre el pico del generador al soltarle la carga, donde no hace falta medir bien, hace falta reaccionar.
+
+### Hasta dónde aguanta el transformador de potencia, que es otra cosa
 
 Se verificó, porque la intuición dice lo contrario:
 
