@@ -67,6 +67,42 @@
 #define PLL_KP_NUM   23L
 #define PLL_KP_DEN    4L
 
+/*  !! Y UNA TERCERA COSA QUE EL BANCO DESTAPO: ESAS GANANCIAS SOLO VALEN
+ *  PARA ERRORES CHICOS, Y YO LAS APLIQUE A ERRORES DE 100 GRADOS.
+ *
+ *  La cuenta de arriba es un lineal alrededor de cero. Con el error en 1000
+ *  decimas (100 grados), el paso del integrador vale
+ *
+ *      1000 x 1419/2000 = 710 x256 = 2.77 cuentas de TOP  POR CICLO = 0.5 Hz
+ *
+ *  o sea que el integrador llega al tope de +-2 Hz en seis ciclos. Y como la
+ *  salida esta limitada por la rampa a 0.185 cuentas por ciclo, el integrador
+ *  se va muchisimo mas adelante que lo que de veras se aplica: **windup
+ *  clasico contra un limitador**. Despues la correccion se queda clavada en
+ *  2000 mHz, la fase se desboca a 12 grados por ciclo, el error da la vuelta
+ *  por +-180 y el integrador se azota para el otro lado. Exactamente lo que
+ *  salio en el reporte.
+ *
+ *  La solucion es separar los dos regimenes, que es como se hace un PLL de
+ *  verdad:
+ *
+ *    BUSQUEDA (|error| > 30 grados).  No hay lazo lineal. Se pide un corrimiento
+ *      FIJO y modesto de 0.25 Hz, con el signo que cierra el error por el lado
+ *      corto. A 0.25 Hz la fase se recorre 1.5 grados por ciclo: 180 grados en
+ *      2 s. Y el integrador se mantiene pegado a la salida, asi que no acumula
+ *      nada y la entrega al seguimiento no da escalon.
+ *
+ *    SEGUIMIENTO (|error| <= 30 grados).  Ahi si el P+I de arriba, que es donde
+ *      el lineal vale. Con anti-windup: el integrador solo se compromete si la
+ *      salida NO esta pegada al limitador de rampa.
+ *
+ *  La banda de captura es de 30 grados y a 1.5 grados por ciclo se tarda 40
+ *  ciclos en cruzarla, contra los ~18 que el lazo necesita para reaccionar
+ *  (wn = 0.173 rad/ciclo). Entra con holgura.
+ */
+#define PLL_BANDA_CAPTURA_X10   300   /* +-30.0 grados                        */
+#define PLL_BUSQUEDA_X256   ((250L * PLL_TOP_X256_POR_HZ) / 1000L)  /* 0.25 Hz */
+
 static PllEstado estado;
 static bool      pedido;
 static int32_t   corrX256;          /* correccion acumulada, cuentas de TOP x256 */
@@ -153,7 +189,14 @@ void pll_atender(void)
       if (per > 3800u && per < 4600u) {
         dmhz = (int32_t)(250000000L / (int32_t)per) - 60060L;
         hayMedida = true;
-        redMhz = dmhz;
+        /*  Promediada para mostrar y para la compuerta: una sola medida de
+         *  periodo tiene 14 mHz de cuantizacion y el jitter del cruce la
+         *  esparce +-180 mHz. En el reporte se veia saltar de -8 a -195
+         *  cuando la deriva real era -48. Con esta media la compuerta de
+         *  +-2 Hz tampoco se pone nerviosa.
+         */
+        redMhz += (dmhz - redMhz) / 8;
+        dmhz = redMhz;
       }
     }
     tDirAnt = t;
@@ -216,30 +259,49 @@ void pll_atender(void)
        */
       const int16_t e = reloj_fase_x10(cmp_t_cruce_dir(), spwm_t_cruce());
       errGradosX10 = e;
-
-      /* ---- 3) integral + proporcional ---------------------------------- */
-
-      corrX256 += ((int32_t)e * PLL_TOP_X256_POR_HZ) / 2000L;
-      if      (corrX256 >  PLL_TOPE_X256) corrX256 =  PLL_TOPE_X256;
-      else if (corrX256 < -PLL_TOPE_X256) corrX256 = -PLL_TOPE_X256;
-
-      deseadoX256 = corrX256 + (((int32_t)e * PLL_KP_NUM) / PLL_KP_DEN);
-      if      (deseadoX256 >  PLL_TOPE_X256) deseadoX256 =  PLL_TOPE_X256;
-      else if (deseadoX256 < -PLL_TOPE_X256) deseadoX256 = -PLL_TOPE_X256;
-
-      /* ---- 4) engancho? ------------------------------------------------ */
-
       const int16_t ae = (e < 0) ? (int16_t)-e : e;
-      if (ae <= PLL_BANDA_GRADOS_X10) {
-        if (dentro < PLL_SOSTENIDO_CICLOS) {
-          if (++dentro == PLL_SOSTENIDO_CICLOS) {
-            estado = PLL_ENGANCHADO;
-            msEnganche = (uint16_t)(millis() - msInicio);
-          }
-        }
+
+      if (ae > PLL_BANDA_CAPTURA_X10) {
+
+        /* ---- 3a) BUSQUEDA: corrimiento fijo, sin lazo lineal ------------ */
+
+        deseadoX256 = (e > 0) ? PLL_BUSQUEDA_X256 : -PLL_BUSQUEDA_X256;
+        corrX256    = aplicadoX256;   /* el integrador sigue a la salida */
+        dentro      = 0;
+        estado      = PLL_ENGANCHANDO;
+
       } else {
-        dentro = 0;
-        estado = PLL_ENGANCHANDO;
+
+        /* ---- 3b) SEGUIMIENTO: P + I con anti-windup --------------------- */
+
+        int32_t cand = corrX256 + ((int32_t)e * PLL_TOP_X256_POR_HZ) / 2000L;
+        if      (cand >  PLL_TOPE_X256) cand =  PLL_TOPE_X256;
+        else if (cand < -PLL_TOPE_X256) cand = -PLL_TOPE_X256;
+
+        deseadoX256 = cand + (((int32_t)e * PLL_KP_NUM) / PLL_KP_DEN);
+        if      (deseadoX256 >  PLL_TOPE_X256) deseadoX256 =  PLL_TOPE_X256;
+        else if (deseadoX256 < -PLL_TOPE_X256) deseadoX256 = -PLL_TOPE_X256;
+
+        /*  ANTI-WINDUP: el integrador solo se compromete si la salida NO
+         *  esta pegada al limitador de rampa. Integrar contra un limitador
+         *  es acumular una deuda que despues hay que pagar con sobretiro.
+         */
+        const int32_t sobra = deseadoX256 - aplicadoX256;
+        if (sobra <= PLL_PASO_MAX_X256 && sobra >= -PLL_PASO_MAX_X256) corrX256 = cand;
+
+        /* ---- 4) engancho? ---------------------------------------------- */
+
+        if (ae <= PLL_BANDA_GRADOS_X10) {
+          if (dentro < PLL_SOSTENIDO_CICLOS) {
+            if (++dentro == PLL_SOSTENIDO_CICLOS) {
+              estado = PLL_ENGANCHADO;
+              msEnganche = (uint16_t)(millis() - msInicio);
+            }
+          }
+        } else {
+          dentro = 0;
+          estado = PLL_ENGANCHANDO;
+        }
       }
     }
   }
