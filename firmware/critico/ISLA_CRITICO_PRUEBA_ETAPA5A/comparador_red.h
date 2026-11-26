@@ -71,7 +71,31 @@
  *  estorbar, y tapa cualquier repique del cruce. A 50 Hz el semiperiodo son
  *  10 000 µs y sobra más.
  */
-#define CMP_BLANQUEO_US     2000
+/*  !! SUBIO DE 2000 A 6000 us, Y LA RAZON ES LA FUENTE.
+ *
+ *  Lo enseno el banco con el inversor SPWM del arquitecto como fuente. Un
+ *  inversor SPWM trae rizado de conmutacion de 20 kHz encima de su senoidal.
+ *  Ese rizado es de amplitud fija, pero la pendiente del fundamental en el
+ *  cruce es MINIMA -- 583 mV/ms -- asi que justo ahi el rizado manda. **La red
+ *  no tiene eso**: una fuente SPWM es mas dificil que la red para un
+ *  comparador sin histeresis.
+ *
+ *  Con 2000 us, un cruce falso que llegara entre 2 y 6 ms pasaba el filtro de
+ *  tiempo, y lo unico que lo detenia era la prueba de ACO -- la que ya sabemos
+ *  que se lee tarde y no es de fiar. Cuando uno se colaba, torcia la
+ *  alternancia y ensuciaba una muestra de fase.
+ *
+ *  Un cruce de verdad NO PUEDE llegar antes de un semiciclo. Los margenes:
+ *
+ *      60 Hz +-2 Hz   semiciclo 8.06 .. 8.62 ms
+ *      ventana 55-65  semiciclo 7.69 .. 9.09 ms
+ *      50 Hz          semiciclo 10.0 ms
+ *      blanqueo       6.0 ms   ->  1.7 ms de margen en el peor caso
+ *
+ *  Es la misma leccion que el sentido por alternancia: **decidir con el
+ *  tiempo, que lo medimos bien, en vez de con ACO, que no.**
+ */
+#define CMP_BLANQUEO_US     6000
 
 /*  Un hueco: pasó más de esto sin un cruce. A 60 Hz el semiperiodo son
  *  8 333 µs; 12 000 permite bajar hasta 41.7 Hz antes de contar hueco.
@@ -97,7 +121,7 @@ uint16_t cmp_rech_direccion(void);// mismo lado que el anterior: repique ida y v
  *      repartido en cientos de µs   → recruce por armónicos de la red
  */
 #define CMP_ANCLA_US   8192   // ancla de la desviación: potencia de dos
-#define CMP_CAJONES_N  7
+#define CMP_CAJONES_N  9
 uint16_t cmp_histograma(uint8_t k);
 uint16_t cmp_histograma_tope(uint8_t k);
 

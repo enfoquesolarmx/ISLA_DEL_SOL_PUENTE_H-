@@ -75,8 +75,12 @@ static int8_t            voto;           // ACO como ancla lenta, no rapida
  *  repique. Y el primer cajón es ciego mientras la ISR corre, así que el
  *  repique real es más rápido de lo que estos cajones pueden resolver.
  */
-#define CMP_CAJONES  7
-static const uint16_t CMP_TOPE[CMP_CAJONES] = { 20, 50, 100, 200, 500, 1000, 2000 };
+/*  Dos cajones nuevos, 4 ms y 6 ms, para VER lo que el blanqueo viejo dejaba
+ *  pasar. Si ahi aparecen cuentas, eran cruces falsos del rizado de la fuente
+ *  que antes se colaban y torcian la alternancia.
+ */
+#define CMP_CAJONES  9
+static const uint16_t CMP_TOPE[CMP_CAJONES] = { 20, 50, 100, 200, 500, 1000, 2000, 4000, 6000 };
 static volatile uint16_t cmp_histo[CMP_CAJONES];
 
 // Anillo de semiperiodos: la ISR encola, el lazo saca la σ y la frecuencia.
