@@ -63,6 +63,9 @@ static volatile uint16_t tCruceDir;      // sello SOLO del sentido de referencia
 static volatile uint8_t  nCruceDir;      // cambia una vez por ciclo, 60/s
 static volatile uint8_t  sentido;        // alternancia por TIEMPO, no por ACO
 static int8_t            voto;           // ACO como ancla lenta, no rapida
+static uint16_t          semiEsp;        // semiperiodo esperado, media movil
+static uint8_t           fueraVent;      // seguidos fuera de la ventana
+static volatile uint16_t rechVentana;    // rechazados por caer fuera de tiempo
 
 /*  Histograma de a qué distancia del cruce aceptado llegan los flancos
  *  rechazados. Es la pregunta que decide el arreglo, y se contesta desde
@@ -222,6 +225,50 @@ ISR(ANALOG_COMP_vect)
       nCruceDir++;
     }
   }
+
+  /*  ---- LA VENTANA DE LLEGADA, Y ESTO LO ENSENO EL ANALIZADOR -----------
+   *
+   *  En la captura de D13 el segundo pulso llega EXACTAMENTE un periodo de
+   *  portadora despues del primero -- 41.7 us, contra los 41.6 que mide D4 en
+   *  la misma pantalla. No es ruido del ambiente ni rizado de la fuente: es
+   *  **nuestro propio SPWM acoplandose a la entrada del comparador**, que es
+   *  lo que DC-023 anticipo cuando anoto que AC_FB_GRID_A6 corre 44 mm
+   *  paralelo a TN_CMD.
+   *
+   *  Y el ancho del pulso dice cual se acepta: el largo (20-22 us, el cuerpo
+   *  completo) es el PRIMERO del par. El detector se queda con el primer
+   *  flanco de cada rafaga.
+   *
+   *  AHI ESTA LA EXPLICACION DEL SIGNO. El acoplamiento solo puede hacer que
+   *  la rafaga EMPIECE ANTES, nunca despues -- cuando llega el cruce de
+   *  verdad el comparador dispara igual. Por eso los saltos de fase medidos
+   *  son TODOS negativos, de -79 a -86.5 grados, y ni uno positivo. Un sesgo
+   *  de un solo lado no lo produce el ruido: lo produce quedarse con el
+   *  primero.
+   *
+   *  EL ARREGLO NO ES FILTRAR MAS, ES NO TOMAR EL PRIMERO: tomar el que cae
+   *  DONDE DEBE CAER. El semiperiodo lo medimos con sigma de 34 us, asi que
+   *  una ventana de +-600 us son 18 sigma -- no estorba al jitter y tira
+   *  cualquier flanco que llegue medio milisegundo temprano.
+   *
+   *  Con escape, porque un filtro que nunca acepta es tan malo como no
+   *  tenerlo: cuatro seguidos fuera y se acepta, resincronizando la
+   *  expectativa. Asi una fuente que de veras cambio de frecuencia entra.
+   */
+  if (semiEsp != 0 && cruces > 8) {
+    const uint16_t d = (dt > semiEsp) ? (uint16_t)(dt - semiEsp)
+                                      : (uint16_t)(semiEsp - dt);
+    if (d > CMP_VENTANA_US) {
+      if (++fueraVent < 4) { rechVentana++; CMP_TRAZA_SALE(); return; }
+      fueraVent = 0;                 /* escape: la fuente cambio de verdad */
+    } else {
+      fueraVent = 0;
+    }
+  }
+  /*  Media movil de 8 del semiperiodo aceptado: la expectativa para el que
+   *  sigue. Un desplazamiento, nada de divisiones en la ISR.
+   */
+  semiEsp = (semiEsp == 0) ? dt : (uint16_t)(semiEsp + ((int16_t)(dt - semiEsp) >> 3));
 
   if (dt > CMP_HUECO_US) huecos++;   // se acepta igual, pero queda anotado
 
@@ -433,6 +480,14 @@ uint16_t cmp_fase_x10(void)
  *  a ver el hardware del cruce, no el firmware.
  */
 int8_t cmp_voto_sentido(void) { return voto; }
+
+/*  Flancos tirados por llegar fuera de la ventana de tiempo esperada. Son el
+ *  acoplamiento de nuestra propia portadora adelantando la rafaga.
+ */
+uint16_t cmp_rech_ventana(void)
+{
+  uint16_t v; ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = rechVentana; } return v;
+}
 
 void cmp_reiniciar(void)
 {
