@@ -86,6 +86,19 @@ uint16_t spwm_muestras_ciclo();
  *  diferencia de fase con 0.086 grados de resolucion — siete veces mas fina
  *  que el jitter medido de 0.59.
  */
+/*  LA FASE, MEDIDA CONTRA TIMER1 (ver el .cpp para el porque).
+ *
+ *  `spwm_fase_cuentas()` dice EN QUE PUNTO DE NUESTRO CICLO estamos ahora, de
+ *  0 a `spwm_fase_vuelta()`. Llamada desde la ISR del comparador da
+ *  directamente la fase del cruce de la red: nuestro cruce es la posicion 0
+ *  por construccion, asi que no hay resta ni segundo reloj.
+ *
+ *  Resolucion: 62.5 ns = 0.0014 grados. Y no puede perder cuentas, porque es
+ *  el mismo timer que genera la onda.
+ */
+uint32_t spwm_fase_cuentas(void);
+uint32_t spwm_fase_vuelta(void);
+
 uint16_t spwm_t_cruce(void);
 uint8_t  spwm_n_cruce(void);
 

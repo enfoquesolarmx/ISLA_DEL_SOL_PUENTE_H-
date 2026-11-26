@@ -177,6 +177,58 @@ uint16_t spwm_top_actual(void) { return topEntero; }
 static volatile uint16_t tCruceInv;
 static volatile uint8_t  nCruceInv;
 
+/* =============================================================================
+ *  LA FASE SE MIDE CONTRA TIMER1, NO CONTRA EL RELOJ DE 4 us
+ *
+ *  Lo enseno el banco con un numero que no deja lugar a dudas: enganchado, la
+ *  linea FASE marcaba -87.7, -88.5, -88.1, -87.9, -87.8 mientras el lazo leia
+ *  0.2. No es ruido: es un OFFSET CONSTANTE de 88 grados que aparece y
+ *  desaparece. Y 88.5 grados de nuestro ciclo son 4096 us, o sea **cuatro
+ *  desbordes del Timer0**.
+ *
+ *  El reloj de 4 us se arma con `timer0_overflow_count`, que lo lleva una ISR
+ *  que compite con la del SPWM al 65 % de ocupacion, con la del ADC, con TWI
+ *  y con los cli() del lazo. La correccion por TOV0 solo salva UN desborde
+ *  pendiente. Cuatro, no.
+ *
+ *  NO VOY A ADIVINAR UNA CUARTA VEZ POR QUE SE PIERDEN CUATRO. Quito la
+ *  dependencia: **ya tenemos un reloj mejor y es el nuestro.**
+ *
+ *      posicion = semiciclo x 200 + muestra        (0..399, 0.9 grados)
+ *      fino     = TCNT1 dentro del periodo         (62.5 ns)
+ *
+ *  Timer1 no puede perder cuentas: es el hardware que genera la onda, y su
+ *  ISR es lo de mas alta prioridad del sistema. Si eso se atrasa, la onda se
+ *  deforma y ya no importa la fase.
+ *
+ *  Y HAY ALGO MEJOR TODAVIA: **el cruce del inversor ya no necesita sello.**
+ *  Nuestro cruce es `posicion = 0` por construccion. Asi que esto no mide una
+ *  diferencia de dos relojes: mide DIRECTAMENTE en que punto de nuestro
+ *  propio ciclo cruzo la red. Un solo numero, una sola fuente, sin resta.
+ *
+ *  Se llama desde la ISR del comparador, 120 veces por segundo.
+ * =============================================================================
+ */
+uint32_t spwm_fase_cuentas(void)
+{
+  const uint16_t pos = (uint16_t)semiciclo * (uint16_t)muestrasSemiciclo
+                     + (uint16_t)muestra;
+  /*  Modo 8: el contador sube y baja. Dos lecturas dicen para donde va, que
+   *  es mas barato y mas seguro que deducirlo de un registro de estado.
+   */
+  const uint16_t a   = TCNT1;
+  const uint16_t b   = TCNT1;
+  const uint16_t dos = (uint16_t)(topEntero << 1);
+  const uint16_t fino = (b >= a) ? a : (uint16_t)(dos - a);
+  return (uint32_t)pos * dos + fino;
+}
+
+/*  Cuentas en una vuelta completa de fase. Depende del TOP, que el PLL mueve. */
+uint32_t spwm_fase_vuelta(void)
+{
+  return (uint32_t)((uint16_t)muestrasSemiciclo << 1) * (uint32_t)(topEntero << 1);
+}
+
 uint16_t spwm_t_cruce(void)
 {
   uint16_t v;
