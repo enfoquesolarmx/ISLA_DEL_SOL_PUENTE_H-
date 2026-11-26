@@ -93,7 +93,7 @@ D) LAS DOS VUELTAS.  Con una carga conocida, compara 1 vuelta contra 2.
    a la mitad sin avisar.
 
 
-E) EL TIEMPO FISICO ENTRE LOS DOS CRUCES, CON EL ANALIZADOR LOGICO.
+E) (OPCIONAL) EL TIEMPO FISICO ENTRE LOS DOS CRUCES, CON ANALIZADOR LOGICO.
 
    No hace falta ningun pin nuevo ni una linea de firmware: LB ya se levanta
    exactamente en el cruce por cero del inversor.
@@ -120,8 +120,9 @@ E) EL TIEMPO FISICO ENTRE LOS DOS CRUCES, CON EL ANALIZADOR LOGICO.
        etapa 4 la midio entre 2.7 y 22 us por el histograma, que subestimaba
        110 ciclos por la ventana ciega del muestreo.
 
-   El procedimiento completo y la tabla para llenar estan en el protocolo,
-   seccion C5-bis.
+   Esta corrida NO lleva registro en el protocolo: es una comprobacion del
+   arquitecto para validar el proceso y seguir adelante. Si algun dia el
+   numero hace falta para compensar fase, ahi esta como sacarlo.
 
 
 LO QUE NO DEBE MOVERSE
