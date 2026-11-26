@@ -113,6 +113,7 @@ static uint8_t   nDirVisto;         /* para medir el periodo de la red        */
 static uint16_t  tDirAnt;
 static bool      hayPeriodo;
 static uint8_t   fuera;             /* ciclos seguidos fuera de rango         */
+static uint8_t   mudos;             /* ciclos seguidos sin sello nuevo de red  */
 static int32_t   aplicadoX256;      /* lo que de veras se escribio            */
 static int32_t   redMhz;            /* ultima medida valida, latcheada        */
 static uint32_t  msInicio;
@@ -129,6 +130,7 @@ void pll_preparar(void)
   nDirVisto = 0;
   hayPeriodo = false;
   fuera = 0;
+  mudos = 0;
   aplicadoX256 = 0;
   redMhz = 0;
   msEnganche = 0;
@@ -202,6 +204,7 @@ void pll_atender(void)
     tDirAnt = t;
     hayPeriodo = true;
     nDirVisto = nd;
+    mudos = 0;
   }
 
   /*  Una vez por ciclo del inversor: el contador de cruces lo mueve la ISR
@@ -229,7 +232,31 @@ void pll_atender(void)
 
   int32_t deseadoX256 = corrX256;
 
-  if (!cmp_red_presente()) { estado = PLL_ENGANCHANDO; dentro = 0; deseadoX256 = 0; }
+  /* ---- 0) LA RED SIGUE AHI? SE PREGUNTA CADA CICLO, NO UNA VEZ ----------
+   *
+   *  !! Lo encontro el banco: al cortar la red el lazo dejaba de corregir pero
+   *  seguia reportando ENGANCHANDO para siempre. Un estado que miente es peor
+   *  que no tenerlo, porque quien decida cerrar el relevador le va a preguntar
+   *  a `pll_estado()`.
+   *
+   *  Y el guardia NO puede ser solo `cmp_red_presente()`. Con la red cortada
+   *  la entrada queda al aire y el comparador puede castanetear con el ruido:
+   *  `cmp_red_presente()` diria que si hay red, y el lazo se engancharia AL
+   *  RUIDO. Se exige que **el sello calificado siga avanzando**, que es el
+   *  dato que el lazo de veras usa, y ademas que el periodo sea plausible.
+   *  Tres ciclos sin sello nuevo (50 ms) y se suelta.
+   */
+  if (mudos < 255) mudos++;
+
+  if (mudos > 3 || !cmp_red_presente()) {
+    estado      = PLL_SIN_RED;
+    dentro      = 0;
+    fuera       = 0;
+    msEnganche  = 0;          /* el enganche anterior ya no vale nada */
+    msInicio    = millis();   /* y el cronometro arranca de nuevo cuando vuelva */
+    corrX256    = 0;
+    deseadoX256 = 0;          /* de vuelta al cristal, y por la rampa */
+  }
   else {
 
     /* ---- 1) la compuerta de rango, con memoria --------------------------
