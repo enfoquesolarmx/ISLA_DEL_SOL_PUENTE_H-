@@ -105,6 +105,7 @@ uint16_t cmp_histograma_tope(uint8_t k);
 bool cmp_jitter(uint16_t *minUs, uint16_t *promUs, uint16_t *maxUs, uint16_t *sigmaUs);
 uint16_t cmp_semiperiodo_us(void);// el último aceptado
 bool     cmp_red_presente(void);
+uint16_t cmp_t_ultimo_cruce(void);   // sello de 4 us, para el detector de fase
 
 /*  Hay que llamarla en cada vuelta del lazo: drena el anillo de semiperiodos
  *  y acumula la estadística. Lo que antes costaba 117 ciclos dentro de la ISR

@@ -75,6 +75,7 @@
 #include <util/atomic.h>
 #include "spwm.h"
 #include "tabla_seno.h"
+#include "reloj_4us.h"
 
 // --- Enganches de medición (DC-017 / protocolo de banco, Parte C) -----------
 // En producción NO EXISTEN: no hay traza_isr.h, las macros se expanden a nada
@@ -143,6 +144,21 @@ static uint8_t         muestrasCuarto    = MUESTRAS_CUARTO_60;
 static const uint16_t *tablaSeno         = TABLA_SENO_60_Q16;   // en flash
 
 // ============================ INTERRUPCIÓN DE PORTADORA ======================
+/*  Sello del ultimo cruce por cero del inversor (inicio del semiciclo
+ *  positivo) y un contador que cambia en cada uno. Ver reloj_4us.h.
+ */
+static volatile uint16_t tCruceInv;
+static volatile uint8_t  nCruceInv;
+
+uint16_t spwm_t_cruce(void)
+{
+  uint16_t v;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = tCruceInv; }
+  return v;
+}
+
+uint8_t spwm_n_cruce(void) { return nCruceInv; }
+
 ISR(TIMER1_OVF_vect) {
   SPWM_TRAZA_ENTRA();
   SPWM_CADA_PERIODO();   // el disparo del ADC va aquí: lo más cerca posible
@@ -166,6 +182,17 @@ ISR(TIMER1_OVF_vect) {
     if (sem == 0) {                // empieza un ciclo nuevo (semiciclo positivo):
       amplitud = amplitudPedida;   // la amplitud sólo cambia aquí -> los dos
       ciclosSalida++;              // semiciclos del ciclo son iguales (sin CD)
+
+      /*  EL CRUCE POR CERO DEL INVERSOR ES EXACTAMENTE AQUI, y esta rama ya
+       *  existia para otra cosa: corre 60 veces por segundo, no 24 024. El
+       *  sello cuesta ~10 ciclos y los otros 24 023 periodos no pagan nada.
+       *
+       *  Mismo `reloj_4us()` que la ISR del comparador usa para sellar el
+       *  cruce de la red: la resta de los dos sellos ES la fase, y usando la
+       *  misma secuencia de instrucciones cualquier sesgo se cancela.
+       */
+      tCruceInv = reloj_4us();
+      nCruceInv++;
     }
   }
 

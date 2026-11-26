@@ -79,3 +79,12 @@ uint16_t spwm_amplitud_max();
 // Frecuencia de línea en uso (60 o 50) y muestras por ciclo (400 o 480).
 uint8_t  spwm_frecuencia_hz();
 uint16_t spwm_muestras_ciclo();
+
+/* -------------------------------------------------- detector de fase -------
+ *  Sello de 4 us del ultimo cruce por cero del inversor, y un contador que
+ *  cambia en cada cruce. Restando contra el sello del cruce de la red sale la
+ *  diferencia de fase con 0.086 grados de resolucion — siete veces mas fina
+ *  que el jitter medido de 0.59.
+ */
+uint16_t spwm_t_cruce(void);
+uint8_t  spwm_n_cruce(void);

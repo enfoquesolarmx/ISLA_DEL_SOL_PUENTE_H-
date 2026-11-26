@@ -1,0 +1,122 @@
+===============================================================================
+  ETAPA 5A:  la pinza de corriente  +  el detector de fase
+===============================================================================
+
+Solo cambia el CRITICO. El AUX se queda con ISLA_AUX_PRUEBA_I2C_ESCLAVO.
+
+      ISLA_CRITICO_PRUEBA_ETAPA5A/   -> al Nano del SPWM
+
+Es la etapa 4 con dos cosas encima. Todo lo demas se queda igual, y eso es a
+proposito: si SOBREPASOS deja de ser 0, ya sabemos por donde.
+
+
+LAS DOS COSAS QUE ENTRAN
+-----------------------------------------------------------------------------
+1) LA PINZA SCT-013-030 EN A2.
+
+   La rotacion del ADC paso de 4 a 8 pasos:
+
+        A0  A6  A0  A3  A0  A6  A0  A2
+
+   El punto es que A0 NO SE MUEVE: sigue tocando 4 de cada 8, los mismos
+   3 003 muestras/s, con lo que la alineacion exacta de 25 muestras por
+   semiciclo queda intacta. A6 tampoco. El que paga es A3, que baja a 750/s
+   y le sobra.
+
+2) EL DETECTOR DE FASE, Y LA IDEA ES TUYA.
+
+   No hace falta leer la fase del inversor desde ningun lado: el SPWM ya sabe
+   cuando cruza, y el codigo YA TENIA la rama exacta donde pasa. Ahi se le
+   puso un sello de tiempo.
+
+        if (sem == 0) {          <- el cruce por cero del inversor
+            ...
+            tCruceInv = reloj_4us();
+        }
+
+   Corre 60 veces por segundo, no 24 024. Verificado en el binario: la ISR
+   del SPWM crece 21 instrucciones PERO EL PROLOGO NO CRECE -- 15 push antes
+   y 15 ahora-- asi que los otros 24 023 periodos no pagan nada.
+
+   Y las dos puntas usan la MISMA funcion `reloj_4us()`. Si cada una tuviera
+   su copia, bastaria que el compilador ordenara distinto las instrucciones
+   para meter un sesgo constante, y un sesgo constante en una medicion de
+   fase es indistinguible de fase de verdad. Con la misma secuencia, lo que
+   sobre o falte se cancela en la resta.
+
+   Resolucion: 4 us = 0.086 grados. Siete veces mas fina que el jitter de
+   0.59 que medimos en la etapa 4, que es lo que uno quiere de un
+   instrumento.
+
+
+LA LINEA NUEVA DEL REPORTE
+-----------------------------------------------------------------------------
+   PINZA 412 mA  CD=511  FASE inv-red=37.4 grados  deriva=-48 mHz
+                                                   vuelta cada 20833 ms
+
+   PINZA AUSENTE (CD=3, esperado 511)     <- no hay pinza conectada
+
+El CD delata la pinza floja: el bias le llega al pin A TRAVES DE LA BOBINA de
+la pinza, asi que sin pinza el pin pierde su camino de CD y se va a cero.
+Sin esto, una pinza floja se ve igual que "no hay carga".
+
+
+CUATRO CORRIDAS, Y TRES NO NECESITAN EL TRANSFORMADOR
+-----------------------------------------------------------------------------
+A) EL PISO DE RUIDO.  Pinza cerrada EN EL AIRE, sin abrazar nada.
+
+   Lo que lea el RMS **es** el piso. No es estimacion, no hay modelo: es el
+   ruido midiendose a si mismo. Hoy el firmware supone 1 cuenta = 9 W.
+
+   Si sale 1 cuenta, la tabla de DC-013 vale. Si salen 4, el piso se va a
+   37 W y conviene una tercera vuelta.
+
+B) QUE CONDUCTORES DEL JACK TRAEN LA SENAL.
+
+   Con la pinza abrazando un cable con corriente, multimetro en AC entre
+   T-S, T-R y R-S del plug. El par que marque es el bueno. El esquematico
+   supone punta y manga.
+
+C) EL BUJE DEL JACK.  Continuidad del buje roscado a cada terminal.
+
+   !! Si pita con la MANGA, NO lo montes en metal aterrizado: nuestra manga
+   esta a 2.5 V, no a tierra, y lo cortocircuitarias. El sintoma seria
+   confuso -- CD a cero, o sea "pinza ausente" -- y buscarias un cable
+   flojo cuando el problema es el tornillo.
+
+D) LAS DOS VUELTAS.  Con una carga conocida, compara 1 vuelta contra 2.
+
+   Debe dar EXACTAMENTE el doble. Si no, una vuelta no esta haciendo
+   contacto completo por la ventana.
+
+   Y cuando quede: AMARRA EL CABLE. Si una vuelta se zafa, la lectura se va
+   a la mitad sin avisar.
+
+
+LO QUE NO DEBE MOVERSE
+-----------------------------------------------------------------------------
+       SOBREPASOS=+0     PERDIDAS=0     CRCmalo=0
+       sigma del RMS de la red = 0.0    ventanas 25/50
+
+Si SOBREPASOS deja de ser 0, el sospechoso es el costo que no medimos en
+ciclos: +4 instrucciones en la ISR del ADC y +21 en la rama de 60/s del SPWM.
+Las trazas de D4, D5 y D13 dicen quien fue.
+
+
+LO QUE LA FASE VA A DECIR, Y LO QUE NO
+-----------------------------------------------------------------------------
+Nuestra frecuencia es exacta por construccion: 24 024 / 400 = 60.060 Hz. La
+resta contra la red da la deriva, y de ahi el tiempo de una vuelta completa
+de fase.
+
+Con tu ultimo reporte (red en 60.012) salen 48 mHz y una vuelta cada ~21 s.
+Eso quiere decir que SIN PLL, esperando, la fase pasa sola por cero cada
+21 segundos -- y para volver a la red despues de un apagon, esperar 21 s no
+le molesta a nadie.
+
+!! Con generador es otra cosa: a 58 Hz el batimiento es de 2 Hz y la ventana
+de +-5 grados dura 13 ms, del mismo tamano que lo que tarda un rele en
+cerrar. Ahi si harian falta el PLL o la prediccion.
+
+Esta corrida es la que va a decir cual de los dos caminos hace falta.
+===============================================================================

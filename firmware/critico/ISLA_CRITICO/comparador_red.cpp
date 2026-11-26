@@ -24,6 +24,7 @@
  */
 
 #include "comparador_red.h"
+#include "reloj_4us.h"
 #include "rms_ventana.h"
 
 #include <Arduino.h>
@@ -35,7 +36,6 @@
  *  llamándose igual. Si algún día cambiara, esto **no compila** — falla
  *  ruidosamente, que es la forma correcta de fallar.
  */
-extern volatile unsigned long timer0_overflow_count;
 
 // --- Enganche de medición (protocolo de banco, Parte C, etapa 4) -------------
 #if defined(__has_include)
@@ -99,10 +99,11 @@ ISR(ANALOG_COMP_vect)
    *  La corrección del desborde pendiente es la misma que hace `micros()` y
    *  hay que hacerla igual: si TOV0 está puesto, el contador se quedó atrás.
    */
-  const uint8_t t0 = TCNT0;
-  uint8_t m8 = (uint8_t)timer0_overflow_count;
-  if ((TIFR0 & _BV(TOV0)) && (t0 < 255)) m8++;
-  const uint16_t t = (uint16_t)(((uint16_t)m8 << 8) | t0);
+  /*  Mismo reloj que usa el SPWM para sellar SU cruce: la resta de los dos
+   *  sellos es la fase, y con la misma secuencia de instrucciones cualquier
+   *  sesgo se cancela exacto. Ver reloj_4us.h.
+   */
+  const uint16_t t = reloj_4us();
 
   const uint16_t dt  = (uint16_t)((uint16_t)(t - tUltimo) << 2);   // a µs
   const uint8_t  aco = (uint8_t)((ACSR & _BV(ACO)) ? 1 : 0);
@@ -303,12 +304,19 @@ bool cmp_red_presente(void)
   uint16_t t;
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { t = tUltimo; }
 
-  const uint8_t t0 = TCNT0;
-  uint8_t m8 = (uint8_t)timer0_overflow_count;
-  if ((TIFR0 & _BV(TOV0)) && (t0 < 255)) m8++;
-  const uint16_t ahora = (uint16_t)(((uint16_t)m8 << 8) | t0);
+  const uint16_t ahora = reloj_4us();
 
   return (uint16_t)(ahora - t) < (uint16_t)((CMP_SIN_RED_MS * 1000UL) / 4);
+}
+
+/*  Sello de 4 us del ultimo cruce ACEPTADO de la red. Se resta contra
+ *  `spwm_t_cruce()` para sacar la fase; los dos usan `reloj_4us()`.
+ */
+uint16_t cmp_t_ultimo_cruce(void)
+{
+  uint16_t t;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { t = tUltimo; }
+  return t;
 }
 
 void cmp_reiniciar(void)
