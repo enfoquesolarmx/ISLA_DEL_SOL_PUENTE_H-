@@ -1132,6 +1132,19 @@ void loop()
        */
       Serial.print(F("  voto="));
       Serial.print(cmp_voto_sentido());
+
+      /*  Los ocho ultimos errores CRUDOS, uno por ciclo de salida. Esto es lo
+       *  que el filtro esconde, y es lo unico que puede decir de donde salen
+       *  las muestras imposibles.
+       */
+      Serial.print(F("\n   crudo:"));
+      for (uint8_t k = 0; k < 8; k++) {
+        const int16_t v = pll_huella(k);
+        Serial.print(F(" "));
+        Serial.print(v / 10);
+        Serial.print(F("."));
+        Serial.print((v < 0 ? -v : v) % 10);
+      }
       if (pll_estado() != PLL_LIBRE) {
         Serial.print(F("  corrigiendo "));
         Serial.print(pll_correccion_mhz());
