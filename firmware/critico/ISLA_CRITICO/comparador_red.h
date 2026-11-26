@@ -127,6 +127,11 @@ uint16_t cmp_t_ultimo_cruce(void);   // sello de 4 us de CUALQUIER cruce, 120/s
 uint16_t cmp_t_cruce_dir(void);
 uint8_t  cmp_n_cruce_dir(void);
 
+/*  Salud del detector de sentido: acuerdo entre la alternancia (determinista)
+ *  y ACO (ruidoso), de -60 a +60. Debe vivir pegado a +60.
+ */
+int8_t   cmp_voto_sentido(void);
+
 /*  Hay que llamarla en cada vuelta del lazo: drena el anillo de semiperiodos
  *  y acumula la estadística. Lo que antes costaba 117 ciclos dentro de la ISR
  *  —y hacía perder pasos de la onda— aquí no le cuesta nada a nadie.

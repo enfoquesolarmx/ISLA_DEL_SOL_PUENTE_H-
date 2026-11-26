@@ -58,6 +58,8 @@ static volatile uint16_t tUltimo;        // garrapatas de 4 µs del último cruc
 static volatile uint8_t  acoUlt;         // ACO del último cruce aceptado
 static volatile uint16_t tCruceDir;      // sello SOLO del sentido de referencia
 static volatile uint8_t  nCruceDir;      // cambia una vez por ciclo, 60/s
+static volatile uint8_t  sentido;        // alternancia por TIEMPO, no por ACO
+static int8_t            voto;           // ACO como ancla lenta, no rapida
 
 /*  Histograma de a qué distancia del cruce aceptado llegan los flancos
  *  rechazados. Es la pregunta que decide el arreglo, y se contesta desde
@@ -158,7 +160,51 @@ ISR(ANALOG_COMP_vect)
    *  enganche se asienta cerca de 180 en vez de cerca de 0, se voltea
    *  CMP_ACO_REFERENCIA. No lo adivino aqui.
    */
-  if (aco == CMP_ACO_REFERENCIA) { tCruceDir = t; nCruceDir++; }
+  /*  EL SENTIDO SALE DE LA ALTERNANCIA, NO DE LEER ACO. Y ESTO LO ENSENO EL
+   *  BANCO CON 417 MUESTRAS IMPOSIBLES EN UNA CORRIDA.
+   *
+   *  Arriba, en la prueba de direccion, esta escrito desde hace semanas:
+   *  "el repique es mas rapido que la entrada a la ISR y ACO ya volvio cuando
+   *  lo leemos". Es cierto, y yo lo use de todas formas para decidir el
+   *  sentido del sello de fase. Decidir con una lectura que sabemos tardia,
+   *  justo donde la senal es mas lenta y el repique manda, es una moneda al
+   *  aire: salian entre 10 y 20 muestras imposibles por segundo, de 60.
+   *
+   *  LA ALTERNANCIA, EN CAMBIO, ES DETERMINISTA. Los cruces se turnan: subida,
+   *  bajada, subida. No hay que medir nada para saberlo, solo contar. Y cuando
+   *  falta un cruce la alternancia se rompe -- pero eso se ve en el TIEMPO,
+   *  que es lo que medimos bien:
+   *
+   *      semis = redondeo(dt / 8330 us)    semiciclos que de veras pasaron
+   *      si semis es par, el sentido NO cambio
+   *
+   *  Asi un cruce perdido se corrige solo, y dos tambien, sin leer ACO.
+   *
+   *  ACO SE QUEDA, PERO COMO ANCLA LENTA. La alternancia es exacta pero
+   *  relativa: alguien tiene que decir cual de los dos sentidos es cual. Ese
+   *  alguien es ACO, que en UNA lectura es poco de fiar pero EN PROMEDIO no se
+   *  equivoca. Un voto que sube con cada acuerdo y baja con cada desacuerdo:
+   *  si se va muy negativo, la bandera estaba volteada y se voltea. Verdad
+   *  rapida de la alternancia, verdad lenta del sensor ruidoso.
+   */
+  {
+    /*  !! SIN DIVISION. La primera version de esto escribio
+     *  `(dt + 4165) / 8330` -- una division de 16 bits, ~200 ciclos, DENTRO DE
+     *  LA ISR. Es exactamente el error de la Parte C que costo 14 pasos de
+     *  onda, cometido otra vez. Con comparaciones el caso normal (dt de un
+     *  semiciclo) no entra al lazo ni una vez: cuesta una comparacion.
+     */
+    uint8_t  impares = 1;
+    uint16_t tope    = 12495u;            /* 1.5 semiciclos */
+    while (dt >= tope && impares < 8) { impares ^= 1u; tope += 8330u; }
+    if (impares) sentido = (uint8_t)!sentido;
+
+    if (aco == sentido) { if (voto <  60) voto++; }
+    else                { if (voto > -60) voto--; }
+    if (voto < -30)     { sentido = (uint8_t)!sentido; voto = 0; }
+
+    if (sentido == CMP_ACO_REFERENCIA) { tCruceDir = t; nCruceDir++; }
+  }
 
   if (dt > CMP_HUECO_US) huecos++;   // se acepta igual, pero queda anotado
 
@@ -353,6 +399,12 @@ uint16_t cmp_t_cruce_dir(void)
 }
 
 uint8_t cmp_n_cruce_dir(void) { return nCruceDir; }   /* un byte: atomico */
+
+/*  Acuerdo entre la alternancia y ACO, -60..+60. Cerca de +60 el detector de
+ *  sentido esta sano; cerca de 0 o negativo, ACO esta inservible y hay que ir
+ *  a ver el hardware del cruce, no el firmware.
+ */
+int8_t cmp_voto_sentido(void) { return voto; }
 
 void cmp_reiniciar(void)
 {
