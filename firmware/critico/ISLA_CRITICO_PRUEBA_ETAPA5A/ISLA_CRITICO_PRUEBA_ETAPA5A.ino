@@ -985,12 +985,7 @@ void loop()
         Serial.print(cmp_histograma(k));
       }
       Serial.print(F("   por direccion="));
-      Serial.print(cmp_rech_direccion());
-      /*  Los que llegaron fuera de la ventana de tiempo: son el acoplamiento
-       *  de nuestra propia portadora adelantando la rafaga.
-       */
-      Serial.print(F("   fuera de ventana="));
-      Serial.println(cmp_rech_ventana());
+      Serial.println(cmp_rech_direccion());
       rms_atender(); cmp_atender();   // el reporte bloquea el lazo: ver el anillo
     }
 
