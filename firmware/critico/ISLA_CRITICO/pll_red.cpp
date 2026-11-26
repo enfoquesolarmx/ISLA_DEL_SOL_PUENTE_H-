@@ -110,6 +110,35 @@
  *  cero, asi que sin ella la ley estaria pidiendo +-33 mHz alternados para
  *  siempre. Con 0.3 grados el integrador sostiene y la parabola se calla.
  */
+/*  EL FILTRO DE MUESTRAS IMPOSIBLES, Y ES LO QUE ROMPIA EL ENGANCHE
+ *
+ *  v5 engancho en 831 ms y se sostuvo tres segundos en 0.2 grados. Y despues
+ *  se cayo CON EL ERROR EN 0.2 GRADOS, que no puede pasar... salvo que en
+ *  algun ciclo intermedio llegara una medicion falsa.
+ *
+ *  La prueba esta en el reporte: la linea FASE y la linea del PLL leen EL
+ *  MISMO par de sellos con milisegundos de diferencia, y discrepan hasta 180
+ *  grados. Mientras hay enganche coinciden; cuando se rompe, divergen. Y
+ *  `cruces` anda en 110..124 en vez de 120 clavado: se estan perdiendo cruces,
+ *  y un cruce perdido descoloca cual sentido fisico cae en el sello de
+ *  referencia.
+ *
+ *  LA PARABOLA OBEDECE TODO LO QUE SE LE DA, y ese es su unico punto debil:
+ *  una sola muestra de 100 grados le pide 1.04 Hz y mata el enganche.
+ *
+ *  El filtro es de fisica, no de gusto: **nuestra frecuencia solo puede mover
+ *  la fase 12 grados por ciclo**, porque el rango es de +-2 Hz y
+ *  360 x 2 / 60 = 12. Se dan 20 de margen. Un salto mayor no lo produjo la
+ *  planta: lo produjo la medicion, y se tira.
+ *
+ *  Con escape, para no quedarse ciego: si el lazo se perdio ciclos de verdad
+ *  (el reporte bloquea el lazo decenas de ms mientras imprime), el limite se
+ *  escala por los ciclos transcurridos, y cinco descartes seguidos obligan a
+ *  resincronizar. Un filtro que nunca acepta es tan malo como no tenerlo.
+ */
+#define PLL_SALTO_MAX_X10  200    /* 20 grados por ciclo; la fisica da 12    */
+#define PLL_DESCARTES_MAX    5    /* a los cinco seguidos, se resincroniza   */
+
 #define PLL_PARAB_X256      47L   /* signo(e) x 47 x raiz(|e|)               */
 #define PLL_INTEGRA_X10      50   /* el integrador solo adentro de +-5.0     */
 #define PLL_MUERTA_X10        3   /* 0.3 grados: abajo de eso, no se empuja  */
@@ -140,6 +169,10 @@ static bool      hayPeriodo;
 static uint8_t   fuera;             /* ciclos seguidos fuera de rango         */
 static uint8_t   mudos;             /* ciclos seguidos sin sello nuevo de red  */
 static int32_t   aplicadoX256;      /* lo que de veras se escribio            */
+static int16_t   eAnt;              /* ultimo error bueno                     */
+static bool      hayEAnt;
+static uint8_t   seguidos;          /* descartes seguidos                     */
+static uint16_t  descartados;       /* total, para el reporte                 */
 static int32_t   redMhz;            /* ultima medida valida, latcheada        */
 static uint32_t  msInicio;
 static uint16_t  msEnganche;
@@ -158,6 +191,9 @@ void pll_preparar(void)
   mudos = 0;
   aplicadoX256 = 0;
   redMhz = 0;
+  hayEAnt = false;
+  seguidos = 0;
+  descartados = 0;
   msEnganche = 0;
   spwm_top_fijar(TOP_CUENTAS, 0);
 }
@@ -179,7 +215,8 @@ uint16_t  pll_ms_para_enganchar(void) { return msEnganche; }
  *  consecutivos. El reporte no puede medirla por su cuenta -- entre dos
  *  impresiones pasa un segundo y la resta de sellos envuelve.
  */
-int32_t pll_red_mhz(void) { return redMhz; }
+int32_t  pll_red_mhz(void)    { return redMhz; }
+uint16_t pll_descartados(void) { return descartados; }
 
 int16_t pll_correccion_mhz(void)
 {
@@ -237,6 +274,7 @@ void pll_atender(void)
    */
   const uint8_t n = spwm_n_cruce();
   if (n == nCruceVisto) return;
+  const uint8_t saltados = (uint8_t)(n - nCruceVisto);   /* ciclos de verdad */
   nCruceVisto = n;
 
   if (!pedido) {
@@ -309,7 +347,39 @@ void pll_atender(void)
        *  en uint16 y reducia modulo 4162 -- mal, porque 65536 no es multiplo
        *  de 4162 y la mitad de las diferencias son negativas. Ver reloj_4us.h.
        */
-      const int16_t e = reloj_fase_x10(cmp_t_cruce_dir(), spwm_t_cruce());
+      int16_t e = reloj_fase_x10(cmp_t_cruce_dir(), spwm_t_cruce());
+
+      /* ---- 2b) LA MUESTRA, ¿ES POSIBLE? ------------------------------- */
+
+      if (hayEAnt) {
+        int16_t d = (int16_t)(e - eAnt);
+        if      (d >  1800) d -= 3600;
+        else if (d < -1800) d += 3600;
+
+        uint8_t k = (saltados > 4) ? 4 : saltados;
+        if (k == 0) k = 1;
+        const int16_t lim = (int16_t)(PLL_SALTO_MAX_X10 * k);
+
+        if (d > lim || d < -lim) {
+          descartados++;
+          if (++seguidos < PLL_DESCARTES_MAX) {
+            /*  Se tira la muestra y se sostiene la salida: no se toca ni la
+             *  parabola ni el integrador. Mejor no hacer nada que obedecer
+             *  una mentira.
+             */
+            e = eAnt;
+          } else {
+            /*  Cinco seguidos ya no son ruido: la fase de veras se movio y
+             *  hay que resincronizar. Un filtro que nunca acepta es tan malo
+             *  como no tenerlo.
+             */
+            seguidos = 0;
+          }
+        } else {
+          seguidos = 0;
+        }
+      }
+      eAnt = e; hayEAnt = true;
       errGradosX10 = e;
       const int16_t ae = (e < 0) ? (int16_t)-e : e;
 

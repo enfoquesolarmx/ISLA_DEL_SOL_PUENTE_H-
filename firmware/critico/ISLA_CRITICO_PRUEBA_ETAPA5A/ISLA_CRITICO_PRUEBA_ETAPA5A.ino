@@ -1120,6 +1120,13 @@ void loop()
           Serial.print(F("SOLTADO: NO HAY RED (sin cruces que seguir)"));
           break;
       }
+      /*  Muestras de fase imposibles que el filtro tiro. Si esto crece rapido
+       *  el problema esta en el detector de cruce, no en el lazo.
+       */
+      if (pll_descartados()) {
+        Serial.print(F("  imposibles="));
+        Serial.print(pll_descartados());
+      }
       if (pll_estado() != PLL_LIBRE) {
         Serial.print(F("  corrigiendo "));
         Serial.print(pll_correccion_mhz());
