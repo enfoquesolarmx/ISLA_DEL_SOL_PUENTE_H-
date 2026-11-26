@@ -361,6 +361,7 @@
 #include "rms_ventana.h"
 #include "traza_cmp.h"   // sólo por TRZ_CMP_BIT; las macros las usa el módulo
 #include "sensor_corriente.h"
+#include "pll_red.h"
 #include "reloj_4us.h"
 #include "est_rms.h"    // ⚠️ aparte a propósito: ver el aviso adentro
 
@@ -587,6 +588,7 @@ void setup()
   est_cero(est[RMS_INV]);
   est_cero(est[RMS_RED]);
 
+  pll_preparar();
   spwm_arrancar();
   spwm_fijar_amplitud(spwm_amplitud_max());   // caso peor: la tabla trabaja
 
@@ -601,6 +603,20 @@ void setup()
 
 void loop()
 {
+  /*  Tecla  p  : pide o suelta el enganche de fase.
+   *  El inversor corre SUELTO por omision: el enganche se pide cuando una
+   *  transferencia es inminente, no todo el tiempo (ver pll_red.h).
+   */
+  if (Serial.available()) {
+    const int c = Serial.read();
+    if (c == 'p' || c == 'P') {
+      const bool nuevo = (pll_estado() == PLL_LIBRE);
+      pll_pedir_enganche(nuevo);
+      Serial.println(nuevo ? F(">>> PLL: pidiendo enganche")
+                           : F(">>> PLL: suelto, vuelve al cristal"));
+    }
+  }
+
   uint16_t t0, t1;
   uint8_t  hay;
 
@@ -630,6 +646,7 @@ void loop()
      */
     rms_atender();
     cmp_atender();
+    pll_atender();   // el PLL vive en el lazo, ni una linea en una ISR
 
     if (rms_recoger(RMS_INV, &r, &cd, &n)) est_mete(est[RMS_INV], r, cd, n);
     if (rms_recoger(RMS_RED, &r, &cd, &n)) est_mete(est[RMS_RED], r, cd, n);
@@ -1055,6 +1072,39 @@ void loop()
           Serial.print((uint16_t)(1000000L / (dmhz < 0 ? -dmhz : dmhz)));
           Serial.print(F(" ms"));
         }
+      }
+
+      /* ---- estado del PLL ------------------------------------------- */
+      Serial.print(F("\n   PLL "));
+      switch (pll_estado()) {
+        case PLL_LIBRE:
+          Serial.print(F("libre (cristal, 60.060 Hz) — teclea p para enganchar"));
+          break;
+        case PLL_ENGANCHANDO:
+          Serial.print(F("ENGANCHANDO  error="));
+          Serial.print(pll_error_grados_x10() / 10);
+          Serial.print(F("."));
+          Serial.print(abs(pll_error_grados_x10()) % 10);
+          Serial.print(F(" grados"));
+          break;
+        case PLL_ENGANCHADO:
+          Serial.print(F("*** FASE ESTABLE, ENGANCHADO ***  tardo "));
+          Serial.print(pll_ms_para_enganchar());
+          Serial.print(F(" ms   error="));
+          Serial.print(pll_error_grados_x10() / 10);
+          Serial.print(F("."));
+          Serial.print(abs(pll_error_grados_x10()) % 10);
+          Serial.print(F(" grados"));
+          break;
+        case PLL_FUERA_RANGO:
+          Serial.print(F("SOLTADO: la fuente se salio de +-2 Hz"));
+          break;
+      }
+      if (pll_estado() != PLL_LIBRE) {
+        Serial.print(F("  corrigiendo "));
+        Serial.print(pll_correccion_mhz());
+        Serial.print(F(" mHz  TOP="));
+        Serial.print(spwm_top_actual());
       }
       Serial.println();
     }

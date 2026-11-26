@@ -88,3 +88,17 @@ uint16_t spwm_muestras_ciclo();
  */
 uint16_t spwm_t_cruce(void);
 uint8_t  spwm_n_cruce(void);
+
+/* ------------------------------------- volante de frecuencia (PLL) --------
+ *  Fija el TOP de la portadora con dither de 8 bits. Mueve la frecuencia de
+ *  linea sin tocar la tabla: 0.18 Hz por cuenta entera, 0.70 mHz por paso de
+ *  fraccion. Las 25 muestras por semiciclo NO se mueven, porque el ADC
+ *  tambien cuelga de la portadora.
+ *
+ *  !! Al subir el TOP baja el ciclo de trabajo relativo, o sea la amplitud:
+ *  -3.3 % en el extremo del rango, 0.1 % en enganche normal. NO se compensa
+ *  desde el PLL a proposito (ver pll_red.h): lo absorbe el lazo de voltaje de
+ *  salida, que mide el RMS real. Compensarlo dos veces es pelearse con el.
+ */
+void     spwm_top_fijar(uint16_t entero, uint8_t frac);
+uint16_t spwm_top_actual(void);

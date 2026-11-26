@@ -147,6 +147,33 @@ static const uint16_t *tablaSeno         = TABLA_SENO_60_Q16;   // en flash
 /*  Sello del ultimo cruce por cero del inversor (inicio del semiciclo
  *  positivo) y un contador que cambia en cada uno. Ver reloj_4us.h.
  */
+/*  TOP DE LA PORTADORA, AJUSTABLE — es el volante de frecuencia del PLL.
+ *
+ *      f_linea = 16 MHz / (2 x TOP x 400)        TOP = 333 -> 60.060 Hz
+ *
+ *  Mover el TOP mueve la portadora Y la linea juntas, y por eso **las 25
+ *  muestras por semiciclo de DC-023 se conservan exactas**: el disparo del
+ *  ADC tambien cuelga de la portadora, asi que la razon no cambia.
+ *
+ *          muestras por semiciclo = (fsw/8) / (fsw/200) = 25,  sea cual sea fsw
+ *
+ *  Una cuenta de TOP son 0.18 Hz, demasiado grueso para enganchar fase. Se
+ *  afina **dithereando** entre TOP y TOP+1 con un acumulador de 8 bits:
+ *  0.70 mHz por paso, diez veces mas fino que los 7 mHz con que medimos la
+ *  red. El dither mueve el flanco 62.5 ns — nada, al lado de los 41.6 us del
+ *  periodo— y **no toca ni una muestra de la tabla**: la onda sigue intacta.
+ */
+static volatile uint16_t topEntero = TOP_CUENTAS;
+static volatile uint8_t  topFrac;          // 0..255 -> fraccion de cuenta
+static uint8_t           acumTop;          // solo la ISR
+
+void spwm_top_fijar(uint16_t entero, uint8_t frac)
+{
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { topEntero = entero; topFrac = frac; }
+}
+
+uint16_t spwm_top_actual(void) { return topEntero; }
+
 static volatile uint16_t tCruceInv;
 static volatile uint8_t  nCruceInv;
 
@@ -199,7 +226,7 @@ ISR(TIMER1_OVF_vect) {
   // ---- 3) Comparadores del siguiente periodo -------------------------------
   if (sig == 0 || sig == ultimaMuestra) {
     OCR1A = 0;                     // HA siempre baja
-    OCR1B = TOP_CUENTAS;           // LA siempre baja
+    OCR1B = topEntero;             // LA siempre baja (TOP de ahora, no la constante)
   } else {
     // Cuarto de onda en espejo: 0..C-1 tal cual, C..S-1 al revés
     // (60 Hz: C = 100, S = 200;  50 Hz: C = 120, S = 240).
@@ -210,10 +237,29 @@ ISR(TIMER1_OVF_vect) {
       OCR1A = d;
       OCR1B = d + dtCuentas;
     } else {                                   // semiciclo -: LA lleva la potencia
-      const uint16_t b = TOP_CUENTAS - d;
+      const uint16_t b = topEntero - d;
       OCR1B = b;
       OCR1A = b - dtCuentas;
     }
+  }
+
+  /*  Dither del TOP. ICR1 se actualiza en BOTTOM por ser modo 8 (phase and
+   *  frequency correct), asi que escribirlo aqui no produce glitch: es
+   *  justamente lo que ese modo garantiza.
+   */
+  if (topFrac) {
+    /*  Guardia: con el PLL suelto `topFrac` es 0, ICR1 ya vale lo que debe y
+     *  no hay nada que hacer. Asi el camino comun paga una lectura y un salto
+     *  —~4 ciclos— en vez de los ~18 del dither completo.
+     *
+     *  Importa porque el inversor corre SUELTO casi siempre: el enganche se
+     *  pide cuando una transferencia es inminente, no todo el tiempo. Cobrar
+     *  2.1 % del CPU las 24 horas por algo que se usa unos segundos seria
+     *  justo el error que DC-026 describe — el costo por vuelta del lazo.
+     */
+    const uint8_t prev = acumTop;
+    acumTop = (uint8_t)(prev + topFrac);
+    ICR1 = (uint16_t)(topEntero + ((acumTop < prev) ? 1u : 0u));
   }
 
   muestra   = sig;

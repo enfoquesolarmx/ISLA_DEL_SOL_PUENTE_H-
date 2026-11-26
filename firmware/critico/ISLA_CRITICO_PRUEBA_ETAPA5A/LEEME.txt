@@ -10,7 +10,7 @@ Es la etapa 4 con dos cosas encima. Todo lo demas se queda igual, y eso es a
 proposito: si SOBREPASOS deja de ser 0, ya sabemos por donde.
 
 
-LAS DOS COSAS QUE ENTRAN
+LAS TRES COSAS QUE ENTRAN
 -----------------------------------------------------------------------------
 1) LA PINZA SCT-013-030 EN A2.
 
@@ -123,6 +123,51 @@ E) (OPCIONAL) EL TIEMPO FISICO ENTRE LOS DOS CRUCES, CON ANALIZADOR LOGICO.
    Esta corrida NO lleva registro en el protocolo: es una comprobacion del
    arquitecto para validar el proceso y seguir adelante. Si algun dia el
    numero hace falta para compensar fase, ahi esta como sacarlo.
+
+
+3) EL ENGANCHE DE FASE A LA RED (PLL).  Tecla  p  en el monitor.
+
+   El inversor corre SUELTO por omision, a los 60.060 Hz del cristal, que son
+   mas estables que cualquier red. El enganche se PIDE, porque sirve para una
+   sola cosa: que al cerrar el relevador las dos ondas esten alineadas.
+
+   EL VOLANTE ES EL TOP DE LA PORTADORA, NO LA TABLA.
+
+        f_linea = 16 MHz / (2 x TOP x 400)        TOP=333 -> 60.060 Hz
+
+   Y eso tiene una propiedad que vale oro: mover el TOP mueve la portadora Y
+   la linea juntas, asi que LAS 25 MUESTRAS POR SEMICICLO DE DC-023 SE
+   CONSERVAN EXACTAS -- el disparo del ADC tambien cuelga de la portadora.
+   La alineacion fragil sobrevive sola, y la tabla de seno NO SE TOCA: no se
+   salta ni se repite una muestra, la onda queda intacta.
+
+   Una cuenta de TOP son 0.18 Hz, muy grueso para fase. Se afina dithereando
+   entre TOP y TOP+1: 0.70 mHz por paso, diez veces mas fino que los 7 mHz
+   con que medimos la red. El dither mueve el flanco 62.5 ns.
+
+   TUS TRES LIMITES, TAL CUAL:
+
+     rango      +-2 Hz. Afuera se suelta y vuelve al cristal, POR LA RAMPA.
+                Arrastrar la casa a 57 Hz es peor que no transferir.
+     rampa      2 segundos para recorrer el rango completo. No hay escalones.
+     aviso      "*** FASE ESTABLE, ENGANCHADO ***  tardo NNNN ms"
+                El enganche no es opinion: es el error de fase dentro de
+                +-5 grados durante medio segundo seguido.
+
+   COSTO, MEDIDO EN EL BINARIO:
+
+        ISR del SPWM   170 -> 189 instrucciones    push 15 -> 15
+        camino comun con el PLL SUELTO: ~5 ciclos (una lectura y un salto)
+        con el PLL enganchado:          ~18 ciclos
+
+   La guardia `if (topFrac)` es a proposito: cobrar 2.1 % del CPU las 24 horas
+   por algo que se usa unos segundos seria justo el error de DC-026.
+
+   !! ACOPLAMIENTO CONOCIDO Y NO COMPENSADO: al subir el TOP baja el ciclo de
+   trabajo relativo, o sea la amplitud. En el extremo del rango son -3.3 %.
+   No se corrige aqui porque el lazo de voltaje de salida lo va a corregir
+   solo -- mide el RMS real y ajusta. Corregirlo dos veces es pelearse con el.
+   En enganche normal son 0.1 %.
 
 
 LO QUE NO DEBE MOVERSE
