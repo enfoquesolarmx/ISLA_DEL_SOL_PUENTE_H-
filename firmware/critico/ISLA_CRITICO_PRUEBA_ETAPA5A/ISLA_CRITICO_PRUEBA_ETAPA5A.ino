@@ -1112,6 +1112,13 @@ void loop()
         case PLL_FUERA_RANGO:
           Serial.print(F("SOLTADO: la fuente se salio de +-2 Hz"));
           break;
+        case PLL_SIN_RED:
+          /*  No es lo mismo que ENGANCHANDO. Enganchando quiere decir "la
+           *  estoy alcanzando"; esto quiere decir "no hay a que engancharse".
+           *  Decirlo mal es lo que hacia el firmware anterior.
+           */
+          Serial.print(F("SOLTADO: NO HAY RED (sin cruces que seguir)"));
+          break;
       }
       if (pll_estado() != PLL_LIBRE) {
         Serial.print(F("  corrigiendo "));

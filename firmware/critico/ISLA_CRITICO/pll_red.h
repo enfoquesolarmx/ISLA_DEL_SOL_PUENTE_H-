@@ -80,8 +80,23 @@ enum PllEstado : uint8_t {
   PLL_LIBRE = 0,      /* corriendo del cristal, 60.060 Hz                    */
   PLL_ENGANCHANDO,    /* corrigiendo, todavia fuera de banda                 */
   PLL_ENGANCHADO,     /* error de fase quieto dentro de banda                */
-  PLL_FUERA_RANGO     /* la fuente se salio de +-2 Hz: se solto a proposito  */
+  PLL_FUERA_RANGO,    /* la fuente se salio de +-2 Hz: se solto a proposito  */
+  PLL_SIN_RED         /* no hay cruces que seguir: se solto y se dice         */
 };
+
+/*  !! EL ENGANCHE NO SE LATCHEA, SE REVALIDA CADA CICLO.
+ *
+ *  Lo encontro el banco: al cortar la red el PLL dejaba de corregir pero
+ *  seguia diciendo ENGANCHANDO para siempre, como si la estuviera buscando.
+ *  Un estado que miente es peor que no tenerlo, porque quien decida cerrar el
+ *  relevador va a preguntarle a `pll_estado()`.
+ *
+ *  Ahora hay PLL_SIN_RED, y lo que lo dispara NO es solo `cmp_red_presente()`
+ *  sino que **el sello calificado deje de avanzar**. La diferencia importa:
+ *  con la red cortada la entrada queda al aire y el comparador puede
+ *  castanetear con el ruido; `cmp_red_presente()` diria que si hay red y el
+ *  lazo se engancharia AL RUIDO. Eso es justo el limbo que no queremos.
+ */
 
 void        pll_preparar(void);
 
