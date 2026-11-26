@@ -834,62 +834,6 @@ La etapa de potencia trabajando, con J15 todavía fuera.
 
 **Criterio.** (a) `rechazados` **sigue en 0** — cualquier cosa distinta es acoplamiento, y ya sabemos dónde buscarlo: los 44 mm de pista paralela. (b) Las dos piernas conservan su tiempo muerto; **HA y LA nunca altos a la vez**, ni un solo flanco. (c) Diferencia entre semiciclos consecutivos ≤ 20 µs. (d) El RMS de la red no se mueve cuando el puente arranca: si se mueve, el canal de red está viendo al inversor y no a la red.
 
-## C5-bis. Caracterización con analizador lógico: el tiempo físico entre los dos cruces
-
-**Qué es, y en qué se distingue de lo demás de la Parte C.** No valida un criterio ni pasa o falla: **mide un número que el proyecto todavía no tiene** y lo deja escrito. El analizador no comparte nada con el firmware, así que es la única medición de fase que no depende de nuestras propias suposiciones.
-
-### El montaje
-
-```
-CH1  →  D3   (LB)     flanco de SUBIDA = cruce por cero del INVERSOR
-CH2  →  D13  (TRZ)    pulso            = entrada a la ISR del comparador
-GND  →  GND del Nano
-```
-
-**No hace falta ningún pin nuevo ni una línea de firmware.** `LB` ya se levanta exactamente en el cruce del inversor:
-
-```c
-} else if (muestra == 0) {
-    if (semiciclo == 0) PORTD |= _BV(BIT_LB);   // ← el cruce del inversor
-```
-
-> ⚠️ **J15 desconectado.** D13 es `TN_CMD`: con J15 puesto, la traza castañetea el relé K5.
-
-### Conversión
-
-| | |
-| --- | --- |
-| 1 ms | **21.6°** |
-| 1° | **46.3 µs** |
-| ciclo completo (60.06 Hz) | 16.65 ms |
-
-### Lo que hay que anotar
-
-| | medido | notas |
-| --- | --- | --- |
-| Δt de D3↑ a D13↑, **mínimo** | | |
-| Δt **promedio** | | |
-| Δt **máximo** | | |
-| **Dispersión** (máx − mín) | | ésta es la que importa |
-| Lo mismo en **grados** | | ×21.6 por ms |
-| Lo que reportó el sketch como `FASE inv-red` | | debe coincidir |
-| Pulsos **de más** en D13 entre cruces buenos | | son los rechazos del blanqueo |
-| Separación de esos pulsos de más | | el histograma los da ≤50 µs |
-
-### Lo que el número va a contener, y por eso hay que anotarlo ahora
-
-⚠️ **Δt no es sólo la fase.** D13 sube cuando la ISR del comparador **entra**, no cuando la red cruza de verdad. En medio está la latencia de entrada, que la etapa 4 midió entre **43 y 351 ciclos = 2.7 a 22 µs**, o sea **0.06° a 0.47°**.
-
-**Eso no estorba: es un dato nuevo.** La dispersión del Δt en el analizador **es** la latencia de entrada vista desde afuera — y es la primera vez que se podría medir sin el muestreo ciego del lazo, que la subestimaba en 110 ciclos.
-
-Y hay un segundo término que **hoy vale cero y mañana no**: entre el flanco de `LB` y los 127 V reales están el retardo del driver, el del MOSFET y el del transformador. Con la etapa de potencia fuera no existe; **cuando entre, hay que medirlo y restarlo**, y el analizador es la herramienta para eso también.
-
-### Por qué se guarda
-
-Este número es la referencia contra la cual se va a comparar cualquier PLL, cualquier predicción de cierre de relé y cualquier compensación de fase que se escriba después. **Un corrimiento constante sólo se puede compensar si alguien lo midió una vez.**
-
----
-
 ## C6. Si no cabe: el orden de los remedios
 
 Del más barato al más caro. **No saltarse pasos**: cada uno se mide antes de pasar al siguiente.
