@@ -99,3 +99,4 @@ PllEstado   pll_estado(void);
 int16_t     pll_error_grados_x10(void);   /* error de fase, decimas de grado */
 uint16_t    pll_ms_para_enganchar(void);  /* cuanto tardo la ultima vez      */
 int16_t     pll_correccion_mhz(void);     /* cuanto estamos corrigiendo      */
+int32_t     pll_red_mhz(void);            /* deriva de la red vs 60.060 Hz   */
