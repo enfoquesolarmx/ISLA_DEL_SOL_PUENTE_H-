@@ -93,6 +93,37 @@ D) LAS DOS VUELTAS.  Con una carga conocida, compara 1 vuelta contra 2.
    a la mitad sin avisar.
 
 
+E) EL TIEMPO FISICO ENTRE LOS DOS CRUCES, CON EL ANALIZADOR LOGICO.
+
+   No hace falta ningun pin nuevo ni una linea de firmware: LB ya se levanta
+   exactamente en el cruce por cero del inversor.
+
+        CH1  ->  D3   (LB)    flanco de SUBIDA = cruce del INVERSOR
+        CH2  ->  D13  (TRZ)   pulso            = ISR del comparador, la RED
+        GND  ->  GND del Nano
+
+   !! J15 DESCONECTADO: D13 es TN_CMD y le castanetea el rele K5.
+
+   Conversion:   1 ms = 21.6 grados      1 grado = 46.3 us
+
+   Anota minimo, promedio y maximo del Dt, y sobre todo LA DISPERSION. El
+   sketch reporta el mismo numero como FASE inv-red: deben coincidir.
+
+   Dos cosas que solo se ven aqui:
+
+     · LOS RECHAZOS. D13 pulsa en CADA entrada a la ISR, incluidos los ~66/s
+       que el blanqueo tira. Hoy solo los conocemos como histograma; aqui se
+       ven uno por uno con su tiempo real, pegados al cruce bueno.
+
+     · LA LATENCIA DE ENTRADA. D13 sube cuando la ISR ENTRA, no cuando la red
+       cruza. La dispersion del Dt ES esa latencia vista desde afuera -- la
+       etapa 4 la midio entre 2.7 y 22 us por el histograma, que subestimaba
+       110 ciclos por la ventana ciega del muestreo.
+
+   El procedimiento completo y la tabla para llenar estan en el protocolo,
+   seccion C5-bis.
+
+
 LO QUE NO DEBE MOVERSE
 -----------------------------------------------------------------------------
        SOBREPASOS=+0     PERDIDAS=0     CRCmalo=0
