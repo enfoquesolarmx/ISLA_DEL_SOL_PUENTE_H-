@@ -1061,7 +1061,8 @@ void loop()
          *  contra uno de 60/s y reducia en uint16 modulo 4162: salia ambiguo
          *  en 180 grados y roto cuando la red cruzaba primero.
          */
-        const int16_t g10 = reloj_fase_x10(cmp_t_cruce_dir(), tInv);
+        int16_t g10 = (int16_t)cmp_fase_x10();
+        if (g10 > 1800) g10 -= 3600;
         Serial.print(F("  FASE inv-red="));
         Serial.print(g10 / 10);
         Serial.print(F("."));

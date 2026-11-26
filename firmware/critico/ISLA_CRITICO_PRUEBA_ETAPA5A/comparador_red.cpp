@@ -25,6 +25,7 @@
 
 #include "comparador_red.h"
 #include "reloj_4us.h"
+#include "spwm.h"
 #include "rms_ventana.h"
 
 #include <Arduino.h>
@@ -56,6 +57,8 @@ static volatile uint16_t cruces, rechazados, huecos, rechDir;
 static volatile uint16_t semiperiodo;    // el último aceptado, en µs
 static volatile uint16_t tUltimo;        // garrapatas de 4 µs del último cruce
 static volatile uint8_t  acoUlt;         // ACO del último cruce aceptado
+static volatile uint32_t faseCruce;      // fase del cruce EN NUESTRO CICLO
+static volatile uint32_t faseVuelta;     // cuentas de una vuelta, al momento
 static volatile uint16_t tCruceDir;      // sello SOLO del sentido de referencia
 static volatile uint8_t  nCruceDir;      // cambia una vez por ciclo, 60/s
 static volatile uint8_t  sentido;        // alternancia por TIEMPO, no por ACO
@@ -207,7 +210,17 @@ ISR(ANALOG_COMP_vect)
     else                { if (voto > -60) voto--; }
     if (voto < -30)     { sentido = (uint8_t)!sentido; voto = 0; }
 
-    if (sentido == CMP_ACO_REFERENCIA) { tCruceDir = t; nCruceDir++; }
+    if (sentido == CMP_ACO_REFERENCIA) {
+      /*  LA FASE, CONTRA TIMER1. El sello de 4 us se queda para el
+       *  semiperiodo y el jitter, donde funciona bien; para la FASE no
+       *  sirve, porque pierde desbordes del Timer0 y mete offsets de 88
+       *  grados. Ver spwm_328p.cpp.
+       */
+      faseCruce  = spwm_fase_cuentas();
+      faseVuelta = spwm_fase_vuelta();
+      tCruceDir  = t;
+      nCruceDir++;
+    }
   }
 
   if (dt > CMP_HUECO_US) huecos++;   // se acepta igual, pero queda anotado
@@ -402,7 +415,18 @@ uint16_t cmp_t_cruce_dir(void)
   return t;
 }
 
-uint8_t cmp_n_cruce_dir(void) { return nCruceDir; }   /* un byte: atomico */
+uint8_t cmp_n_cruce_dir(void) { return nCruceDir; }
+
+/*  Fase del ultimo cruce de referencia, en decimas de grado, 0..3599, medida
+ *  DENTRO de nuestro propio ciclo. Sin resta y sin Timer0.
+ */
+uint16_t cmp_fase_x10(void)
+{
+  uint32_t c, v;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { c = faseCruce; v = faseVuelta; }
+  if (v == 0) return 0;
+  return (uint16_t)((c * 3600UL) / v);
+}   /* un byte: atomico */
 
 /*  Acuerdo entre la alternancia y ACO, -60..+60. Cerca de +60 el detector de
  *  sentido esta sano; cerca de 0 o negativo, ACO esta inservible y hay que ir

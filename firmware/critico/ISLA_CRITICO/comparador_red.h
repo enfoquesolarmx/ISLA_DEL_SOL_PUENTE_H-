@@ -156,6 +156,13 @@ uint8_t  cmp_n_cruce_dir(void);
  */
 int8_t   cmp_voto_sentido(void);
 
+/*  Fase del ultimo cruce de referencia DENTRO de nuestro propio ciclo, en
+ *  decimas de grado (0..3599). Medida contra Timer1, que es el que genera la
+ *  onda y no puede perder cuentas. Reemplaza a la resta de dos sellos de 4 us,
+ *  que en banco metia offsets de 88 grados (cuatro desbordes de Timer0).
+ */
+uint16_t cmp_fase_x10(void);
+
 /*  Hay que llamarla en cada vuelta del lazo: drena el anillo de semiperiodos
  *  y acumula la estadística. Lo que antes costaba 117 ciclos dentro de la ISR
  *  —y hacía perder pasos de la onda— aquí no le cuesta nada a nadie.

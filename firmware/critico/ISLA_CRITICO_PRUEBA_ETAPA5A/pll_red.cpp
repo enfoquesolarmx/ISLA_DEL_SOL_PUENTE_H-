@@ -376,7 +376,13 @@ void pll_atender(void)
        *  en uint16 y reducia modulo 4162 -- mal, porque 65536 no es multiplo
        *  de 4162 y la mitad de las diferencias son negativas. Ver reloj_4us.h.
        */
-      int16_t e = reloj_fase_x10(cmp_t_cruce_dir(), spwm_t_cruce());
+      /*  LA FASE, DE UN SOLO NUMERO. `cmp_fase_x10()` dice en que punto de
+       *  NUESTRO ciclo cruzo la red, medido contra Timer1. Nuestro cruce es
+       *  la posicion 0 por construccion, asi que esto ya ES el error de fase:
+       *  no hay resta de dos relojes, y el Timer0 queda fuera del camino.
+       */
+      int16_t e = (int16_t)cmp_fase_x10();
+      if (e > 1800) e -= 3600;
 
       /*  La huella se guarda CRUDA, antes de filtrar: es justamente lo que el
        *  filtro esconde.
