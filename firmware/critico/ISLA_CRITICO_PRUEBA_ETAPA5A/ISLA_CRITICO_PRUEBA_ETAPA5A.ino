@@ -710,7 +710,13 @@ void loop()
      *  `dobladas` deja de ser «las que hubo que adivinar» y pasa a ser un
      *  dato: cuántas veces la ISR siguió corriendo después del TOP.
      */
-    if (t1 > TOP_CUENTAS) dobladas++;
+    /*  !! Contra el TOP DE AHORA, no contra la constante. Con el PLL moviendo
+     *  el TOP esta linea comparaba contra 333 fijo, y cada vez que el TOP
+     *  pasaba de 333 contaba como doblada una lectura perfectamente buena:
+     *  en banco salto de 4 a 100. Era el instrumento, no la falla. Tercer
+     *  lugar donde TOP_CUENTAS tenia que volverse variable.
+     */
+    if (t1 > spwm_top_actual()) dobladas++;
 
     mete(entrada, t0);
     mete(cuerpo,  (uint16_t)(t1 - t0));
@@ -1050,20 +1056,27 @@ void loop()
       const uint16_t tRed = cmp_t_ultimo_cruce();
       const uint16_t tInv = spwm_t_cruce();
       if (cmp_red_presente() && spwm_n_cruce() != 0) {
-        uint16_t d = (uint16_t)(tRed - tInv);          /* cuentas de 4 us   */
-        while (d >= (RELOJ_CICLO_X2 / 2)) d -= (RELOJ_CICLO_X2 / 2);
-        /*  grados x10:  d cuentas x 0.08648 grados = d x 8648 / 10000  */
-        const uint16_t g10 = (uint16_t)(((uint32_t)d * 8648UL) / 10000UL);
+        /*  Misma resta que usa el PLL, hecha por la misma pieza, y contra el
+         *  sello de UN SOLO SENTIDO. Lo de antes restaba un sello de 120/s
+         *  contra uno de 60/s y reducia en uint16 modulo 4162: salia ambiguo
+         *  en 180 grados y roto cuando la red cruzaba primero.
+         */
+        const int16_t g10 = reloj_fase_x10(cmp_t_cruce_dir(), tInv);
         Serial.print(F("  FASE inv-red="));
         Serial.print(g10 / 10);
         Serial.print(F("."));
-        Serial.print(g10 % 10);
+        Serial.print((g10 < 0 ? -g10 : g10) % 10);
         Serial.print(F(" grados"));
 
         /*  Deriva: nuestra frecuencia es exacta por construccion,
          *  24 024 / 400 = 60.060 Hz. La diferencia da el batimiento.
          */
-        const int32_t dmhz = (int32_t)cmp_frecuencia_mhz() - 60060L;
+        /*  !! `cmp_frecuencia_mhz()` NO sirve aqui: `cmp_reiniciar()` corre
+         *  unas lineas arriba y pone su promedio en cero, asi que devolvia 0 y
+         *  la deriva salia -60060 mHz en todos los reportes. Se mide con
+         *  nuestros propios sellos, que nadie reinicia.
+         */
+        const int32_t dmhz = pll_red_mhz();
         Serial.print(F("  deriva="));
         Serial.print(dmhz);
         Serial.print(F(" mHz"));

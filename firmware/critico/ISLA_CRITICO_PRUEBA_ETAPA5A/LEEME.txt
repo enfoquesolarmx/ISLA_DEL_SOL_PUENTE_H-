@@ -157,6 +157,8 @@ E) (OPCIONAL) EL TIEMPO FISICO ENTRE LOS DOS CRUCES, CON ANALIZADOR LOGICO.
    COSTO, MEDIDO EN EL BINARIO:
 
         ISR del SPWM   170 -> 189 instrucciones    push 15 -> 15
+        (verificado en banco: SOBREPASOS=+0 total 0 en las 17 corridas,
+         con el PLL suelto y corrigiendo. El presupuesto de ISR aguanto.)
         camino comun con el PLL SUELTO: ~5 ciclos (una lectura y un salto)
         con el PLL enganchado:          ~18 ciclos
 
@@ -170,10 +172,70 @@ E) (OPCIONAL) EL TIEMPO FISICO ENTRE LOS DOS CRUCES, CON ANALIZADOR LOGICO.
    En enganche normal son 0.1 %.
 
 
+   LO QUE LA PRIMERA CORRIDA DEL PLL YA ENSENO (26 nov)
+   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   No engancho, y los cuatro motivos eran mios. Se arreglaron los cuatro:
+
+     1. FASE AMBIGUA EN 180 GRADOS. El comparador sella LOS DOS cruces del
+        ciclo (ACIS=00, 120/s) y el inversor solo el positivo (60/s). Restar
+        uno contra otro no puede distinguir 0 de 180. En el reporte se veia
+        clarisimo: el error se agrupaba en +-100 a 180 en vez de converger.
+        Ahora hay un sello de UN SOLO SENTIDO, `cmp_t_cruce_dir()`.
+
+     2. LA RESTA EN uint16 ESTABA MAL. El reloj envuelve en 65536 y 65536 no
+        es multiplo de 4162, asi que reducir modulo 4162 el valor crudo falla
+        cuando la red cruza ANTES que el inversor -- la mitad de las veces. Un
+        cruce a un pelo de cero se reportaba a 267 grados. Ahora la resta se
+        hace firmada, en `reloj_fase_x10()`.
+
+     3. EL PLL LEIA UN INSTRUMENTO QUE EL REPORTE PONE EN CERO. Usaba
+        `cmp_frecuencia_mhz()`, y `cmp_reiniciar()` corre en cada impresion:
+        mientras se vuelve a llenar devuelve 0, el PLL leia "la red esta a
+        0 Hz", declaraba fuera de rango y se desandaba UNA VEZ POR SEGUNDO.
+        Es tambien lo que ponia `deriva=-60060 mHz` en todos los reportes.
+        Ahora el PLL mide el periodo con sus propios sellos.
+
+     4. EL LAZO ERA UN INTEGRADOR PURO, O SEA UN OSCILADOR SIN AMORTIGUAR.
+        Lo llame "proporcional" y estaba mal: si la salida es la integral del
+        error de fase, zeta = 0 y el error se pasea para siempre. Se le agrego
+        el termino proporcional de verdad, calculado para zeta = 0.70.
+
+   Y una quinta que era el INSTRUMENTO, no la falla: `dobladas` comparaba
+   contra TOP_CUENTAS fijo, asi que contaba como doblada cualquier lectura
+   buena mientras el TOP andaba arriba de 333. De 4 salto a 100. Ya compara
+   contra el TOP de ahora.
+
+
+   !! LA PREGUNTA QUE ESTA CORRIDA CONTESTA
+   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   CUAL de los dos sentidos de cruce es el positivo depende de si A6 entra al
+   + o al - del comparador, y eso no lo adivino: lo dice el banco.
+
+        Si el enganche se asienta cerca de 0 grados          -> esta bien
+        Si se asienta cerca de 180 (o +-175, -178...)        -> voltea
+                                   CMP_ACO_REFERENCIA de 1 a 0 en
+                                   comparador_red.h, y vuelve a correr
+
+   Las dos cosas enganchan igual de firme. La diferencia es que una cierra el
+   relevador en fase y la otra en contrafase, que es justo el golpe que todo
+   esto existe para evitar. Hay que saberlo antes de cablear el rele.
+
+
 LO QUE NO DEBE MOVERSE
 -----------------------------------------------------------------------------
        SOBREPASOS=+0     PERDIDAS=0     CRCmalo=0
-       sigma del RMS de la red = 0.0    ventanas 25/50
+
+!! EL sigma DEL RMS DE LA RED **NO** ES CRITERIO MIENTRAS EL PLL CORRIGE.
+
+Se vio en banco: suelto da sigma=0.0 y n=25 clavado; en cuanto el PLL mueve el
+TOP, sigma sube a 10 cuentas, n se va a 24 o 26 y min/max abre a 175..254. No
+es un hundimiento de la red. La ventana del RMS de la red la ABRE el cruce de
+la red pero la MUESTREA nuestra portadora: si las dos frecuencias no coinciden,
+en la ventana cabe un numero no entero de muestras y entra medio semiciclo.
+
+Y eso tiene una consecuencia de diseno, no solo de medicion: **la ventana de
+voltaje de DC-033 se valida con el PLL SUELTO, antes de pedir enganche.** El
+orden es voltaje primero, enganche despues, cierre al final.
 
 Si SOBREPASOS deja de ser 0, el sospechoso es el costo que no medimos en
 ciclos: +4 instrucciones en la ISR del ADC y +21 en la rama de 60/s del SPWM.

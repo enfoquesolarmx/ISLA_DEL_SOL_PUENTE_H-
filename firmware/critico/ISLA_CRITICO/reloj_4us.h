@@ -60,3 +60,41 @@ static inline uint16_t reloj_4us(void)
  */
 #define RELOJ_GRADOS_X100_NUM   8648UL
 #define RELOJ_GRADOS_X100_DEN    100UL
+
+/* ===========================================================================
+ *  LA RESTA DE FASE, EN UN SOLO LUGAR -- Y ESTO SE APRENDIO EN BANCO
+ *
+ *  El primer intento restaba los dos sellos en `uint16_t` y luego reducia el
+ *  resultado con  `while (d >= 4163) d -= 4163`.  Eso esta MAL, y falla la
+ *  mitad de las veces:
+ *
+ *    El reloj de 4 us envuelve en 65536, y **65536 no es multiplo de 4162**.
+ *    Cuando el cruce de la red cae ANTES que el del inversor, la diferencia
+ *    verdadera es negativa; en uint16 eso aparece como 65535, 65534..., y
+ *    restarle 4162 repetidas veces no da -1, da 3091. Un cruce que estaba a
+ *    un pelo de cero se reportaba a 267 grados.
+ *
+ *  La forma correcta: la diferencia de dos `uint16_t` **casteada a int16_t**
+ *  ES la diferencia firmada exacta, siempre que el valor real quepa en
+ *  +-32768 cuentas (131 ms). El nuestro es menor a 17 ms. Y el doblez se hace
+ *  sobre ese numero firmado, no sobre el crudo.
+ *
+ *  Vive aqui, junto al reloj, por la misma razon que el reloj: una sola pieza
+ *  sirviendo al lazo y al reporte, para que no puedan discrepar.
+ * ===========================================================================
+ */
+
+#define RELOJ_CICLO     (RELOJ_CICLO_X2 / 2u)   /* 4162 cuentas = un ciclo   */
+#define RELOJ_MEDIO     (RELOJ_CICLO_X2 / 4u)   /* 2081 = medio ciclo        */
+
+/*  Fase de tA respecto a tB, en decimas de grado, en -1800..+1800.
+ *  Los dos sellos tienen que venir del MISMO sentido de cruce: si uno es de
+ *  120/s y el otro de 60/s, el numero sale ambiguo en 180 grados.
+ */
+static inline int16_t reloj_fase_x10(uint16_t tA, uint16_t tB)
+{
+  int16_t raw = (int16_t)((uint16_t)(tA - tB));    /* firmada, exacta */
+  while (raw >  (int16_t)RELOJ_MEDIO) raw -= (int16_t)RELOJ_CICLO;
+  while (raw < -(int16_t)RELOJ_MEDIO) raw += (int16_t)RELOJ_CICLO;
+  return (int16_t)(((int32_t)raw * 3600L) / (int32_t)RELOJ_CICLO);
+}

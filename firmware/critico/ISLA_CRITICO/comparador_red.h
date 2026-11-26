@@ -57,6 +57,13 @@
 
 #pragma once
 
+/*  Cual de los dos sentidos de cruce se toma como referencia de fase. Depende
+ *  de si A6 entra al + o al - del comparador: si el enganche se asienta cerca
+ *  de 180 grados en vez de cerca de 0, se voltea este 1 por 0. Una corrida de
+ *  banco lo contesta; no se adivina.
+ */
+#define CMP_ACO_REFERENCIA  1
+
 #include <stdint.h>
 
 /*  Ventana ciega tras un cruce aceptado. A 60 Hz el semiperiodo son 8 333 µs,
@@ -105,7 +112,20 @@ uint16_t cmp_histograma_tope(uint8_t k);
 bool cmp_jitter(uint16_t *minUs, uint16_t *promUs, uint16_t *maxUs, uint16_t *sigmaUs);
 uint16_t cmp_semiperiodo_us(void);// el último aceptado
 bool     cmp_red_presente(void);
-uint16_t cmp_t_ultimo_cruce(void);   // sello de 4 us, para el detector de fase
+uint16_t cmp_t_ultimo_cruce(void);   // sello de 4 us de CUALQUIER cruce, 120/s
+
+/*  EL SELLO QUE SIRVE PARA FASE: un solo sentido de cruce, 60/s.
+ *
+ *  `cmp_t_ultimo_cruce()` se mueve en los dos cruces del ciclo. Restarlo
+ *  contra el del inversor —que solo sella el semiciclo positivo— da un numero
+ *  ambiguo en 180 grados; el banco lo mostro como errores agrupados en +-150
+ *  en vez de converger. Para fase hay que usar estos dos.
+ *
+ *  Ni el sello ni el contador los borra `cmp_reiniciar()`: el PLL no puede
+ *  depender de un instrumento que el reporte pone en cero cada segundo.
+ */
+uint16_t cmp_t_cruce_dir(void);
+uint8_t  cmp_n_cruce_dir(void);
 
 /*  Hay que llamarla en cada vuelta del lazo: drena el anillo de semiperiodos
  *  y acumula la estadística. Lo que antes costaba 117 ciclos dentro de la ISR

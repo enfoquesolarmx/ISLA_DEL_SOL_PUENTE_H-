@@ -56,6 +56,8 @@ static volatile uint16_t cruces, rechazados, huecos, rechDir;
 static volatile uint16_t semiperiodo;    // el último aceptado, en µs
 static volatile uint16_t tUltimo;        // garrapatas de 4 µs del último cruce
 static volatile uint8_t  acoUlt;         // ACO del último cruce aceptado
+static volatile uint16_t tCruceDir;      // sello SOLO del sentido de referencia
+static volatile uint8_t  nCruceDir;      // cambia una vez por ciclo, 60/s
 
 /*  Histograma de a qué distancia del cruce aceptado llegan los flancos
  *  rechazados. Es la pregunta que decide el arreglo, y se contesta desde
@@ -139,6 +141,24 @@ ISR(ANALOG_COMP_vect)
     return;
   }
   acoUlt = aco;
+
+  /*  EL SELLO CALIFICADO POR SENTIDO, Y POR QUE HACE FALTA.
+   *
+   *  `tUltimo` se pone en LOS DOS cruces del ciclo (ACIS=00, cualquier flanco):
+   *  son 120/s. Pero el inversor solo sella el arranque del semiciclo POSITIVO:
+   *  60/s. Restar uno contra otro da un numero **ambiguo en 180 grados**, y el
+   *  banco lo mostro limpio: el error del PLL se agrupaba en +-100 a 180 en vez
+   *  de converger a cero.
+   *
+   *  Aqui se guarda el sello de UN solo sentido. Cuesta una comparacion y dos
+   *  guardados, 120 veces por segundo.
+   *
+   *  !! CUAL de los dos sentidos es el positivo depende de si A6 entra al + o
+   *  al - del comparador, y eso lo contesta el banco en una corrida: si el
+   *  enganche se asienta cerca de 180 en vez de cerca de 0, se voltea
+   *  CMP_ACO_REFERENCIA. No lo adivino aqui.
+   */
+  if (aco == CMP_ACO_REFERENCIA) { tCruceDir = t; nCruceDir++; }
 
   if (dt > CMP_HUECO_US) huecos++;   // se acepta igual, pero queda anotado
 
@@ -318,6 +338,21 @@ uint16_t cmp_t_ultimo_cruce(void)
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { t = tUltimo; }
   return t;
 }
+
+/*  Sello y contador del cruce de UN SOLO SENTIDO, 60/s. Es lo que el PLL tiene
+ *  que usar: `cmp_t_ultimo_cruce()` es de 120/s y da fase ambigua en 180.
+ *
+ *  !! Estos dos NO los toca `cmp_reiniciar()`, a proposito: el PLL no puede
+ *  depender de un instrumento que el reporte pone en cero cada segundo.
+ */
+uint16_t cmp_t_cruce_dir(void)
+{
+  uint16_t t;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { t = tCruceDir; }
+  return t;
+}
+
+uint8_t cmp_n_cruce_dir(void) { return nCruceDir; }   /* un byte: atomico */
 
 void cmp_reiniciar(void)
 {
