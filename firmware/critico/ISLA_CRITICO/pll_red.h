@@ -116,3 +116,8 @@ uint16_t    pll_ms_para_enganchar(void);  /* cuanto tardo la ultima vez      */
 int16_t     pll_correccion_mhz(void);     /* cuanto estamos corrigiendo      */
 int32_t     pll_red_mhz(void);            /* deriva de la red vs 60.060 Hz   */
 uint16_t    pll_descartados(void);        /* muestras de fase imposibles     */
+
+/*  Los ultimos 8 errores de fase CRUDOS, uno por ciclo, sin filtrar. i=0 es la
+ *  mas vieja. Es el instrumento para ver que pasa entre reporte y reporte.
+ */
+int16_t     pll_huella(uint8_t i);

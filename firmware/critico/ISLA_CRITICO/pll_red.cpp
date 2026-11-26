@@ -173,6 +173,29 @@ static int16_t   eAnt;              /* ultimo error bueno                     */
 static bool      hayEAnt;
 static uint8_t   seguidos;          /* descartes seguidos                     */
 static uint16_t  descartados;       /* total, para el reporte                 */
+
+/*  LA HUELLA: los ultimos 8 errores crudos, SIN FILTRAR, uno por ciclo.
+ *
+ *  Dejo de adivinar. Ya van tres hipotesis mias y el banco corrigio las tres.
+ *  A escala de un segundo la medicion es impecable -- la deriva libre sale en
+ *  +17 grados/s clavada -- pero ciclo a ciclo salen entre 5 y 24 muestras
+ *  imposibles de 60. Y el ruido en el cruce NO puede explicarlo: 20 mV sobre
+ *  una pendiente de 583 mV/ms corren el sello 34 us, o sea 0.7 grados. Para
+ *  100 grados harian falta 4.6 MILISEGUNDOS. Eso es estructural, no ruido.
+ *
+ *  Ocho muestras seguidas lo dicen de un vistazo y sin teoria:
+ *
+ *    deriva limpia con picos sueltos  ->  el detector se ensucia a ratos
+ *    alternando bueno/malo            ->  hay dos sellos peleandose
+ *    saltos de un semiciclo (180)     ->  sentido, aunque el voto diga 60
+ *    saltos de 22 grados o multiplos  ->  el reloj (1024 us = 22.14 grados)
+ *    ruido parejo                     ->  el cruce mismo
+ *
+ *  Cuesta 16 bytes de RAM y nada en ninguna ISR.
+ */
+#define PLL_HUELLA 8
+static int16_t  huella[PLL_HUELLA];
+static uint8_t  huellaW;
 static int32_t   redMhz;            /* ultima medida valida, latcheada        */
 static uint32_t  msInicio;
 static uint16_t  msEnganche;
@@ -217,6 +240,12 @@ uint16_t  pll_ms_para_enganchar(void) { return msEnganche; }
  */
 int32_t  pll_red_mhz(void)    { return redMhz; }
 uint16_t pll_descartados(void) { return descartados; }
+
+/*  i = 0 es la mas vieja de las ocho. */
+int16_t pll_huella(uint8_t i)
+{
+  return huella[(uint8_t)(huellaW + i) & (PLL_HUELLA - 1)];
+}
 
 int16_t pll_correccion_mhz(void)
 {
@@ -348,6 +377,12 @@ void pll_atender(void)
        *  de 4162 y la mitad de las diferencias son negativas. Ver reloj_4us.h.
        */
       int16_t e = reloj_fase_x10(cmp_t_cruce_dir(), spwm_t_cruce());
+
+      /*  La huella se guarda CRUDA, antes de filtrar: es justamente lo que el
+       *  filtro esconde.
+       */
+      huella[huellaW] = e;
+      huellaW = (uint8_t)((huellaW + 1) & (PLL_HUELLA - 1));
 
       /* ---- 2b) LA MUESTRA, ¿ES POSIBLE? ------------------------------- */
 
