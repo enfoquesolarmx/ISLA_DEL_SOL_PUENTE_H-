@@ -100,6 +100,13 @@
 /*  Un hueco: pasó más de esto sin un cruce. A 60 Hz el semiperiodo son
  *  8 333 µs; 12 000 permite bajar hasta 41.7 Hz antes de contar hueco.
  */
+/*  Ventana de llegada alrededor del semiperiodo esperado. El semiperiodo se
+ *  mide con sigma de 34 us, asi que 600 us son 18 sigma: no estorba al jitter
+ *  y tira cualquier flanco que llegue medio milisegundo temprano por el
+ *  acoplamiento de nuestra propia portadora.
+ */
+#define CMP_VENTANA_US        600
+
 #define CMP_HUECO_US        12000
 
 /*  Sin cruces por más de esto, se declara que no hay red. Tres semiciclos.
@@ -155,6 +162,7 @@ uint8_t  cmp_n_cruce_dir(void);
  *  y ACO (ruidoso), de -60 a +60. Debe vivir pegado a +60.
  */
 int8_t   cmp_voto_sentido(void);
+uint16_t cmp_rech_ventana(void);   // tirados por llegar fuera de tiempo
 
 /*  Fase del ultimo cruce de referencia DENTRO de nuestro propio ciclo, en
  *  decimas de grado (0..3599). Medida contra Timer1, que es el que genera la
