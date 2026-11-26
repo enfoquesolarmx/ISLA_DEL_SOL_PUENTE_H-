@@ -1127,6 +1127,11 @@ void loop()
         Serial.print(F("  imposibles="));
         Serial.print(pll_descartados());
       }
+      /*  Salud del detector de sentido. Debe vivir pegado a +60. Si anda cerca
+       *  de cero, ACO esta inservible y el problema es del hardware del cruce.
+       */
+      Serial.print(F("  voto="));
+      Serial.print(cmp_voto_sentido());
       if (pll_estado() != PLL_LIBRE) {
         Serial.print(F("  corrigiendo "));
         Serial.print(pll_correccion_mhz());
