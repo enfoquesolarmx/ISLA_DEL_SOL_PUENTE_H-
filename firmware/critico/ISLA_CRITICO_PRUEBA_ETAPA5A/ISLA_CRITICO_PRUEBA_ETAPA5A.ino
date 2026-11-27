@@ -508,6 +508,8 @@ void setup()
   Serial.println(F("================================================================"));
   Serial.println(F("  !! J15 DESCONECTADO y etapa de potencia fuera. Verificar."));
   Serial.println(F("  !! J15 DESCONECTADO: D13 lleva \"hay red\", no TN_CMD."));
+  Serial.println(F("  -- D4 conmuta en cada CRUCE de la red (no es la ISR del SPWM)."));
+  Serial.println(F("     Medir: disparo en bajada de D13, atras hasta el ultimo D4."));
   Serial.println(F("  -- D13: 1 = hay red, 0 = no hay red. Nivel, sin pulsos."));
   Serial.println(F("  !! 127 V en el primario del transformador. Es la barrera."));
 #if (MV_POR_CUENTA_X100_RED == 0) || (MV_POR_CUENTA_X100_INV == 0)

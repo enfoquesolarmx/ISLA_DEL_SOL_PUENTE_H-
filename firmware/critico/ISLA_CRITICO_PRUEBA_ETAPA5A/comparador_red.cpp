@@ -40,9 +40,15 @@
 
 // --- Enganche de medición (protocolo de banco, Parte C, etapa 4) -------------
 #if defined(__has_include)
+#  if __has_include("traza_cruce.h")
+#    include "traza_cruce.h"
+#  endif
 #  if __has_include("traza_cmp.h")
 #    include "traza_cmp.h"
 #  endif
+#endif
+#ifndef CRUCE_TRAZA_TOGGLE
+#define CRUCE_TRAZA_TOGGLE()
 #endif
 #ifndef CMP_TRAZA_ENTRA
 #define CMP_TRAZA_ENTRA()
@@ -237,6 +243,12 @@ ISR(ANALOG_COMP_vect)
   tUltimo     = t;
   semiperiodo = dt;
   cruces++;
+
+  /*  D4 conmuta aqui: UNA instruccion, y es el unico sitio donde se sabe que
+   *  el cruce fue aceptado. Ver traza_cruce.h -- es lo que deja medir la
+   *  demora directo en el analizador, sin inferirla de la pierna B.
+   */
+  CRUCE_TRAZA_TOGGLE();
 
   /*  El jitter, encolado. Sólo entran los semiperiodos plausibles: el primero
    *  de todos y los que vienen después de un hueco no son medidas de jitter,

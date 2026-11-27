@@ -43,6 +43,15 @@
 // ⚠️ J15 DESCONECTADO durante toda la prueba — ver Parte C, sección C0.
 #define TRZ_BIT    PD4
 
+/*  1 = la ISR del SPWM tambien mueve el pin D4.  0 = solo la contabilidad.
+ *
+ *  Se pone en 0 mientras D4 lleva los cruces de la red (traza_cruce.h). Lo
+ *  que se apaga es UNICAMENTE el toggleo del pin: `isr_t0`, `isr_t0_max`,
+ *  `isr_n` y sobre todo `isr_sobrepasos` se siguen midiendo igual, asi que
+ *  PROPIO, t0max y SOBREPASOS del reporte NO cambian.
+ */
+#define TRZ_SPWM_PIN   0
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -99,7 +108,7 @@ extern volatile uint16_t isr_t0_max;      // el PEOR caso de entrada, sin ceguer
 
 #define SPWM_TRAZA_ENTRA()                      \
   do {                                          \
-    PORTD |= _BV(TRZ_BIT);                      \
+    if (TRZ_SPWM_PIN) PORTD |= _BV(TRZ_BIT);      \
     uint16_t t;                                 \
     SPWM_TCNT_DIR(t);                           \
     isr_t0 = t;                                 \
@@ -112,5 +121,5 @@ extern volatile uint16_t isr_t0_max;      // el PEOR caso de entrada, sin ceguer
     isr_n++;                                    \
     if (TIFR1 & _BV(TOV1)) isr_sobrepasos++;    \
     isr_lista = 1;                              \
-    PORTD &= ~_BV(TRZ_BIT);                     \
+    if (TRZ_SPWM_PIN) PORTD &= ~_BV(TRZ_BIT);     \
   } while (0)
