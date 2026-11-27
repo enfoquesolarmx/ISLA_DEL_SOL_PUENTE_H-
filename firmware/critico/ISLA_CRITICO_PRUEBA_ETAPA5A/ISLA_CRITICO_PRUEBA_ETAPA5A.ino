@@ -611,10 +611,23 @@ void loop()
   if (Serial.available()) {
     const int c = Serial.read();
     if (c == 'p' || c == 'P') {
+      /*  Ahora SUELTA, no pide: el enganche es el estado normal mientras haya
+       *  red. Cuando la red se muere ya no hay a que engancharse, asi que hay
+       *  que llegar en fase, no empezar a buscarla.
+       */
       const bool nuevo = (pll_estado() == PLL_LIBRE);
       pll_pedir_enganche(nuevo);
-      Serial.println(nuevo ? F(">>> PLL: pidiendo enganche")
-                           : F(">>> PLL: suelto, vuelve al cristal"));
+      Serial.println(nuevo ? F(">>> PLL: enganche automatico")
+                           : F(">>> PLL: SOLTADO a mano, corre del cristal"));
+    }
+    else if (c == 'f' || c == 'F') {
+      /*  El detector por producto. Se prende y se apaga sin reflashear porque
+       *  cuesta ~90 ciclos en la ranura de la red y el presupuesto va en 507
+       *  de 666. Si SOBREPASOS se mueve, se apaga.
+       */
+      fase_habilitar(!fase_activa);
+      Serial.println(fase_activa ? F(">>> PRODUCTO: midiendo")
+                                 : F(">>> PRODUCTO: apagado"));
     }
   }
 
@@ -1094,7 +1107,7 @@ void loop()
       Serial.print(F("\n   PLL "));
       switch (pll_estado()) {
         case PLL_LIBRE:
-          Serial.print(F("libre (cristal, 60.060 Hz) — teclea p para enganchar"));
+          Serial.print(F("SOLTADO A MANO (cristal) — teclea p para el automatico"));
           break;
         case PLL_ENGANCHANDO:
           Serial.print(F("ENGANCHANDO  error="));

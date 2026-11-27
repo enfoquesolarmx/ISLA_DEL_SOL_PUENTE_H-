@@ -105,8 +105,16 @@ void        pll_preparar(void);
  */
 void        pll_atender(void);
 
-/*  Pide enganche. Mientras no se pida, el inversor corre libre del cristal:
- *  el enganche se pide cuando una transferencia es inminente, no siempre.
+/*  EL ENGANCHE ES EL ESTADO NORMAL. Esto arranca en true.
+ *
+ *  Ayer era al reves y estaba mal planteado: yo pensaba solo en IR hacia la
+ *  red -- alinear y cerrar. Pero el caso que manda es el contrario. Cuando la
+ *  red se muere, la casa pasa a ser nuestra y **ya no queda referencia a la
+ *  cual engancharse**: si no estabas en fase antes del corte, no lo vas a
+ *  estar despues. Y el arquitecto lo dijo mejor: no se trata de andar pasando
+ *  RED, cristal, RED, cristal.
+ *
+ *  Esta funcion sirve ahora para SOLTARLO a mano, para experimentos.
  */
 void        pll_pedir_enganche(bool si);
 
