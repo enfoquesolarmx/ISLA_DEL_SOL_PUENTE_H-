@@ -136,6 +136,28 @@
  *  escala por los ciclos transcurridos, y cinco descartes seguidos obligan a
  *  resincronizar. Un filtro que nunca acepta es tan malo como no tenerlo.
  */
+/*  EL REGRESO AL CRISTAL, CUANDO NO HAY RED: LENTO, NO DE GOLPE
+ *
+ *  Lo planteo el arquitecto y tiene razon: "el PLL debe estar siempre a la
+ *  frecuencia de la red, y no estas pasando RED, cuarzo, RED, cuarzo."
+ *
+ *  Mi version soltaba la correccion a cero en ~2 s cada vez que la red
+ *  parpadeaba: el inversor se la pasaba yendo y viniendo entre 60.012 y
+ *  60.060. Y lo peor no es el vaiven, es QUE PASA EN EL INSTANTE DEL CORTE:
+ *  ahi la casa esta a punto de ser nuestra y lo ultimo que queremos es estar
+ *  moviendo la frecuencia.
+ *
+ *  Ahora se CONGELA y despues se regresa despacio. Con 2 cuentas x256 por
+ *  ciclo, el rango completo tarda medio minuto y la correccion tipica de
+ *  48 mHz se va en medio segundo. En los primeros 20 ms --que es lo que dura
+ *  una transferencia-- la frecuencia se mueve 1.7 mHz: nada.
+ *
+ *  Y el regreso existe porque la frecuencia de un generador viejo no es una
+ *  buena frecuencia para la casa a largo plazo. Congelar para transferir,
+ *  volver al cristal para vivir.
+ */
+#define PLL_REGRESO_X256     2
+
 #define PLL_SALTO_MAX_X10  200    /* 20 grados por ciclo; la fisica da 12    */
 #define PLL_DESCARTES_MAX    5    /* a los cinco seguidos, se resincroniza   */
 
@@ -203,7 +225,22 @@ static uint16_t  msEnganche;
 void pll_preparar(void)
 {
   estado = PLL_LIBRE;
-  pedido = false;
+  /*  ENGANCHA SOLO, Y ESO CAMBIO HOY.
+   *
+   *  Ayer esto arrancaba en false: el enganche se pedia. Lo diseñe pensando
+   *  solo en IR hacia la red -- alinear y cerrar. Pero el caso que manda es
+   *  el contrario: cuando la red se muere, la casa pasa a ser nuestra y YA NO
+   *  HAY REFERENCIA a la cual engancharse. Si no estabas en fase antes del
+   *  corte, no lo vas a estar despues.
+   *
+   *  Asi que el enganche es el estado normal mientras haya red. La tecla `p`
+   *  ahora sirve para SOLTARLO a mano, no para pedirlo.
+   *
+   *  Cuesta ~13 ciclos por periodo de portadora (el dither deja de ser
+   *  gratis): 1.95 % del CPU. Es el precio de estar siempre listo para
+   *  transferir, y vale la pena.
+   */
+  pedido = true;
   corrX256 = 0;
   errGradosX10 = 0;
   dentro = 0;
@@ -312,8 +349,8 @@ void pll_atender(void)
      *  que la rampa existe para evitar, nada mas que al reves.
      */
     if (aplicadoX256 != 0) {
-      if      (aplicadoX256 >  PLL_PASO_MAX_X256) aplicadoX256 -= PLL_PASO_MAX_X256;
-      else if (aplicadoX256 < -PLL_PASO_MAX_X256) aplicadoX256 += PLL_PASO_MAX_X256;
+      if      (aplicadoX256 >  PLL_REGRESO_X256) aplicadoX256 -= PLL_REGRESO_X256;
+      else if (aplicadoX256 < -PLL_REGRESO_X256) aplicadoX256 += PLL_REGRESO_X256;
       else                                        aplicadoX256  = 0;
       corrX256 = aplicadoX256;
       const int32_t t0 = ((int32_t)TOP_CUENTAS << 8) + aplicadoX256;
@@ -346,8 +383,12 @@ void pll_atender(void)
     fuera       = 0;
     msEnganche  = 0;          /* el enganche anterior ya no vale nada */
     msInicio    = millis();   /* y el cronometro arranca de nuevo cuando vuelva */
-    corrX256    = 0;
-    deseadoX256 = 0;          /* de vuelta al cristal, y por la rampa */
+    /*  CONGELA Y REGRESA DESPACIO, no de golpe. Ver PLL_REGRESO_X256. */
+    if      (aplicadoX256 >  PLL_REGRESO_X256) aplicadoX256 -= PLL_REGRESO_X256;
+    else if (aplicadoX256 < -PLL_REGRESO_X256) aplicadoX256 += PLL_REGRESO_X256;
+    else                                       aplicadoX256  = 0;
+    corrX256    = aplicadoX256;
+    deseadoX256 = aplicadoX256;        /* nada que perseguir: quieto */
   }
   else {
 
@@ -363,9 +404,17 @@ void pll_atender(void)
     }
 
     if (fuera >= 8) {
+      /*  OJO A LA DIFERENCIA CON "NO HAY RED", QUE ES A PROPOSITO:
+       *
+       *    no hay red   -> CONGELA y regresa en medio minuto. La casa esta a
+       *                    punto de ser nuestra; no se toca la frecuencia.
+       *    fuera de rango -> la fuente ESTA AHI pero no la queremos seguir.
+       *                    Es una decision, no una perdida, asi que se
+       *                    regresa al cristal por la rampa normal de 2 s.
+       */
       estado = PLL_FUERA_RANGO;
       dentro = 0;
-      deseadoX256 = 0;          /* de vuelta al cristal, y por la rampa */
+      deseadoX256 = 0;
       corrX256    = 0;
     } else {
 
