@@ -2666,6 +2666,202 @@ El valor vive en EEPROM del AUX. ⚠️ Una escritura de EEPROM son ~3.4 ms por 
 
 ---
 
+## DC-035. El enganche de fase con la red: la perilla es el TOP de la portadora, y la fase se mide contra nuestro propio ciclo
+
+> Para pasarle la casa a la red hay que llegar **al mismo ángulo**, no sólo a la misma frecuencia. Un ángulo malo contra una fuente rígida no es un parpadeo: es una corriente de choque. Y la forma de conseguirlo que parecía obvia —correr más rápido la tabla de senos— rompe la alineación del ADC que sostiene todo lo demás.
+
+**Estado: vigente (V1), validado en banco.** Escrita el 27 de noviembre de 2026, después de dos días de banco y de once correcciones al propio lazo.
+
+### Por qué hace falta
+
+El inversor corre con su cristal y la red corre con la suya. Son dos relojes independientes: por buenos que sean, **el ángulo entre ellos se pasea**. Si el relé cierra en un momento cualquiera, los dos se encuentran con la diferencia que les haya tocado.
+
+| diferencia de ángulo al cerrar | qué siente el puente |
+| --- | --- |
+| 0° | nada: las dos ondas coinciden |
+| 10° | el pico de 180 V × sen(10°) = **31 V** contra la impedancia del transformador |
+| 90° | **180 V** de diferencia instantánea |
+| 180° | **360 V**, y el puente es quien los aguanta |
+
+> **Decisión: el enganche de fase es requisito para entrar a la red, y no es requisito para salir de ella.** Son dos casos distintos y la asimetría es a propósito: al entrar hay con qué chocar, al salir no hay nada. Pedir enganche para salir bloquearía la transferencia justo cuando hace falta.
+
+### La perilla es el TOP, no la tabla
+
+La forma intuitiva de mover la frecuencia es recorrer la tabla de senos más rápido o más despacio. **Y es la mala.** El muestreo del ADC cuelga de la portadora ([DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad)): si se mueve la tabla sin mover la portadora, los 25 muestreos por medio ciclo se desalinean y se pierde la medición de RMS de [DC-028](#dc-028-el-lazo-de-control-de-ca-comparador-para-el-cruce-rms-de-medio-ciclo-por-pares).
+
+La portadora y la línea salen del mismo divisor:
+
+```
+f_linea = 16 MHz / (2 × TOP × 400)
+
+TOP = 333  ->  60.060 Hz   (portadora 24.024 kHz)
+TOP = 334  ->  59.880 Hz
+TOP = 332  ->  60.241 Hz
+```
+
+**Mover el TOP mueve las dos juntas.** La portadora cambia de 24.024 a 23.952 kHz y el ADC sigue cayendo exactamente donde debe, porque su disparo cuelga de la portadora que se movió. La alineación de 25 muestras por medio ciclo se conserva **por construcción**, sin tocar una línea del muestreo.
+
+El paso de un entero es 180 mHz, demasiado grueso. Se *dithierea* el TOP entre `TOP` y `TOP+1` con un acumulador de 8 bits:
+
+```
+paso = 180 mHz / 256 = 0.70 mHz
+```
+
+> ⚠️ **El dither corre siempre**, porque el enganche es permanente (abajo). Cuesta ~13 ciclos en la ISR del SPWM, **1.95 % de CPU, pagados a propósito.**
+
+### La fase se mide contra nuestro propio ciclo, y así no hay resta que contaminar
+
+El primer instrumento restaba una estampa de tiempo de la ISR del comparador menos una de la ISR del SPWM. Medía mal, con un sesgo de −88°, y la causa tardó en aparecer:
+
+> **Un déficit de reloj se cancela en una resta dentro de la misma ISR, pero no entre dos ISR distintas.** El semiperiodo tomaba las dos estampas dentro de la ISR del comparador, así que un desbordamiento pendiente de Timer0 se cancelaba — y en efecto su σ se quedó en 32–36 µs todo el tiempo. La fase restaba estampas de **dos** ISR con prioridades distintas: la del SPWM es la más alta y casi nunca ve desbordamientos pendientes; la del comparador sí. Déficits distintos, diferencia contaminada. Por eso un instrumento medía bien y el otro mal.
+
+La solución fue **quitar la resta**, no corregirla. Nuestro cruce por cero es la posición 0 de nuestro propio ciclo, por construcción:
+
+```c
+posicion = semiciclo × 200 + muestra      /* 0..399 */
+fase     = posicion × (2 × TOP) + TCNT1   /* cuentas de 62.5 ns */
+```
+
+Un solo número, una sola fuente de tiempo, ninguna resta entre ISR. Lo que se mide es **dónde, dentro de nuestro propio ciclo, cruzó la red.**
+
+| | resolución |
+| --- | --- |
+| reloj de 4 µs (lo anterior) | 0.086° |
+| **Timer1 a 62.5 ns** | **0.0014°** |
+
+**60 veces más fino, quitando código.**
+
+### El sentido se saca por alternancia, anclado por una votación lenta
+
+El comparador estampa los dos cruces (120/s) y el SPWM define uno (60/s): hay una ambigüedad de 180°. Leer `ACO` dentro de la ISR no sirve — el propio código ya lo documentaba: *«el repique es más rápido que la entrada a la ISR y ACO ya volvió cuando lo leemos»*.
+
+Pero los cruces **alternan de forma determinista**, y un cruce perdido se nota en el **tiempo** (la paridad del semiperiodo), que es justo lo que medimos bien:
+
+```c
+uint8_t  impares = 1;
+uint16_t tope    = 12495u;            /* 1.5 semiciclos */
+while (dt >= tope && impares < 8) { impares ^= 1u; tope += 8330u; }
+if (impares) sentido = (uint8_t)!sentido;
+
+if (aco == sentido) { if (voto <  60) voto++; }
+else                { if (voto > -60) voto--; }
+if (voto < -30)     { sentido = (uint8_t)!sentido; voto = 0; }
+```
+
+**ACO es ruidoso pero no está sesgado**, así que sirve de ancla absoluta en promedio. Verdad rápida de la alternancia, verdad lenta del sensor sucio. En banco el voto se queda clavado en `+60`.
+
+> 📌 Las comparaciones sustituyen a una división de 16 bits que estuvo escrita y no se subió: una división dentro de la ISR del comparador es exactamente el error de la Parte C, y el presupuesto de esa ISR es de 233 instrucciones / 19 *push*.
+
+### La parábola de frenado, sacada de la rampa que pidió el usuario
+
+La especificación fue «rampa de aceleración de 2 s para no forzar». Eso fija el paso máximo por ciclo, y de ahí sale **la desaceleración máxima sostenible**:
+
+```
+dc/ciclo ≤ 0.1848 cuentas   ->   A = 10.8 × 0.1848 = 2.0 décimas/ciclo²
+```
+
+Con una desaceleración máxima conocida, la velocidad que se puede sostener sin pasarse es la curva de frenado clásica:
+
+```
+|v| = √(2·A·|e|)      ->      c = signo(e) × 47 × √|e|      (unidades ×256)
+```
+
+Y **ese 47 es el propio paso de la rampa.** No es una constante ajustada a mano: sale de la rampa que pidió el usuario. Tiempo mínimo, sin modos, sin *windup*. Corregir 180° cuesta 1.39 Hz, dentro del rango de ±2 Hz.
+
+> Lo que hubo antes y no funcionó, dejado escrito porque es instructivo: un integrador puro es un oscilador sin amortiguamiento (ζ = 0); un P+I se degenera en *bang-bang* a ±0.25 Hz porque cualquier error mayor a ~1° queda limitado por la rampa y el anti-*windup* congela el integrador. **La parábola los reemplaza a los dos.**
+
+### Alimentación directa, integrador acotado, y la trampa del integrador viejo
+
+El error de frecuencia se corrige **midiendo la frecuencia de la red**, no integrándola:
+
+```c
+const int32_t ff = -(redMhz * PLL_TOP_X256_POR_HZ) / 1000L;
+deseadoX256 = ff + corrX256 + par;
+```
+
+El integrador sólo recoge el residuo (unas 7 cuentas) y **sólo se actualiza dentro de ±5°**. Eso último fue una trampa que costó un día de banco:
+
+> ⚠️ **Un integrador congelado fuera de su banda no puede desenrollarse nunca.** Un valor grande y viejo cancela exactamente a la parábola y estaciona el error en un equilibrio falso. Reproducido en simulación: `corr = −479` estaciona el error en **11.99°** con `aplicado = 54` — que son los números del banco (10.8–12.3°, −38 mHz) con tres cifras.
+
+El arreglo es acotarlo a lo que de verdad tiene que hacer, más una fuga cuando está fuera de banda:
+
+```c
+#define PLL_INTEGRA_TOPE  100   /* su trabajo real son ~7 cuentas */
+#define PLL_INTEGRA_FUGA    1
+```
+
+### Enganche permanente, y congelar cuando se va la red
+
+El usuario lo puso en una frase que es la decisión entera:
+
+> *«el PLL debe estar siempre a la frecuencia de la red … no estás pasando RED, cuarzo interno, RED, cuarzo interno»*
+
+Un lazo que engancha, se sale de rango, se suelta y vuelve al cristal **deja al inversor en el ángulo equivocado justo en el instante en que se va la red.** Se siente el parpadeo y se apaga una PC. Así que el enganche arranca pedido y se suelta sólo a mano.
+
+Y cuando la red se va de verdad:
+
+```
+Congelar para transferir, volver al cristal para vivir.
+```
+
+Se congela frecuencia y fase —la casa está a punto de ser nuestra, y mover la frecuencia en el instante del corte es lo contrario de lo que hace falta— y después se regresa al cristal en ~30 s (`PLL_REGRESO_X256 = 2`). **En los primeros 20 ms no se mueve nada**, que es lo único que importa: una fuente ATX aguanta 16–20 ms.
+
+### Lo que dio el banco
+
+Prueba de desconexión y reconexión de la red, hecha por el usuario sin que nadie la pidiera:
+
+```
+1794 ms   enganche inicial, error 0.4 a 0.9 grados
+          --- se corta la red ---
+          PLL SOLTADO: NO HAY RED      corrigiendo 27 mHz
+          corrigiendo 0 mHz  TOP=333   <- regreso al cristal, sin brincos
+          --- regresa la red ---
+          error 121.2 grados, voto=-13   (reconexion sucia, como debe verse)
+          crudo: 121.2 117.6 112.6 ... 92.4
+2750 ms   FASE ESTABLE, ENGANCHADO     error 0.1 a 0.6 grados
+```
+
+| medición | resultado |
+| --- | --- |
+| enganche inicial | **1794 ms** |
+| reenganche desde 121.2° | **2750 ms** |
+| reportes bajo 1° de error | **76 de 86** |
+| reportes declarados ENGANCHADO | 69 de 86, con corridas de 20 y 13 s seguidos |
+| tiempo muerto de la pierna B, medido | **41.879 µs** = un periodo de portadora, como se diseñó |
+| voto de sentido | `+60`, clavado |
+
+### Dos defectos de hardware-firmware que esto destapó
+
+**1. `OCR1x` tiene doble buffer; `ICR1` no.** En modo 8, `OCR1A`/`OCR1B` escritos en la ISR cargan en el siguiente BOTTOM y gobiernan el periodo N+1; `ICR1` no tiene buffer y gobierna el periodo N. Emparejarlos (`OCR1B = ICR1`) produjo un pulso pegado de **41.6 µs** en vez de 62.5 ns — 666 veces peor. Y `OC1B` está en modo invertido (`COM1B1 | COM1B0`), así que `OCR1B > TOP` significa que **no hay comparación nunca** y la salida se queda como estaba un periodo entero.
+
+El arreglo: **no dithierear el TOP en los dos periodos del cruce**, para que `OCR1B = topEntero` sea exacto por construcción.
+
+> 📌 La observación del usuario —*«cuando libero el PLL suelto el enlace, las anomalías desaparecen»*— es lo que apuntó al defecto. El analizador lógico lo confirmó.
+
+**2. La prueba de regresión mentía.** `prueba_dither.cpp` aplicaba `ICR1` y los `OCR` en el mismo periodo, así que era **estructuralmente incapaz** de ver el defecto y reportaba «todo correcto» sobre código roto. Se corrigió el modelo del doble buffer y se verificó que ahora **falla** al reintroducir el defecto a propósito.
+
+### Lo que todavía falta
+
+1. 📌 **Medir el relé:** retardo de orden a contacto **y su dispersión**, 20–30 cierres, CH1 en `TN_CMD`/D13 y CH2 en un contacto seco. **1 ms de dispersión son 21.6° a 60 Hz**, así que ese número es el que fija el ángulo de adelanto — y decide si una PC sobrevive la transferencia.
+2. ⚠️ **`SOBREPASOS` despertó dos veces**, las dos durante el reenganche, después de semanas en cero. El margen se fue en lo que se agregó: dither permanente 1.95 % (justificado) y el gancho del detector por producto 0.30 % (nunca encendido, candidato a quitarse).
+3. 📌 **Nuestra propia portadora se acopla a la entrada del comparador.** Ya estaba anticipado en [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13): «AC_FB_GRID_A6 corre 44 mm paralelo a TN_CMD, con 0.27 mm de separación». El detector se queda con el primer flanco de cada ráfaga, y el acoplamiento sólo puede **adelantar** el inicio de la ráfaga — por eso los errores de fase salen estrictamente negativos, nunca positivos.
+4. 📌 **Resistencia de 1 MΩ del nodo de D6 a tierra**, pendiente de autorización, para darle al comparador un estado definido sin red (28.2 mV / 1.04° con 820 kΩ; 23.2 mV / 0.86° con 1 MΩ; 10.6 mV / 0.39° con 2.2 MΩ).
+5. ⚠️ `cmp_red_presente()` tarda hoy **50 ms** y podría bajar a ~8.3 ms. Sumado al relé (5–15 ms) es lo que decide la transferencia contra los 16–20 ms de una ATX. Va con [DC-033](#dc-033-el-contrato-con-la-fuente-de-afuera-ventanas-de-red-y-de-generador-y-cuándo-cortar).
+
+### Resumen
+
+- ✅ **La perilla de frecuencia es el TOP de la portadora**, no la tabla de senos: así se conserva la alineación de 25 muestras por medio ciclo sin tocar el muestreo.
+- ✅ **La fase se mide contra nuestro propio ciclo** (`posición × 2·TOP + TCNT1`), sin restar estampas entre ISR: 0.0014° de resolución.
+- ✅ **El sentido sale de la alternancia**, anclado por una votación lenta de `ACO`.
+- ✅ **La parábola de frenado sale de la rampa de 2 s** que pidió el usuario: el paso de la rampa *es* el coeficiente.
+- ✅ **Enganche permanente**, con congelamiento al perder la red y regreso al cristal en ~30 s.
+- ✅ Validado en banco: 1794 ms de enganche, 2750 ms de reenganche desde 121°, 76 de 86 reportes bajo 1°.
+- 📌 **Falta el relé.** Sin su retardo y su dispersión, el ángulo de adelanto no se puede fijar.
+
+**Referencias:** [DC-020](#dc-020-reloj-del-adc-a-128-y-muestreo-amarrado-a-la-portadora-precisión-antes-que-velocidad), [DC-023](#dc-023-comparador-analógico-interno-para-el-cruce-por-cero-y-tn_cmd-se-muda-a-d13), [DC-026](#dc-026-la-regla-del-cli-el-costo-se-paga-por-vuelta-del-lazo-no-por-unidad-de-tiempo), [DC-028](#dc-028-el-lazo-de-control-de-ca-comparador-para-el-cruce-rms-de-medio-ciclo-por-pares), [DC-033](#dc-033-el-contrato-con-la-fuente-de-afuera-ventanas-de-red-y-de-generador-y-cuándo-cortar). Fuentes 30 y 31.
+
+---
+
 ## Críticas esperadas y preguntas abiertas
 
 Lo que sabemos que se puede discutir. Se deja escrito a propósito:
@@ -2712,6 +2908,9 @@ Quien tenga datos (mediciones, una alternativa probada, una falla documentada) p
 28. dalathegreat, *Battery-Emulator — Pylontech LV CAN protocol*: implementación de referencia con los desplazamientos de byte, tipos y escalas de cada trama; 0x305 de ocho bytes en cero como latido del inversor; nombre de fabricante propio en 0x35E. <https://deepwiki.com/dalathegreat/Battery-Emulator/5.5-pylontech-lv-can-protocol>
 29. Set Fire Labs, *Pylontech US2000/US3000: reading and replicating the CAN bus*: captura del bus de una batería real y verificación del latido. <https://www.setfirelabs.com/green-energy/pylontech-can-reading-can-replication>
 26. Microchip, *Prescaling and Conversion Timing* (mismo periférico ADC que el ATmega328P): «the successive approximation circuitry requires an input clock frequency between 50kHz and 200kHz to get maximum resolution»; conversión normal de 13 ciclos de ADC, primera conversión de 25 ciclos, *sample-and-hold* a 1.5 ciclos de ADC del inicio de una conversión normal (13.5 en la primera). <https://onlinedocs.microchip.com/oxy/GUID-EC8D3BAB-0B5E-454F-AB6E-6A7C91C6F103-en-US-3/GUID-6E3CE6D6-C382-4489-A654-C4664BA15691.html>
+
+30. Microchip, *ATmega328P datasheet*, Timer/Counter1 — *Output Compare Units* y *Input Capture Unit*: los registros OCR1A/OCR1B tienen doble buffer y se cargan en BOTTOM, mientras que ICR1 no tiene doble buffer; en el modo 8 (PWM de fase y frecuencia correctas) ICR1 define el TOP. <https://ww1.microchip.com/downloads/en/DeviceDoc/ATmega48A-PA-88A-PA-168A-PA-328-P-DS-DS40002061B.pdf>
+31. E. A. A. Coelho et al., *Arduino PLL* (detector por producto sobre un AVR de 8 bits): Sc = Σ(v·cos), Ss = Σ(v·sen), θ₀ = atan2(−Sc, Ss); la amplitud se cancela en el cociente, la componente de CD se cancela en un ciclo completo y una muestra corrompida pesa 1/25. Costo reportado: 78 % de la CPU. <https://ernane-aac.github.io/Arduino-PLL/>
 
 ---
 
