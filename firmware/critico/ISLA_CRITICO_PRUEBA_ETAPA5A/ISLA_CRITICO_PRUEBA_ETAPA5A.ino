@@ -362,6 +362,7 @@
 #include "traza_cmp.h"   // sólo por TRZ_CMP_BIT; las macros las usa el módulo
 #include "sensor_corriente.h"
 #include "pll_red.h"
+#include "senal_red.h"
 #include "reloj_4us.h"
 #include "est_rms.h"    // ⚠️ aparte a propósito: ver el aviso adentro
 
@@ -492,13 +493,12 @@ void setup()
 #endif
   DDRD  |= _BV(TRZ_ADC_BIT);  // D5 = CARG_CMD, traza de la ISR del ADC
   PORTD &= ~_BV(TRZ_ADC_BIT);
-  /*  D13 = TN_CMD (union N-PE, rele K5). Se deja MANEJADO EN 0, que es
-   *  "sin union": el estado seguro con la red conectada, porque la union la
-   *  hace la acometida. La traza del comparador que vivia aqui esta apagada
-   *  (CMP_TRAZA_ACTIVA en traza_cmp.h). Ver DC-019 y DC-023.
+  /*  D13: lo prepara `senal_red_preparar()`. Arranca MANEJADO EN 0, que aqui
+   *  significa "no hay red" y que ademas es el estado seguro de TN_CMD (sin
+   *  union N-PE). La traza del comparador que vivia en este pin esta apagada
+   *  (CMP_TRAZA_ACTIVA en traza_cmp.h). Ver senal_red.h, DC-019 y DC-023.
    */
-  DDRB  |= _BV(TRZ_CMP_BIT);
-  PORTB &= ~_BV(TRZ_CMP_BIT);
+  senal_red_preparar();
 
   Serial.println();
   Serial.println(F("================================================================"));
@@ -506,7 +506,8 @@ void setup()
   Serial.println(F("  Las cuatro ISR juntas: SPWM + ADC/RMS + TWI + comparador"));
   Serial.println(F("================================================================"));
   Serial.println(F("  !! J15 DESCONECTADO y etapa de potencia fuera. Verificar."));
-  Serial.println(F("  -- D13 = TN_CMD en 0 (sin union N-PE). Traza del cmp APAGADA."));
+  Serial.println(F("  !! J15 DESCONECTADO: D13 lleva \"hay red\", no TN_CMD."));
+  Serial.println(F("  -- D13: 1 = hay red, 0 = no hay red. Nivel, sin pulsos."));
   Serial.println(F("  !! 127 V en el primario del transformador. Es la barrera."));
 #if (MV_POR_CUENTA_X100_RED == 0) || (MV_POR_CUENTA_X100_INV == 0)
   Serial.println(F("  -> SIN CALIBRAR: se imprimen cuentas. Ver MV_POR_CUENTA_X100."));
@@ -654,8 +655,30 @@ void loop()
      *  dos funciones regresan en seguida.
      */
     rms_atender();
-    cmp_atender();
+    cmp_atender(); senal_red_atender();
     pll_atender();    // el PLL vive en el lazo, ni una linea en una ISR
+
+    /*  Aviso de la transicion de D13, para cotejar el serial contra el
+     *  analizador logico. El pin YA cambio antes de este print: el modulo
+     *  escribe el pin primero y la contabilidad despues, a proposito.
+     */
+    {
+      static uint16_t cambiosVistos = 0;
+      const uint16_t cNuevos = senal_red_cambios();
+      if (cNuevos != cambiosVistos) {
+        cambiosVistos = cNuevos;
+        uint8_t sub; uint16_t lat;
+        if (senal_red_ultima(&sub, &lat)) {
+          Serial.print(F("\n>>> D13 "));
+          Serial.print(sub ? F("SUBE (hay red)") : F("CAE (no hay red)"));
+          Serial.print(F("  a "));
+          Serial.print(lat / 1000); Serial.print('.');
+          Serial.print((lat / 100) % 10);
+          Serial.print(F(" ms del cruce mas reciente   cambios="));
+          Serial.println(cNuevos);
+        }
+      }
+    }
 
     if (rms_recoger(RMS_INV, &r, &cd, &n)) est_mete(est[RMS_INV], r, cd, n);
     if (rms_recoger(RMS_RED, &r, &cd, &n)) est_mete(est[RMS_RED], r, cd, n);
@@ -979,7 +1002,7 @@ void loop()
       Serial.print(F("   <<< CRUCES FUERA DE CUENTA"));
 
     Serial.println();
-    rms_atender(); cmp_atender();   // el reporte bloquea el lazo: ver el anillo
+    rms_atender(); cmp_atender(); senal_red_atender();   // el reporte bloquea el lazo: ver el anillo
 
     /*  LA PREGUNTA QUE DECIDE EL ARREGLO: a qué distancia del cruce llegan los
      *  flancos rechazados. Concentrados abajo de 50 µs = repique por falta de
@@ -995,7 +1018,7 @@ void loop()
       }
       Serial.print(F("   por direccion="));
       Serial.println(cmp_rech_direccion());
-      rms_atender(); cmp_atender();   // el reporte bloquea el lazo: ver el anillo
+      rms_atender(); cmp_atender(); senal_red_atender();   // el reporte bloquea el lazo: ver el anillo
     }
 
     /*  EL JITTER DEL CRUCE ACEPTADO — el criterio que de verdad importa, en
@@ -1028,7 +1051,7 @@ void loop()
         Serial.print(F(" grados (criterio: < 2.0)"));
         if (gradoMil > 2000) Serial.print(F("   <<< JITTER ALTO"));
         Serial.println();
-        rms_atender(); cmp_atender();   // el reporte bloquea el lazo: ver el anillo
+        rms_atender(); cmp_atender(); senal_red_atender();   // el reporte bloquea el lazo: ver el anillo
       }
     }
 
@@ -1219,7 +1242,7 @@ void loop()
       Serial.print(F(" (comparador sin cruces?)"));
     }
     Serial.println();
-    rms_atender(); cmp_atender();   // el reporte bloquea el lazo: ver el anillo
+    rms_atender(); cmp_atender(); senal_red_atender();   // el reporte bloquea el lazo: ver el anillo
 
     est_cero(est[RMS_INV]);
     est_cero(est[RMS_RED]);
@@ -1246,7 +1269,7 @@ void loop()
     Serial.print(PISO_CICLOS);
   }
   Serial.println();
-  rms_atender(); cmp_atender();   // el reporte bloquea el lazo: ver el anillo
+  rms_atender(); cmp_atender(); senal_red_atender();   // el reporte bloquea el lazo: ver el anillo
 
   cero(entrada);
   cero(cuerpo);
