@@ -45,6 +45,14 @@
 volatile uint8_t  PORTB, PORTD, DDRB, DDRD;
 volatile uint8_t  TCCR1A, TCCR1B, TIMSK1, TIFR1;
 volatile uint16_t TCNT1, ICR1, OCR1A, OCR1B;
+/*  ⏳ 2026-11-27: el SPWM incluye ahora el sello de fase y el gancho del ADC.
+ *  Estos registros existen solo para enlazar; la prueba no los usa.
+ */
+volatile uint8_t  TCNT0, TIFR0, ADCSRA, ADMUX, ADCSRB, DIDR0;
+volatile uint16_t ADC;
+volatile unsigned long timer0_overflow_count;
+/*  Y los contadores que el gancho del ADC toca desde la ISR del SPWM. */
+volatile uint16_t adc_cuenta_desbordes, adc_perdidas_n;
 extern "C" void TIMER1_OVF_vect(void);
 
 static const int RETARDO_ISR = 40;
