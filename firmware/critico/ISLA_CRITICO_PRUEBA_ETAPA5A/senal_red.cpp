@@ -9,6 +9,7 @@
 
 #include "senal_red.h"
 #include "comparador_red.h"
+#include "colapso_red.h"
 #include "reloj_4us.h"
 #include "traza_cmp.h"        /* de aqui sale TRZ_CMP_BIT = PB5 = D13 */
 
@@ -21,6 +22,7 @@ static uint16_t cambios      = 0;
 static uint8_t  ultSubio     = 0;
 static uint16_t ultLatenciaUs = 0;
 static bool     hayUltima    = false;
+static uint8_t  ultColapso   = 0;
 
 void senal_red_preparar(void)
 {
@@ -37,7 +39,8 @@ void senal_red_preparar(void)
 void senal_red_atender(void)
 {
 #if SENAL_RED_ACTIVA
-  const bool hay = cmp_red_presente();
+  /*  EL VEREDICTO COMPLETO: amplitud Y cruces. Ver colapso_red.h. */
+  const bool hay = red_presente();
 
   if (hay == nivel && arrancado) return;    /* el caso comun: nada que hacer */
 
@@ -74,6 +77,10 @@ void senal_red_atender(void)
      */
     ultLatenciaUs = (tics > 16383u) ? 0xFFFFu : (uint16_t)(tics << 2);
     ultSubio      = hay ? 1u : 0u;
+    /*  Cual de los dos criterios gano. Al caer es lo que mas importa:
+     *  el colapso debe dar ~5 ms y los cruces ~50.
+     */
+    ultColapso    = colapso_hay() ? 1u : 0u;
     hayUltima     = true;
     if (cambios != 0xFFFFu) cambios++;
   }
@@ -86,10 +93,11 @@ void senal_red_atender(void)
 bool     senal_red_nivel(void)   { return nivel; }
 uint16_t senal_red_cambios(void) { return cambios; }
 
-bool senal_red_ultima(uint8_t *subio, uint16_t *latenciaUs)
+bool senal_red_ultima(uint8_t *subio, uint16_t *latenciaUs, uint8_t *porColapso)
 {
   if (!hayUltima) return false;
   if (subio)      *subio      = ultSubio;
   if (latenciaUs) *latenciaUs = ultLatenciaUs;
+  if (porColapso) *porColapso = ultColapso;
   return true;
 }

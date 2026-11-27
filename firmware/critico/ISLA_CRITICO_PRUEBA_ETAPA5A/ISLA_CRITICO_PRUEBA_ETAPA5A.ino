@@ -363,6 +363,7 @@
 #include "sensor_corriente.h"
 #include "pll_red.h"
 #include "senal_red.h"
+#include "colapso_red.h"
 #include "reloj_4us.h"
 #include "est_rms.h"    // ⚠️ aparte a propósito: ver el aviso adentro
 
@@ -667,10 +668,12 @@ void loop()
       const uint16_t cNuevos = senal_red_cambios();
       if (cNuevos != cambiosVistos) {
         cambiosVistos = cNuevos;
-        uint8_t sub; uint16_t lat;
-        if (senal_red_ultima(&sub, &lat)) {
+        uint8_t sub, col; uint16_t lat;
+        if (senal_red_ultima(&sub, &lat, &col)) {
           Serial.print(F("\n>>> D13 "));
           Serial.print(sub ? F("SUBE (hay red)") : F("CAE (no hay red)"));
+          if (!sub) Serial.print(col ? F(" por COLAPSO (amplitud)")
+                                     : F(" por SIN CRUCES (vencimiento)"));
           Serial.print(F("  a "));
           Serial.print(lat / 1000); Serial.print('.');
           Serial.print((lat / 100) % 10);
@@ -1165,6 +1168,10 @@ void loop()
        */
       Serial.print(F("  voto="));
       Serial.print(cmp_voto_sentido());
+      Serial.print(F("  colapso="));
+      Serial.print(colapso_hay() ? F("SI") : F("no"));
+      Serial.print('/'); Serial.print(colapso_marca());
+      Serial.print(F(" bias=")); Serial.print(colapso_bias());
 
       /*  Los ocho ultimos errores CRUDOS, uno por ciclo de salida. Esto es lo
        *  que el filtro esconde, y es lo unico que puede decir de donde salen

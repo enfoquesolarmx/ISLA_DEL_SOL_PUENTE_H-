@@ -67,6 +67,8 @@ bool     senal_red_nivel(void);      // lo que tiene el pin ahora
 uint16_t senal_red_cambios(void);    // transiciones totales: si crece sola,
                                      // hay falsos cortes y eso es una
                                      // transferencia que dispara sin razon
-bool     senal_red_ultima(uint8_t *subio, uint16_t *latenciaUs);
-                                     // la ultima transicion: hacia donde fue
-                                     // y a cuantos us del cruce mas reciente
+bool     senal_red_ultima(uint8_t *subio, uint16_t *latenciaUs,
+                          uint8_t *porColapso);
+                                     // la ultima transicion: hacia donde fue,
+                                     // a cuantos us del cruce mas reciente, y
+                                     // CUAL criterio gano (colapso o cruces)

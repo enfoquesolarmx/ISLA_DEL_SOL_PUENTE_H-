@@ -6,6 +6,7 @@
  */
 
 #include "rms_ventana.h"
+#include "colapso_red.h"
 
 #include <util/atomic.h>
 
@@ -140,6 +141,12 @@ void rms_atender(void)
     }
 
     const uint16_t cuenta = ev & 0x03FFu;
+
+    /*  El detector de colapso por amplitud, aqui y no en la ISR: estas
+     *  muestras ya estan pasando por el lazo. Ver colapso_red.h.
+     */
+    if (i == RMS_RED) colapso_meter(cuenta);
+
     vivo[i].suma     += cuenta;
     vivo[i].sumaCuad += (uint32_t)cuenta * cuenta;
 
@@ -152,7 +159,7 @@ void rms_atender(void)
 
 // ========================== FUNCIONES PÚBLICAS ===============================
 
-void rms_preparar(void) { rms_reiniciar(); }
+void rms_preparar(void) { rms_reiniciar(); colapso_preparar(); }
 
 void rms_reiniciar(void)
 {
