@@ -279,10 +279,36 @@ ISR(TIMER1_OVF_vect) {
    *  Costo en el camino comun (PLL suelto, topFrac = 0): el mismo de antes,
    *  una lectura y un salto.
    */
+  /*  !! EL DITHER NO CORRE EN LOS DOS PERIODOS DEL CRUCE, Y ESTA ES LA RAZON.
+   *
+   *  `OCR1x` TIENE DOBLE BUFER: se carga en el siguiente BOTTOM, asi que lo
+   *  que se escribe aqui gobierna el periodo N+1. `ICR1` NO tiene bufer:
+   *  gobierna el periodo N. Son dos periodos distintos.
+   *
+   *  Mi arreglo de la manana escribia `OCR1B = ICR1` creyendo que eran el
+   *  mismo, y empeoro el defecto en vez de quitarlo: si este periodo lleva
+   *  acarreo (TOP=334) y el siguiente no (TOP=333), queda OCR1B > TOP, la
+   *  comparacion NUNCA ocurre y LA se queda en su estado anterior **un
+   *  periodo entero: 41.6 us**. Antes eran 62.5 ns. El banco lo vio en tres
+   *  horas, y vio tambien la pista que lo delata: con el PLL suelto --sin
+   *  dither-- el pulso no esta.
+   *
+   *  La solucion es hacer que los dos coincidan por construccion: en los dos
+   *  periodos del cruce, donde la pierna A va apagada y OCR1B tiene que valer
+   *  TOP exacto, **el TOP no se dithierea**. Asi `OCR1B = topEntero` siempre
+   *  es el valor correcto.
+   *
+   *  Cuesta 2 de cada 400 pasos de dither: 0.5 % de la correccion, o sea
+   *  0.24 mHz sobre los 48 que corregimos. Nada.
+   */
   if (topFrac) {
-    const uint8_t prev = acumTop;
-    acumTop = (uint8_t)(prev + topFrac);
-    ICR1 = (uint16_t)(topEntero + ((acumTop < prev) ? 1u : 0u));
+    if (muestra != 0 && muestra != ultimaMuestra) {
+      const uint8_t prev = acumTop;
+      acumTop = (uint8_t)(prev + topFrac);
+      ICR1 = (uint16_t)(topEntero + ((acumTop < prev) ? 1u : 0u));
+    } else {
+      ICR1 = topEntero;        /* cruce: TOP exacto, para que OCR1B cuadre */
+    }
   }
 
   /*  !! SIN VARIABLE VIVA, Y ESO IMPORTA. La primera version de este arreglo
@@ -322,7 +348,8 @@ ISR(TIMER1_OVF_vect) {
   // ---- 3) Comparadores del siguiente periodo -------------------------------
   if (sig == 0 || sig == ultimaMuestra) {
     OCR1A = 0;                     // HA siempre baja
-    OCR1B = ICR1;                  // LA siempre baja: el TOP QUE RIGE AHORA
+    OCR1B = topEntero;             // LA siempre baja. En el cruce el TOP NO
+                                   // se dithierea, asi que esto ES el TOP.
   } else {
     // Cuarto de onda en espejo: 0..C-1 tal cual, C..S-1 al revés
     // (60 Hz: C = 100, S = 200;  50 Hz: C = 120, S = 240).
