@@ -209,6 +209,16 @@ static volatile uint8_t  nCruceInv;
  *  Se llama desde la ISR del comparador, 120 veces por segundo.
  * =============================================================================
  */
+/*  Posicion del ciclo AHORA, 0..399. La lee la ISR del ADC para saber a que
+ *  angulo corresponde cada muestra de A6. Dos bytes y una suma.
+ */
+uint16_t spwm_posicion(void)
+{
+  return (uint16_t)semiciclo * (uint16_t)muestrasSemiciclo + (uint16_t)muestra;
+}
+
+uint16_t spwm_posiciones(void) { return (uint16_t)muestrasSemiciclo << 1; }
+
 uint32_t spwm_fase_cuentas(void)
 {
   const uint16_t pos = (uint16_t)semiciclo * (uint16_t)muestrasSemiciclo

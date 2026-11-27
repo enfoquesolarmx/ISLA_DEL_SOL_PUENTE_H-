@@ -96,6 +96,13 @@ uint16_t spwm_muestras_ciclo();
  *  Resolucion: 62.5 ns = 0.0014 grados. Y no puede perder cuentas, porque es
  *  el mismo timer que genera la onda.
  */
+/*  Posicion dentro del ciclo de salida, 0..399 (0..479 a 50 Hz), y cuantas
+ *  posiciones tiene una vuelta. La ISR del ADC las usa para etiquetar cada
+ *  muestra de A6 con su angulo.
+ */
+uint16_t spwm_posicion(void);
+uint16_t spwm_posiciones(void);
+
 uint32_t spwm_fase_cuentas(void);
 uint32_t spwm_fase_vuelta(void);
 

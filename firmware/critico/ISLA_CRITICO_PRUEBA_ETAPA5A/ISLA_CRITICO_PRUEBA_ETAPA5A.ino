@@ -362,6 +362,7 @@
 #include "traza_cmp.h"   // sólo por TRZ_CMP_BIT; las macros las usa el módulo
 #include "sensor_corriente.h"
 #include "pll_red.h"
+#include "fase_producto.h"
 #include "reloj_4us.h"
 #include "est_rms.h"    // ⚠️ aparte a propósito: ver el aviso adentro
 
@@ -646,7 +647,8 @@ void loop()
      */
     rms_atender();
     cmp_atender();
-    pll_atender();   // el PLL vive en el lazo, ni una linea en una ISR
+    pll_atender();
+  fase_atender();   // detector por producto: drena el anillo y multiplica   // el PLL vive en el lazo, ni una linea en una ISR
 
     if (rms_recoger(RMS_INV, &r, &cd, &n)) est_mete(est[RMS_INV], r, cd, n);
     if (rms_recoger(RMS_RED, &r, &cd, &n)) est_mete(est[RMS_RED], r, cd, n);
@@ -1133,6 +1135,28 @@ void loop()
        */
       Serial.print(F("  voto="));
       Serial.print(cmp_voto_sentido());
+
+      /*  EL DETECTOR POR PRODUCTO, AL LADO DEL DE CRUCE POR CERO.
+       *
+       *  Los dos miden lo mismo: en que punto de NUESTRO ciclo esta la red.
+       *  Uno lo saca de un instante, el otro de 25 muestras. Si el de
+       *  producto sale limpio donde el de cruce brinca, ya sabemos cual
+       *  llevar al PLL.
+       */
+      if (fase_activa) {
+        int16_t fp; uint8_t fn;
+        Serial.print(F("\n   PRODUCTO "));
+        if (fase_leer(&fp, &fn)) {
+          Serial.print(fp / 10); Serial.print('.');
+          Serial.print((fp < 0 ? -fp : fp) % 10);
+          Serial.print(F(" grados  n=")); Serial.print(fn);
+        } else {
+          Serial.print(F("sin muestras suficientes"));
+        }
+        if (fase_perdidas()) {
+          Serial.print(F("  perdidas=")); Serial.print(fase_perdidas());
+        }
+      }
 
       /*  Los ocho ultimos errores CRUDOS, uno por ciclo de salida. Esto es lo
        *  que el filtro esconde, y es lo unico que puede decir de donde salen
