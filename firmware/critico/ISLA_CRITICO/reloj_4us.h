@@ -50,6 +50,35 @@ static inline uint16_t reloj_4us(void)
   return (uint16_t)(((uint16_t)m8 << 8) | t0);
 }
 
+/*  Lo mismo, pero de 32 bits.
+ *
+ *  ⚠️ POR QUE EXISTE. El de 16 bits envuelve cada 65 536 × 4 µs = 262.144 ms.
+ *  Para la fase eso da igual —las diferencias son de microsegundos— pero para
+ *  un VENCIMIENTO es una trampa: si el sello de referencia se queda quieto
+ *  (no hay red), la resta `ahora - t` recorre todo el rango y vuelve a caer
+ *  debajo del umbral una vez por vuelta. El 27 de noviembre de 2026 eso hizo
+ *  que `cmp_red_presente()` dijera «hay red» durante 50 ms de cada 262 ms con
+ *  la red apagada. Lo encontró el analizador lógico con D13 afuera; el serial
+ *  no lo mostraba. Medido: 261.9 ms de periodo contra 262.144 predichos.
+ *
+ *  Este envuelve en 2^32 garrapatas = 4.77 horas, así que sirve para medir
+ *  ausencias. Para fase se sigue usando el de 16 bits, que es más barato.
+ *
+ *  ⚠️ SÓLO PARA EL LAZO. Lleva un `cli()` de ~10 ciclos porque
+ *  `timer0_overflow_count` son cuatro bytes y no se lee atómico. No meterlo
+ *  en una ISR: ver la regla del `cli()` en DC-026.
+ */
+static inline uint32_t reloj_4us_32(void)
+{
+  const uint8_t sreg = SREG;
+  cli();
+  const uint8_t t0 = TCNT0;
+  uint32_t      m  = timer0_overflow_count;
+  if ((TIFR0 & _BV(TOV0)) && (t0 < 255)) m++;
+  SREG = sreg;
+  return (m << 8) | (uint32_t)t0;
+}
+
 /*  Cuentas de 4 µs en un ciclo de línea completo, para desenrollar la fase.
  *      60.06 Hz → 16 650 µs → 4162.5 cuentas
  *  Se guarda ×2 para no perder el medio.

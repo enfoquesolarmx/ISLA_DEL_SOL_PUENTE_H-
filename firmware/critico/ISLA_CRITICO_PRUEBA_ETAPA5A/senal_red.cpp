@@ -57,9 +57,16 @@ void senal_red_atender(void)
      *  Al subir, el cruce mas reciente es el que acaba de llegar, asi que
      *  esto es lo que tarda el LAZO en reaccionar: debe ser < 1 ms.
      */
-    const uint16_t t     = cmp_t_ultimo_cruce();
-    const uint16_t ahora = reloj_4us();
-    const uint16_t tics  = (uint16_t)(ahora - t);
+    const uint16_t t      = cmp_t_ultimo_cruce();
+    const uint32_t ahora32 = reloj_4us_32();
+    /*  El sello del cruce es de 16 bits; se ancla al reloj largo igual que en
+     *  `cmp_atender()`, para que una latencia de mas de 262 ms no mienta.
+     *  Con el reloj de 16 bits esta misma resta era la trampa del 27 de
+     *  noviembre: ver reloj_4us.h.
+     */
+    const uint16_t atraso = (uint16_t)((uint16_t)ahora32 - t);
+    const uint32_t tics32 = (uint32_t)atraso;
+    const uint16_t tics   = (tics32 > 16383UL) ? 16384u : (uint16_t)tics32;
 
     /*  Garrapatas de 4 us a us, con tope: 16 383 tics son 65 532 us y de ahi
      *  no cabe en 16 bits. Mas de eso ya no es un numero util, es un vuelco

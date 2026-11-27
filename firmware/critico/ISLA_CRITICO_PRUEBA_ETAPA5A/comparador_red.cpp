@@ -64,6 +64,15 @@ static volatile uint8_t  nCruceDir;      // cambia una vez por ciclo, 60/s
 static volatile uint8_t  sentido;        // alternancia por TIEMPO, no por ACO
 static int8_t            voto;           // ACO como ancla lenta, no rapida
 
+/*  Vencimiento de la red, en 32 bits. Ver `reloj_4us_32()` y el defecto que
+ *  lo obligó: con el reloj de 16 bits, sin red, `cmp_red_presente()` volvía a
+ *  decir «hay red» 50 ms de cada 262 ms. Estas tres viven SOLO en el lazo
+ *  (`cmp_atender`), nunca en una ISR, así que no llevan `volatile`.
+ */
+static uint32_t tCruce32  = 0;     // sello de 32 bits del ultimo cruce
+static uint16_t crucesVistos = 0;  // para detectar que hubo cruce nuevo
+static bool     huboCruce = false; // antes del primero no hay nada que medir
+
 /*  Histograma de a qué distancia del cruce aceptado llegan los flancos
  *  rechazados. Es la pregunta que decide el arreglo, y se contesta desde
  *  adentro — sin analizador y sin ventana ciega.
@@ -252,6 +261,32 @@ static uint32_t jSumaDev2;
 
 void cmp_atender(void)
 {
+  /*  EL VENCIMIENTO DE LA RED, pasado a 32 bits.
+   *
+   *  `cruces` dice SI hubo cruce nuevo (es monotono, no tiene aliasing) y
+   *  `tUltimo` dice CUANDO con 4 us. Se juntan aqui, en el lazo, para armar
+   *  un sello de 32 bits que no envuelve en 4.77 horas. A partir de ahi la
+   *  ausencia se mide restando, y la resta ya no puede dar la vuelta.
+   *
+   *  La ISR no se toca: sigue costando 232 instrucciones y 19 push.
+   */
+  {
+    uint16_t n, t;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { n = cruces; t = tUltimo; }
+
+    if (n != crucesVistos) {
+      crucesVistos = n;
+      /*  El cruce fue hace `atraso` garrapatas, y eso SI cabe en 16 bits
+       *  porque acabamos de verlo: el lazo pasa por aqui muchas veces por
+       *  milisegundo. Se resta del reloj largo para anclarlo.
+       */
+      const uint32_t ahora32 = reloj_4us_32();
+      const uint16_t atraso  = (uint16_t)((uint16_t)ahora32 - t);
+      tCruce32  = ahora32 - (uint32_t)atraso;
+      huboCruce = true;
+    }
+  }
+
   // Un byte, y en el AVR eso se lee atómico: el cli() más barato es el que no
   // existe (DC-026). Misma razón que en rms_atender().
   const uint8_t w = semiW;
@@ -381,15 +416,20 @@ uint16_t cmp_histograma_tope(uint8_t k)
 
 bool cmp_red_presente(void)
 {
-  /*  `tUltimo` son garrapatas de 4 µs de 16 bits, así que la comparación se
-   *  hace en garrapatas: 50 ms son 12 500 de ellas, y envuelven cada 262 ms.
+  /*  La resta se hace en 32 bits a proposito. En 16 envolvia cada 262.144 ms
+   *  y, sin red, volvia a decir «hay red» durante CMP_SIN_RED_MS de cada
+   *  vuelta: un tren de pulsos de 50 ms cada 262 ms en D13. Medido con el
+   *  analizador el 27 de noviembre de 2026 (261.9 ms contra 262.144
+   *  predichos), y el serial no lo mostraba.
+   *
+   *  ⚠️ Depende de que `cmp_atender()` se llame. Si el lazo se atora, el
+   *  sello se queda viejo y esto dice «no hay red»: falla hacia el lado
+   *  seguro, que es el que queremos.
    */
-  uint16_t t;
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { t = tUltimo; }
+  if (!huboCruce) return false;
 
-  const uint16_t ahora = reloj_4us();
-
-  return (uint16_t)(ahora - t) < (uint16_t)((CMP_SIN_RED_MS * 1000UL) / 4);
+  const uint32_t ahora = reloj_4us_32();
+  return (uint32_t)(ahora - tCruce32) < ((CMP_SIN_RED_MS * 1000UL) / 4);
 }
 
 /*  Sello de 4 us del ultimo cruce ACEPTADO de la red. Se resta contra
@@ -440,6 +480,10 @@ void cmp_reiniciar(void)
   jRead = 0;
   jSumaDev = 0;
   jSumaDev2 = 0;
+
+  tCruce32     = 0;
+  crucesVistos = 0;
+  huboCruce    = false;   /* sin cruces todavia: no hay red hasta que llegue uno */
 
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     cruces = rechazados = huecos = rechDir = 0;
