@@ -364,6 +364,7 @@
 #include "pll_red.h"
 #include "senal_red.h"
 #include "colapso_red.h"
+#include "prueba_rele.h"
 #include "reloj_4us.h"
 #include "est_rms.h"    // ⚠️ aparte a propósito: ver el aviso adentro
 
@@ -500,6 +501,7 @@ void setup()
    *  (CMP_TRAZA_ACTIVA en traza_cmp.h). Ver senal_red.h, DC-019 y DC-023.
    */
   senal_red_preparar();
+  rele_preparar();
 
   Serial.println();
   Serial.println(F("================================================================"));
@@ -510,6 +512,7 @@ void setup()
   Serial.println(F("  !! J15 DESCONECTADO: D13 lleva \"hay red\", no TN_CMD."));
   Serial.println(F("  -- D4 conmuta en cada CRUCE de la red (no es la ISR del SPWM)."));
   Serial.println(F("     Medir: disparo en bajada de D13, atras hasta el ultimo D4."));
+  Serial.println(F("  -- R = medir K4 (orden a contacto).  C = remojo caliente."));
   Serial.println(F("  -- D13: 1 = hay red, 0 = no hay red. Nivel, sin pulsos."));
   Serial.println(F("  !! 127 V en el primario del transformador. Es la barrera."));
 #if (MV_POR_CUENTA_X100_RED == 0) || (MV_POR_CUENTA_X100_INV == 0)
@@ -618,7 +621,8 @@ void loop()
    */
   if (Serial.available()) {
     const int c = Serial.read();
-    if (c == 'p' || c == 'P') {
+    if (rele_tecla(c)) { /* la prueba del rele se la quedo */ }
+    else if (c == 'p' || c == 'P') {
       /*  Ahora SUELTA, no pide: el enganche es el estado normal mientras haya
        *  red. Cuando la red se muere ya no hay a que engancharse, asi que hay
        *  que llegar en fase, no empezar a buscarla.
@@ -660,6 +664,7 @@ void loop()
     rms_atender();
     cmp_atender(); senal_red_atender();
     pll_atender();    // el PLL vive en el lazo, ni una linea en una ISR
+    rele_atender();   // prueba de K4, apagada salvo que se pida
 
     /*  Aviso de la transicion de D13, para cotejar el serial contra el
      *  analizador logico. El pin YA cambio antes de este print: el modulo

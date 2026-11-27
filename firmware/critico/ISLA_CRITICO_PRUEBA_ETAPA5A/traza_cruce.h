@@ -68,8 +68,19 @@
 #define CRUCE_TRAZA_BIT      PD4      /* D4 = INV_CMD con J15 puesto */
 
 #if CRUCE_TRAZA_ACTIVA
-/*  Escribir 1 en PINx conmuta PORTx: un `sbi`, 2 ciclos. */
-#define CRUCE_TRAZA_TOGGLE()  do { PIND = _BV(CRUCE_TRAZA_BIT); } while (0)
+/*  La prueba del rele toma D4 prestado (prueba_rele.h), asi que la traza se
+ *  suspende desde el teclado. Es una variable y no un #define por eso. El
+ *  costo extra en la ISR del comparador es una carga y un salto, a 120 Hz.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern volatile unsigned char cruceTrazaOn;
+#ifdef __cplusplus
+}
+#endif
+#define CRUCE_TRAZA_TOGGLE()                                   \
+  do { if (cruceTrazaOn) PIND = _BV(CRUCE_TRAZA_BIT); } while (0)
 #else
 #define CRUCE_TRAZA_TOGGLE()  do { } while (0)
 #endif
