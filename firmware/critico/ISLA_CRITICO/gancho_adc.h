@@ -23,12 +23,12 @@
  *  etapa 5, porque el presupuesto de la ISR del ADC está en 127 ciclos y la
  *  suma de las cuatro interrupciones en 507 de 666.
  *
- *  ⏳ 2026-11-27: se agrega `fase_meter`, el detector de fase por producto en
- *  A6. **A proposito NO multiplica aqui**: la multiplicacion con signo son
- *  ~150 ciclos y metida en esta ISR serian 9.4 us dentro de un periodo de
- *  portadora que ya va en 31 de 41.6 -- justo lo que reventó SOBREPASOS el 26.
- *  Aqui solo lee la posicion y empuja dos enteros al anillo; las tablas y los
- *  productos corren en `fase_atender()`, en el lazo.
+ *  🗑️ 2026-11-27: se QUITA `fase_meter` (detector de fase por producto).
+ *  El PLL engancho con el detector de cruce por cero (DC-035), asi que el
+ *  plan B sobraba: costaba 8 ciclos en CADA muestra -- 0.30 % de CPU
+ *  permanente -- por una funcion que nunca se encendio, y SOBREPASOS ya
+ *  habia despertado dos veces. El modulo completo sale del arbol; queda en
+ *  el historial de git si algun dia hace falta.
  * =============================================================================
  */
 
@@ -36,11 +36,9 @@
 
 #include "rms_ventana.h"
 #include "sensor_corriente.h"
-#include "fase_producto.h"
 
 #define ADC_CADA_MUESTRA(ranura, cuenta)        \
   do {                                          \
     rms_meter((ranura), (cuenta));              \
     sct_meter((ranura), (cuenta));              \
-    fase_meter((ranura), (cuenta));             \
   } while (0)

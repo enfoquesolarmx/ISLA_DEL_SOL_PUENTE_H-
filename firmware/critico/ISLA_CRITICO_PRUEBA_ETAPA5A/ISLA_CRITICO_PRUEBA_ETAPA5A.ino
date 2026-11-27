@@ -362,7 +362,6 @@
 #include "traza_cmp.h"   // sólo por TRZ_CMP_BIT; las macros las usa el módulo
 #include "sensor_corriente.h"
 #include "pll_red.h"
-#include "fase_producto.h"
 #include "reloj_4us.h"
 #include "est_rms.h"    // ⚠️ aparte a propósito: ver el aviso adentro
 
@@ -493,7 +492,12 @@ void setup()
 #endif
   DDRD  |= _BV(TRZ_ADC_BIT);  // D5 = CARG_CMD, traza de la ISR del ADC
   PORTD &= ~_BV(TRZ_ADC_BIT);
-  DDRB  |= _BV(TRZ_CMP_BIT);  // D13 = TN_CMD, traza de la ISR del comparador
+  /*  D13 = TN_CMD (union N-PE, rele K5). Se deja MANEJADO EN 0, que es
+   *  "sin union": el estado seguro con la red conectada, porque la union la
+   *  hace la acometida. La traza del comparador que vivia aqui esta apagada
+   *  (CMP_TRAZA_ACTIVA en traza_cmp.h). Ver DC-019 y DC-023.
+   */
+  DDRB  |= _BV(TRZ_CMP_BIT);
   PORTB &= ~_BV(TRZ_CMP_BIT);
 
   Serial.println();
@@ -502,7 +506,7 @@ void setup()
   Serial.println(F("  Las cuatro ISR juntas: SPWM + ADC/RMS + TWI + comparador"));
   Serial.println(F("================================================================"));
   Serial.println(F("  !! J15 DESCONECTADO y etapa de potencia fuera. Verificar."));
-  Serial.println(F("  !! D13 es TN_CMD: con J15 puesto, esta traza castanetea K5."));
+  Serial.println(F("  -- D13 = TN_CMD en 0 (sin union N-PE). Traza del cmp APAGADA."));
   Serial.println(F("  !! 127 V en el primario del transformador. Es la barrera."));
 #if (MV_POR_CUENTA_X100_RED == 0) || (MV_POR_CUENTA_X100_INV == 0)
   Serial.println(F("  -> SIN CALIBRAR: se imprimen cuentas. Ver MV_POR_CUENTA_X100."));
@@ -620,15 +624,6 @@ void loop()
       Serial.println(nuevo ? F(">>> PLL: enganche automatico")
                            : F(">>> PLL: SOLTADO a mano, corre del cristal"));
     }
-    else if (c == 'f' || c == 'F') {
-      /*  El detector por producto. Se prende y se apaga sin reflashear porque
-       *  cuesta ~90 ciclos en la ranura de la red y el presupuesto va en 507
-       *  de 666. Si SOBREPASOS se mueve, se apaga.
-       */
-      fase_habilitar(!fase_activa);
-      Serial.println(fase_activa ? F(">>> PRODUCTO: midiendo")
-                                 : F(">>> PRODUCTO: apagado"));
-    }
   }
 
   uint16_t t0, t1;
@@ -660,8 +655,7 @@ void loop()
      */
     rms_atender();
     cmp_atender();
-    pll_atender();
-  fase_atender();   // detector por producto: drena el anillo y multiplica   // el PLL vive en el lazo, ni una linea en una ISR
+    pll_atender();    // el PLL vive en el lazo, ni una linea en una ISR
 
     if (rms_recoger(RMS_INV, &r, &cd, &n)) est_mete(est[RMS_INV], r, cd, n);
     if (rms_recoger(RMS_RED, &r, &cd, &n)) est_mete(est[RMS_RED], r, cd, n);
@@ -1148,28 +1142,6 @@ void loop()
        */
       Serial.print(F("  voto="));
       Serial.print(cmp_voto_sentido());
-
-      /*  EL DETECTOR POR PRODUCTO, AL LADO DEL DE CRUCE POR CERO.
-       *
-       *  Los dos miden lo mismo: en que punto de NUESTRO ciclo esta la red.
-       *  Uno lo saca de un instante, el otro de 25 muestras. Si el de
-       *  producto sale limpio donde el de cruce brinca, ya sabemos cual
-       *  llevar al PLL.
-       */
-      if (fase_activa) {
-        int16_t fp; uint8_t fn;
-        Serial.print(F("\n   PRODUCTO "));
-        if (fase_leer(&fp, &fn)) {
-          Serial.print(fp / 10); Serial.print('.');
-          Serial.print((fp < 0 ? -fp : fp) % 10);
-          Serial.print(F(" grados  n=")); Serial.print(fn);
-        } else {
-          Serial.print(F("sin muestras suficientes"));
-        }
-        if (fase_perdidas()) {
-          Serial.print(F("  perdidas=")); Serial.print(fase_perdidas());
-        }
-      }
 
       /*  Los ocho ultimos errores CRUDOS, uno por ciclo de salida. Esto es lo
        *  que el filtro esconde, y es lo unico que puede decir de donde salen
