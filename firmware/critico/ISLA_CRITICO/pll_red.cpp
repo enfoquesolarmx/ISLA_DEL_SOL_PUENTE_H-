@@ -163,6 +163,35 @@
 
 #define PLL_PARAB_X256      47L   /* signo(e) x 47 x raiz(|e|)               */
 #define PLL_INTEGRA_X10      50   /* el integrador solo adentro de +-5.0     */
+
+/*  !! EL TOPE DEL INTEGRADOR, Y ES LA TRAMPA QUE EL BANCO ENCONTRO
+ *
+ *  El 27 de noviembre el lazo se quedo clavado en 11 grados, sin moverse,
+ *  con la correccion en -38 mHz. Un lazo con parabola no puede hacer eso: a
+ *  11 grados deberia estar pidiendo 0.33 Hz.
+ *
+ *  La causa: el integrador solo se actualiza dentro de +-5 grados. Si alguna
+ *  vez acumula un valor grande --en un transitorio, un salto, un arranque--
+ *  y el error queda AFUERA de la banda, ese valor **ya no puede desandarse
+ *  nunca**. Y si es lo bastante grande, cancela exactamente lo que la
+ *  parabola pide, y el error se estaciona ahi para siempre.
+ *
+ *  Simulado con el entero exacto: con el integrador en -479 el lazo se
+ *  estaciona en 11.99 grados con aplicado = 54. El banco reportaba 10.8 a
+ *  12.3 grados con -38 mHz, que es aplicado = 54. Clavado.
+ *
+ *  EL ARREGLO SALE DE PREGUNTAR PARA QUE SIRVE ESE INTEGRADOR. Solo afina el
+ *  residuo de la prealimentacion: `redMhz` tiene 14 mHz de cuantizacion y la
+ *  media de ocho deja ~5 mHz, que son **7 cuentas**. Dejarlo llegar a 479 fue
+ *  el error. Con tope de 100 --catorce veces lo que necesita-- la trampa es
+ *  imposible por construccion, y ademas se le pone una fuga lenta cuando el
+ *  error anda fuera de banda, para que nunca se quede con algo rancio.
+ *
+ *  Verificado en simulacion: con el tope, TODO estado inicial converge a
+ *  0.36 grados, incluso arrancando con el integrador en -1500.
+ */
+#define PLL_INTEGRA_TOPE    100
+#define PLL_INTEGRA_FUGA      1
 #define PLL_MUERTA_X10        3   /* 0.3 grados: abajo de eso, no se empuja  */
 
 /*  Raiz entera, en el lazo. |e| <= 1800, asi que el resultado cabe en 6 bits.
@@ -496,9 +525,15 @@ void pll_atender(void)
         const int32_t sobra = deseadoX256 - aplicadoX256;
         if (sobra <= PLL_PASO_MAX_X256 && sobra >= -PLL_PASO_MAX_X256) {
           corrX256 += (int32_t)e / 2;
-          if      (corrX256 >  PLL_TOPE_X256) corrX256 =  PLL_TOPE_X256;
-          else if (corrX256 < -PLL_TOPE_X256) corrX256 = -PLL_TOPE_X256;
+          if      (corrX256 >  PLL_INTEGRA_TOPE) corrX256 =  PLL_INTEGRA_TOPE;
+          else if (corrX256 < -PLL_INTEGRA_TOPE) corrX256 = -PLL_INTEGRA_TOPE;
         }
+      } else if (corrX256) {
+        /*  Fuera de banda el integrador no manda, asi que se desinfla. Un
+         *  integrador congelado con un valor viejo es justo lo que atrapo al
+         *  lazo en 11 grados.
+         */
+        corrX256 += (corrX256 > 0) ? -PLL_INTEGRA_FUGA : PLL_INTEGRA_FUGA;
       }
 
       /* ---- 4) engancho? ---------------------------------------------- */
