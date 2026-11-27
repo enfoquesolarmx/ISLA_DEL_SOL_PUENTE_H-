@@ -52,13 +52,28 @@ int main()
     spwm_fijar_amplitud(spwm_amplitud_max());
     spwm_top_fijar(TOP_CUENTAS, (uint8_t)fr);
 
+    uint16_t ocrABuf = 0, ocrBBuf = 0;
     double t = 0.0, tBajaHA = -1e9, tBajaLA = -1e9;
     int ha = 0, la = 0;
 
     for (long p = 0; p < 400L * 6; p++) {         /* seis ciclos completos */
+      /*  !! EL DOBLE BUFER, Y POR ESTO LA PRIMERA VERSION DE ESTA PRUEBA
+       *  DEJO PASAR UN DEFECTO DE 41.6 us.
+       *
+       *  `OCR1A`/`OCR1B` tienen doble bufer: lo que la ISR escribe se carga
+       *  en el SIGUIENTE BOTTOM y gobierna el periodo de despues. `ICR1` no
+       *  tiene bufer: gobierna el periodo que empieza ya.
+       *
+       *  Mi modelo aplicaba los tres en el mismo periodo, asi que nunca podia
+       *  ver un OCR1B emparejado con un TOP distinto -- que es exactamente el
+       *  defecto que el banco encontro. Una prueba que modela mal el hardware
+       *  no es media prueba: es una que miente.
+       */
       TCNT1 = 0;
-      TIMER1_OVF_vect();                          /* el chip actualiza en BOTTOM */
-      const uint16_t top = ICR1, a = OCR1A, b = OCR1B;
+      const uint16_t a = ocrABuf, b = ocrBBuf;    /* los del BOTTOM anterior */
+      TIMER1_OVF_vect();                          /* escribe ICR1 YA, OCR para la otra */
+      const uint16_t top = ICR1;
+      ocrABuf = OCR1A; ocrBBuf = OCR1B;
 
       if (a > top || b > top) {
         printf("frac=%3u periodo=%ld: ANCHO MAYOR QUE EL TOP (a=%u b=%u top=%u)\n",
