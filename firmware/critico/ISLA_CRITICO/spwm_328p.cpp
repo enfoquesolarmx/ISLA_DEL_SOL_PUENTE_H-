@@ -262,6 +262,40 @@ ISR(TIMER1_OVF_vect) {
     else                PORTB |= _BV(BIT_HB);     // entra HB (empieza el semiciclo -)
   }
 
+  /*  ---- EL TOP QUE VA A REGIR ESTE PERIODO, ANTES DE CALCULAR ANCHOS -----
+   *
+   *  !! Esto estaba mal y lo encontre revisando mi propio trabajo. El dither
+   *  escribia `ICR1 = topEntero + 1` DESPUES de haber calculado los anchos
+   *  con `topEntero` pelado. En el periodo del acarreo, OC1B --que esta en
+   *  modo INVERTIDO, asi que OCR1B = TOP significa "siempre baja"-- quedaba
+   *  en TOP-1: **LA recibia un pulso espurio de una cuenta, 62.5 ns**, justo
+   *  en el periodo donde debia estar apagada del todo.
+   *
+   *  Son 62.5 ns y seguramente no pasan el driver de compuerta, pero es un
+   *  pulso que nadie pidio en la pierna baja. Ahora el acarreo se calcula
+   *  PRIMERO y el mismo numero rige los anchos y el ICR1, que es lo correcto:
+   *  en modo 8 los dos se actualizan en BOTTOM y tienen que ser coherentes.
+   *
+   *  Costo en el camino comun (PLL suelto, topFrac = 0): el mismo de antes,
+   *  una lectura y un salto.
+   */
+  if (topFrac) {
+    const uint8_t prev = acumTop;
+    acumTop = (uint8_t)(prev + topFrac);
+    ICR1 = (uint16_t)(topEntero + ((acumTop < prev) ? 1u : 0u));
+  }
+
+  /*  !! SIN VARIABLE VIVA, Y ESO IMPORTA. La primera version de este arreglo
+   *  guardaba el TOP en un `uint16_t topAhora` que vivia toda la ISR: el
+   *  compilador tuvo que salvar un registro mas y el prologo paso de 15 a 17
+   *  push. Son 8 ciclos en CADA interrupcion a 24 kHz: 1.2 % del CPU
+   *  permanente en la ISR mas critica, por arreglar un pulso de 62.5 ns.
+   *
+   *  En vez de eso, el dither sube aqui arriba y quien necesite el TOP de
+   *  este periodo LEE ICR1, que es el hardware y ya lo tiene. Dos lecturas de
+   *  registro, cero registros vivos.
+   */
+
   // ---- 2) Siguiente periodo: ¿qué muestra y qué semiciclo? -----------------
   uint8_t sig = muestra + 1;
   uint8_t sem = semiciclo;
@@ -288,7 +322,7 @@ ISR(TIMER1_OVF_vect) {
   // ---- 3) Comparadores del siguiente periodo -------------------------------
   if (sig == 0 || sig == ultimaMuestra) {
     OCR1A = 0;                     // HA siempre baja
-    OCR1B = topEntero;             // LA siempre baja (TOP de ahora, no la constante)
+    OCR1B = ICR1;                  // LA siempre baja: el TOP QUE RIGE AHORA
   } else {
     // Cuarto de onda en espejo: 0..C-1 tal cual, C..S-1 al revés
     // (60 Hz: C = 100, S = 200;  50 Hz: C = 120, S = 240).
@@ -299,30 +333,16 @@ ISR(TIMER1_OVF_vect) {
       OCR1A = d;
       OCR1B = d + dtCuentas;
     } else {                                   // semiciclo -: LA lleva la potencia
+      /*  Aqui `topEntero` basta aunque el dither haya sumado uno: el ANCHO del
+       *  pulso es d + dtCuentas y no depende del TOP. Lo unico que se corre
+       *  es la posicion dentro del periodo, 62.5 ns, y eso no cambia el area.
+       */
       const uint16_t b = topEntero - d;
       OCR1B = b;
       OCR1A = b - dtCuentas;
     }
   }
 
-  /*  Dither del TOP. ICR1 se actualiza en BOTTOM por ser modo 8 (phase and
-   *  frequency correct), asi que escribirlo aqui no produce glitch: es
-   *  justamente lo que ese modo garantiza.
-   */
-  if (topFrac) {
-    /*  Guardia: con el PLL suelto `topFrac` es 0, ICR1 ya vale lo que debe y
-     *  no hay nada que hacer. Asi el camino comun paga una lectura y un salto
-     *  —~4 ciclos— en vez de los ~18 del dither completo.
-     *
-     *  Importa porque el inversor corre SUELTO casi siempre: el enganche se
-     *  pide cuando una transferencia es inminente, no todo el tiempo. Cobrar
-     *  2.1 % del CPU las 24 horas por algo que se usa unos segundos seria
-     *  justo el error que DC-026 describe — el costo por vuelta del lazo.
-     */
-    const uint8_t prev = acumTop;
-    acumTop = (uint8_t)(prev + topFrac);
-    ICR1 = (uint16_t)(topEntero + ((acumTop < prev) ? 1u : 0u));
-  }
 
   muestra   = sig;
   semiciclo = sem;
