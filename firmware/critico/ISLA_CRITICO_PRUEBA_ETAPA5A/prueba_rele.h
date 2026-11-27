@@ -3,6 +3,14 @@
  *  prueba_rele.h  -  Isla del Sol, protocolo de banco
  *  Medir K4: demora de orden a contacto, su DISPERSION, y en CALIENTE
  * -----------------------------------------------------------------------------
+ *  🅿️ GUARDADA. Escrita el 27 de noviembre de 2026, **antes de que exista el
+ *  hardware que mide**. En el banco de hoy hay dos Nano, la tarjeta de bias y
+ *  cables: no hay reles, no hay tarjeta de transferencia y no hay J15. Esto
+ *  queda aqui, dormido, para cuando los haya.
+ *
+ *  No estorba: arranca APAGADO y solo se mueve si alguien teclea 'R' o 'C'.
+ *  Mientras tanto D4 sigue llevando la traza de cruces (traza_cruce.h).
+ * -----------------------------------------------------------------------------
  *  POR QUE. Al 27 de noviembre de 2026 el presupuesto de la transferencia es:
  *
  *      deteccion   7.53 ms   MEDIDO (analizador y serial, dos veces)
